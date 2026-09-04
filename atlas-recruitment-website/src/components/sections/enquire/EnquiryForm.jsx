@@ -2,9 +2,22 @@ import { useMemo, useRef, useState } from 'react';
 import { cn } from '@/utils/cn';
 import Icon from '@/components/ui/Icon';
 import { roleTypes, headcountOptions } from '@/data/enquire';
+import { company } from '@/data/company';
 import { validators, validateAll } from '@/utils/validators';
 
-const ENDPOINT = '/api/enquiries';
+/**
+ * Where submissions go.
+ *
+ * This site is a static frontend with no backend of its own — the FAC portal
+ * will own the enquiry API. Until that endpoint exists, VITE_ENQUIRY_ENDPOINT
+ * is unset and the form deliberately refuses to pretend: rather than posting
+ * into the void or showing a success panel for an enquiry nobody received, it
+ * tells the visitor to phone or email instead.
+ *
+ * Point it at the portal when it is ready — no code change, just a build-time
+ * variable:  VITE_ENQUIRY_ENDPOINT=https://portal.example/api/enquiries
+ */
+const ENDPOINT = import.meta.env.VITE_ENQUIRY_ENDPOINT ?? '';
 
 const INITIAL_VALUES = {
   name: '',
@@ -101,6 +114,17 @@ export function EnquiryForm() {
     if (Object.keys(nextErrors).length > 0) {
       // Move focus to the summary so keyboard and screen-reader users land on
       // the problem rather than having to hunt for it.
+      focusSummary();
+      return;
+    }
+
+    // No endpoint configured yet. Say so plainly — a success panel here would
+    // be a lie, and a lost enquiry is worse than an obvious one.
+    if (!ENDPOINT) {
+      setSubmitError(
+        `Our enquiry form isn't connected yet. Please email ${company.email} or call ` +
+          `${company.phone} and we'll pick it up straight away.`,
+      );
       focusSummary();
       return;
     }

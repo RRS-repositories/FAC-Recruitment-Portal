@@ -9,17 +9,6 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  server: {
-    // In production nginx serves the built site and proxies /api to the intake
-    // service on one origin. This mirrors that locally so the form is exercised
-    // same-origin in dev too, and CORS never has to exist anywhere.
-    proxy: {
-      '/api': {
-        target: `http://127.0.0.1:${process.env.ATLAS_PORT || 5010}`,
-        changeOrigin: true,
-      },
-    },
-  },
   build: {
     target: 'es2019',
     cssCodeSplit: true,
