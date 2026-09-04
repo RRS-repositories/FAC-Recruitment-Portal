@@ -8,7 +8,7 @@ import usePageMeta from '@/hooks/usePageMeta';
  * Enquiry inbox.
  *
  * Sits behind Cloudflare Access, and the API verifies that token itself rather
- * than trusting the edge — see server/lib/access.mjs for why. Deliberately
+ * than trusting the edge — see server/lib/access.js for why. Deliberately
  * plain: this is a working tool, read at a glance, not a marketing page.
  */
 

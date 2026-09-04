@@ -1,6 +1,6 @@
 # Migrations
 
-Applied with `node server/scripts/apply-migrations.mjs`, which records each file
+Applied with `node server/scripts/apply-migrations.js`, which records each file
 in a `schema_migrations` ledger and skips anything already applied — the same
 shape as the `scripts/apply-*-migrations.mjs` runners in `CRM-Finalised`.
 

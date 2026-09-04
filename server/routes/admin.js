@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { pool } from '../db.mjs';
-import { requireAccess } from '../lib/access.mjs';
+import { pool } from '../db.js';
+import { requireAccess } from '../lib/access.js';
 
 /**
  * Read-and-triage API for captured enquiries.

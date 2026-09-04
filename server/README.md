@@ -12,7 +12,7 @@ so `atlas_app` does not exist in the CRM's `main` cluster on 5432 and
 `client_credentials` cannot be addressed from here by any credential this
 service holds. No `GRANT` or `REVOKE` is ever issued against the CRM cluster.
 
-`db.mjs` refuses to start if pointed at port 5432, and so does the migration
+`db.js` refuses to start if pointed at port 5432, and so does the migration
 runner.
 
 ## Setup
@@ -121,7 +121,7 @@ Fails closed in every direction: unconfigured returns 503, a missing or invalid
 token returns 403, and an unreachable JWKS endpoint denies rather than allows.
 `ADMIN_DEV_BYPASS` is refused outright when `NODE_ENV=production`.
 
-Covered by `server/lib/access.test.mjs` (`npm test`) — ten cases including
+Covered by `server/lib/access.test.js` (`npm test`) — ten cases including
 `alg: none`, a tampered payload, a token signed by the wrong key, a token
 minted for a different Access application, and JWKS being unreachable.
 

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { generateKeyPairSync, createSign, randomUUID } from 'node:crypto';
 
-import { verifyAccessJwt } from './access.mjs';
+import { verifyAccessJwt } from './access.js';
 
 /**
  * Access control is the only thing standing between the public internet and a
