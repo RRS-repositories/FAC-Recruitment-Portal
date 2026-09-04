@@ -1,0 +1,9 @@
+# Git hooks are shell scripts: they must stay LF-only or the `#!/bin/sh` shebang
+# breaks on Linux/macOS when checked out with CRLF on Windows. Scoped to
+# .githooks/ so the rest of the repo's line-ending handling is unchanged.
+# Same reasoning as CRM-Finalised/.gitattributes.
+.githooks/** text eol=lf
+
+# Deployed verbatim to the on-prem box, so a CRLF shebang from a Windows
+# checkout would break them there even though they run fine locally.
+*.sh text eol=lf
