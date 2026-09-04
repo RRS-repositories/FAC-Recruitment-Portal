@@ -12,7 +12,8 @@
     "server": "node server/index.mjs",
     "server:dev": "node --watch server/index.mjs",
     "migrate": "node server/scripts/apply-migrations.mjs",
-    "migrate:dry": "node server/scripts/apply-migrations.mjs --dry-run"
+    "migrate:dry": "node server/scripts/apply-migrations.mjs --dry-run",
+    "test": "node --test \"server/**/*.test.mjs\""
   },
   "dependencies": {
     "dotenv": "^16.4.5",

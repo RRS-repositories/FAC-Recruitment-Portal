@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { pool, assertConnection } from './db.mjs';
 import { createEnquiriesRouter } from './routes/enquiries.mjs';
+import { createAdminRouter } from './routes/admin.mjs';
 import { startOutbox } from './notifier/outbox.mjs';
 
 const PORT = Number(process.env.ATLAS_PORT || 5010);
@@ -43,6 +44,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 app.use('/api/enquiries', createEnquiriesRouter({ ipSalt }));
+app.use('/api/admin', createAdminRouter());
 
 app.use((error, _req, res, _next) => {
   console.error('[atlas-intake] unhandled:', error.message);
