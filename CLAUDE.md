@@ -27,12 +27,19 @@ The essentials, repeated here so they cannot be missed:
 
 ## Project layout
 
-Copy lives in `src/data/`, page sections in `src/components/sections/`, anything
-reused twice in `src/components/ui/`. Adding a section means one data entry plus one
-presentational component — no other file should need to change.
+This repo holds the **website only**. It is a static frontend with no backend of
+its own — the FAC recruitment portal owns the enquiry API and the database.
 
 ```
-src/
+atlas-recruitment-website/   the React site (this is where all the work is)
+```
+
+Inside it: copy lives in `src/data/`, page sections in `src/components/sections/`,
+anything reused twice in `src/components/ui/`. Adding a section means one data
+entry plus one presentational component — no other file should need to change.
+
+```
+atlas-recruitment-website/src/
 ├─ App.jsx                  Route table; secondary pages lazy-loaded
 ├─ pages/                   One file per route
 ├─ components/
@@ -79,7 +86,15 @@ Verify at 320 / 390 / 768 / 1440px. The page body must never scroll sideways.
   number is not dialable, the WhatsApp and Privacy-policy links point at `/`, and the
   testimonials, headline statistics and founder biography are unverified. Do not treat
   any of it as fact, and do not help publish it as fact.
-- The enquiry form currently stores nothing. Persistence is planned but not built.
+- **The enquiry form has nowhere to submit to yet, and says so.** This site has no
+  backend; the FAC portal will expose the API. Until then `VITE_ENQUIRY_ENDPOINT`
+  is unset and the form tells the visitor to phone or email instead of showing a
+  success panel for an enquiry nobody received. Point that variable at the portal
+  when it exists — no code change needed.
+- An intake service and admin inbox were built here and then removed when the
+  backend moved to the FAC portal. If any of it is useful there —
+  validation, honeypot/timing checks, the notification outbox, the migration —
+  recover it from commit `ff5b683` rather than rewriting it.
 - Production deploys to `/opt/atlas` on `crm-prod`, published through a Cloudflare
   tunnel to local nginx. TLS terminates at Cloudflare's edge; the box has no
   certificate and listens on port 80 only.

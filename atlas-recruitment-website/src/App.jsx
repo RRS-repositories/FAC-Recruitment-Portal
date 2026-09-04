@@ -9,10 +9,6 @@ const FounderPage = lazy(() => import('@/pages/FounderPage'));
 const EnquirePage = lazy(() => import('@/pages/EnquirePage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
-// Internal tool, not part of the site. Split out so its code never ships in a
-// visitor's bundle, and rendered outside Layout so it has no marketing chrome.
-const AdminPage = lazy(() => import('@/pages/AdminPage'));
-
 /** Holds the fold while a split chunk loads — no layout jump on arrival. */
 function RouteFallback() {
   return <div className="min-h-[70vh]" aria-hidden="true" />;
@@ -21,15 +17,6 @@ function RouteFallback() {
 export default function App() {
   return (
     <Routes>
-      <Route
-        path="admin"
-        element={
-          <Suspense fallback={<RouteFallback />}>
-            <AdminPage />
-          </Suspense>
-        }
-      />
-
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route
