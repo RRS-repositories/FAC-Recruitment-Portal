@@ -7,20 +7,30 @@ import { useEffect } from 'react';
  * breaks bookmarks, tab identification and the first thing a screen reader
  * announces after a navigation.
  */
-export function usePageMeta({ title, description }) {
+function setMeta(name, content) {
+  let tag = document.querySelector(`meta[name="${name}"]`);
+  if (!tag) {
+    tag = document.createElement('meta');
+    tag.setAttribute('name', name);
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute('content', content);
+}
+
+export function usePageMeta({ title, description, robots }) {
   useEffect(() => {
     if (title) document.title = title;
+    if (description) setMeta('description', description);
 
-    if (description) {
-      let tag = document.querySelector('meta[name="description"]');
-      if (!tag) {
-        tag = document.createElement('meta');
-        tag.setAttribute('name', 'description');
-        document.head.appendChild(tag);
-      }
-      tag.setAttribute('content', description);
+    // `robots` is set per-route rather than once in index.html because this is
+    // a single-page app: a tag left behind by the previous route would follow
+    // the visitor onto the next one. Removed again on unmount for that reason.
+    if (robots) {
+      setMeta('robots', robots);
+      return () => document.querySelector('meta[name="robots"]')?.remove();
     }
-  }, [title, description]);
+    return undefined;
+  }, [title, description, robots]);
 }
 
 export default usePageMeta;

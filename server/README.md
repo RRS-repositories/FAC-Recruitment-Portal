@@ -104,6 +104,27 @@ data on the box with no backup:
 sudo -u postgres pg_dump -p 5434 -Fc atlas_recruitment > "$BK/atlas-db-$TS.dump"
 ```
 
+## Admin inbox
+
+`GET /api/admin/enquiries` (list, filter, search, paginate) and
+`PATCH /api/admin/enquiries/:id` (set status only). The React page at `/admin`
+consumes them; it is lazy-loaded and never ships in a visitor's bundle.
+
+**The service verifies the Cloudflare Access JWT itself.** The tempting
+shortcut — put an Access policy on the tunnel and trust whatever reaches the
+origin — does not hold here: nginx on this box listens on `0.0.0.0:80` and
+answers to `server_name 192.168.1.58`, so anyone on the office network can
+reach the origin without passing through Cloudflare at all. The edge policy is
+defence in depth; the signature check is the actual control.
+
+Fails closed in every direction: unconfigured returns 503, a missing or invalid
+token returns 403, and an unreachable JWKS endpoint denies rather than allows.
+`ADMIN_DEV_BYPASS` is refused outright when `NODE_ENV=production`.
+
+Covered by `server/lib/access.test.mjs` (`npm test`) — ten cases including
+`alg: none`, a tampered payload, a token signed by the wrong key, a token
+minted for a different Access application, and JWKS being unreachable.
+
 ## Data protection
 
 Every row is personal data. The raw IP is never stored — only a salted
