@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    /* Fixed 70px header — keep anchor targets, and anything scrolled to by
+       keyboard focus, clear of it. This is the only such offset in the sheet:
+       adding scroll-margin to the sections as well would double it. */
+    scroll-padding-top: 90px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-white font-sans text-ink antialiased;
+    line-height: 1.65;
+    /* Belt-and-braces against a stray wide child causing sideways scroll. */
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2 {
+    @apply font-display;
+    letter-spacing: -0.015em;
+  }
+
+  img {
+    @apply block max-w-full;
+  }
+
+  /* A single visible focus indicator for every interactive control. */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid theme('colors.gold.DEFAULT');
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  /* Scroll-reveal: the element is hidden only once JS has confirmed it will be
+     observed, so a no-JS or failed-observer render still shows all content. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+    will-change: opacity, transform;
+  }
+
+  .reveal[data-visible='true'] {
+    opacity: 1;
+    transform: none;
+    will-change: auto;
+  }
+
+  .marquee-mask {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  /* Content must still arrive — drop the movement, not the element. */
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .animate-marquee {
+    animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
