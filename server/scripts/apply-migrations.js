@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { pool } from '../db.mjs';
+import { pool } from '../db.js';
 
 /**
  * Applies pending migrations against the Atlas cluster and records each one in
@@ -11,8 +11,8 @@ import { pool } from '../db.mjs';
  * Same shape as the `scripts/apply-*-migrations.mjs` runners in CRM-Finalised.
  * House rule: Claude writes migrations, Brad runs this.
  *
- *   node server/scripts/apply-migrations.mjs           # apply pending
- *   node server/scripts/apply-migrations.mjs --dry-run # list, change nothing
+ *   node server/scripts/apply-migrations.js           # apply pending
+ *   node server/scripts/apply-migrations.js --dry-run # list, change nothing
  *
  * `_down.sql` files are never picked up — rolling back is a deliberate manual
  * act, not something a runner should do because a file happened to be present.

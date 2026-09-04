@@ -1,9 +1,9 @@
 import 'dotenv/config';
 import express from 'express';
-import { pool, assertConnection } from './db.mjs';
-import { createEnquiriesRouter } from './routes/enquiries.mjs';
-import { createAdminRouter } from './routes/admin.mjs';
-import { startOutbox } from './notifier/outbox.mjs';
+import { pool, assertConnection } from './db.js';
+import { createEnquiriesRouter } from './routes/enquiries.js';
+import { createAdminRouter } from './routes/admin.js';
+import { startOutbox } from './notifier/outbox.js';
 
 const PORT = Number(process.env.ATLAS_PORT || 5010);
 

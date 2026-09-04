@@ -1,7 +1,7 @@
 module.exports = {
   apps: [{
     name: 'atlas-intake',
-    script: 'index.mjs',
+    script: 'index.js',
     cwd: __dirname,
     instances: 1,
     autorestart: true,

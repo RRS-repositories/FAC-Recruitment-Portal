@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer';
-import { pool } from '../db.mjs';
+import { pool } from '../db.js';
 
 /**
  * Notification outbox.

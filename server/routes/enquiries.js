@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { pool } from '../db.mjs';
-import { normalise, validateEnquiry } from '../lib/validate.mjs';
-import { isHoneypotFilled, isTooFast, hashIp, clientIp } from '../lib/spam.mjs';
+import { pool } from '../db.js';
+import { normalise, validateEnquiry } from '../lib/validate.js';
+import { isHoneypotFilled, isTooFast, hashIp, clientIp } from '../lib/spam.js';
 
 const INSERT = `
   INSERT INTO atlas_enquiries
