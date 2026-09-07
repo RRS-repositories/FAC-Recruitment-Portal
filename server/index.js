@@ -7,7 +7,7 @@ import { createApplicationsRouter } from './routes/applications.js';
 import { createBookingRouter } from './routes/booking.js';
 import { createAdminRouter } from './routes/admin.js';
 
-const PORT = Number(process.env.PORT || 5020);
+const PORT = Number(process.env.PORT || 5000);
 
 // Without a salt the stored IP hashes would be reversible with a rainbow
 // table, which defeats the point of hashing them at all.

@@ -5,7 +5,7 @@ portal. React + Vite + Tailwind.
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173, proxies /api to the server on 5020
+npm run dev      # http://localhost:5173, proxies /api to the server on 5000
 npm run build
 ```
 
