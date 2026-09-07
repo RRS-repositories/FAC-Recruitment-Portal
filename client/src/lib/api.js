@@ -28,7 +28,8 @@ async function request(path, { body, method = 'GET', headers } = {}) {
       method,
       // FormData sets its own multipart boundary — setting Content-Type by
       // hand would corrupt the body.
-      headers: body instanceof FormData ? headers : { 'Content-Type': 'application/json', ...headers },
+      headers:
+        body instanceof FormData ? headers : { 'Content-Type': 'application/json', ...headers },
       body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
     });
   } catch {
@@ -60,7 +61,16 @@ export const startApplication = (role) =>
  * which is what the server expects — one request, so a submission can never
  * half-succeed with the answers stored but the CV lost.
  */
-export function submitApplication({ role, details, written, answers, telemetry, sessionId, cv, source }) {
+export function submitApplication({
+  role,
+  details,
+  written,
+  answers,
+  telemetry,
+  sessionId,
+  cv,
+  source,
+}) {
   const form = new FormData();
   form.set('role', role);
   for (const [key, value] of Object.entries(details)) form.set(key, value ?? '');
@@ -73,7 +83,6 @@ export function submitApplication({ role, details, written, answers, telemetry, 
 
   return request('/recruit/applications', { method: 'POST', body: form });
 }
-
 
 /* ── Booking ──────────────────────────────────────────────────────────────
  * The token in the URL is the entire credential — the candidate has no
@@ -158,6 +167,26 @@ export const adminApplication = (id) =>
 
 export const adminDecide = (id, status) =>
   request(`/recruit/admin/applications/${id}`, {
+    method: 'PATCH',
+    body: { status },
+    headers: withAuth(),
+  });
+
+/**
+ * A fresh booking link for an accepted applicant.
+ *
+ * The previous one stops working — which is the point when the reason for
+ * reissuing is that the first went to the wrong address.
+ */
+export const adminReissueLink = (id) =>
+  request(`/recruit/admin/applications/${id}/booking-link`, {
+    method: 'POST',
+    headers: withAuth(),
+  });
+
+/** Records whether the candidate turned up. */
+export const adminMarkAttendance = (id, status) =>
+  request(`/recruit/admin/applications/${id}/interview`, {
     method: 'PATCH',
     body: { status },
     headers: withAuth(),

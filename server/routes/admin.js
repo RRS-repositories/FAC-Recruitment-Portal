@@ -234,6 +234,154 @@ export function createAdminRouter() {
     }
   });
 
+  /**
+   * Reissues a booking link.
+   *
+   * The token is returned exactly once, at the moment of acceptance, and
+   * stored only as a hash — so a manager who closes that dialog without
+   * copying it, or emails it to a typo, has stranded the candidate with no
+   * way back. There has to be a second chance, and this is it.
+   *
+   * Reissuing invalidates the previous link by replacing the hash. That is
+   * the point: if the reason for reissuing is that the first one went to the
+   * wrong address, the wrong address must stop working.
+   */
+  router.post('/applications/:id/booking-link', async (req, res) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: applicant } = await client.query(
+        'SELECT id, status, full_name, email FROM recruit_applicants WHERE id = $1',
+        [req.params.id],
+      );
+      if (!applicant[0]) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ ok: false, error: 'No such application.' });
+      }
+      if (applicant[0].status !== 'accepted') {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          ok: false,
+          error: 'Only an accepted applicant has a booking link. Accept them first.',
+        });
+      }
+
+      const { rows: existing } = await client.query(
+        `SELECT id, status FROM recruit_interviews
+          WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [req.params.id],
+      );
+      const latest = existing[0];
+
+      if (latest && (latest.status === 'attended' || latest.status === 'no_show')) {
+        await client.query('ROLLBACK');
+        // A link to book an interview that has already happened would only
+        // confuse. Whatever comes next is a new decision, not a new link.
+        return res.status(409).json({
+          ok: false,
+          error: 'That interview has already taken place.',
+        });
+      }
+
+      const { token, hash } = generateBookingToken();
+
+      // A cancelled interview keeps its row — "they cancelled, and when" is
+      // worth being able to answer. So a reissue after a cancellation starts
+      // a new one rather than reviving the old.
+      if (!latest || latest.status === 'cancelled') {
+        const { rows: interviewer } = await client.query(
+          'SELECT id FROM recruit_interviewers WHERE active ORDER BY id LIMIT 1',
+        );
+        if (!interviewer[0]) throw new Error('no active interviewer configured');
+
+        await client.query(
+          `INSERT INTO recruit_interviews (applicant_id, interviewer_id, booking_token_hash, token_expires_at, status)
+           VALUES ($1, $2, $3, $4, 'invited')`,
+          [req.params.id, interviewer[0].id, hash, tokenExpiry()],
+        );
+      } else {
+        // Invited or already booked: rotate the token and extend the clock,
+        // leaving any chosen slot alone. A candidate who has booked keeps
+        // their time and gets a working link to manage it.
+        await client.query(
+          `UPDATE recruit_interviews
+              SET booking_token_hash = $2, token_expires_at = $3, updated_at = now()
+            WHERE id = $1`,
+          [latest.id, hash, tokenExpiry()],
+        );
+      }
+
+      await client.query(
+        `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
+         VALUES ($1, $2, 'link_reissued', $3)`,
+        [req.params.id, req.admin.email, JSON.stringify({ reissuedBy: req.admin.email })],
+      );
+
+      await client.query('COMMIT');
+      console.log(`[fac-recruit] ${req.admin.email} reissued a booking link for ${req.params.id}`);
+
+      return res.json({ ok: true, bookingToken: token, email: applicant[0].email, fullName: applicant[0].full_name });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error('[fac-recruit] link reissue failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not reissue that link.' });
+    } finally {
+      client.release();
+    }
+  });
+
+  /**
+   * Records what actually happened at the interview.
+   *
+   * Without this the no-show figure is decorative — the column exists, the
+   * dashboard has a tile for it, and nothing could ever set it. It is also
+   * the only signal that distinguishes a candidate who did not turn up from
+   * one who is still waiting for their interview.
+   */
+  router.patch('/applications/:id/interview', async (req, res) => {
+    const { status } = req.body ?? {};
+    if (status !== 'attended' && status !== 'no_show') {
+      return res.status(400).json({ ok: false, error: 'Status must be attended or no_show.' });
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, status, starts_at FROM recruit_interviews
+          WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [req.params.id],
+      );
+      const interview = rows[0];
+
+      if (!interview || !interview.starts_at) {
+        return res.status(409).json({ ok: false, error: 'That candidate has not booked an interview.' });
+      }
+      if (interview.status === 'cancelled') {
+        return res.status(409).json({ ok: false, error: 'That interview was cancelled.' });
+      }
+      // Marking an interview that has not started yet is not a record of
+      // anything — it is a guess, and one that would quietly become wrong.
+      if (new Date(interview.starts_at) > new Date()) {
+        return res.status(409).json({ ok: false, error: 'That interview has not happened yet.' });
+      }
+
+      await pool.query(
+        'UPDATE recruit_interviews SET status = $2, updated_at = now() WHERE id = $1',
+        [interview.id, status],
+      );
+      await pool.query(
+        `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
+         VALUES ($1, $2, $3, $4)`,
+        [req.params.id, req.admin.email, status, JSON.stringify({ markedBy: req.admin.email })],
+      );
+
+      return res.json({ ok: true, status });
+    } catch (error) {
+      console.error('[fac-recruit] attendance update failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not record that.' });
+    }
+  });
+
   /** Streams the CV. Not a public URL — it goes through this auth check. */
   router.get('/applications/:id/cv', async (req, res) => {
     try {
