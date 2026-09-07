@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AppShell } from '@/components/layout/AppShell';
+import { AdminShell } from '@/components/layout/AdminShell';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/ui/Icon';
@@ -7,7 +7,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ApplicantRow } from '@/features/dashboard/ApplicantRow';
 import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
-import { AdminNav } from '@/features/dashboard/AdminNav';
 import { ROLES } from '@/data/roles';
 import usePageMeta from '@/hooks/usePageMeta';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
@@ -271,202 +270,199 @@ export function DashboardPage() {
   const filtered = status !== 'all' || role !== 'all' || Boolean(search);
 
   return (
-    <AppShell navRight={<AdminNav current="applicants" email={adminEmail} onSignOut={signOut} />}>
-      <div className="mx-auto max-w-wide px-5 py-8 sm:px-8">
-        <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-display-md font-extrabold text-ink">Applicants</h1>
-            <p className="mt-1 text-[0.92rem] text-muted">
-              Review, accept or decline. Accepting creates the candidate&rsquo;s booking link.
-            </p>
-          </div>
-          <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
-            <Icon name="clock" size={15} />
-            {loading ? 'Refreshing…' : 'Refresh'}
-          </Button>
-        </header>
+    <AdminShell
+      current="applicants"
+      title="Applicants"
+      subtitle="Review, accept or decline. Accepting creates the candidate's booking link."
+      email={adminEmail}
+      onSignOut={signOut}
+      actions={
+        <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
+          <Icon name="clock" size={15} />
+          <span className="hidden sm:inline">{loading ? 'Refreshing…' : 'Refresh'}</span>
+        </Button>
+      }
+    >
+      <section
+        aria-label="Summary"
+        className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6"
+      >
+        <Stat label="Total" value={summary.total} icon="user" />
+        <Stat label="Awaiting" value={summary.pending} icon="clock" />
+        <Stat label="Accepted" value={summary.accepted} icon="check" />
+        <Stat label="Booked" value={summary.booked} icon="calendar" />
+        <Stat label="No-shows" value={summary.noShows} icon="alert" tone="alert" />
+        <Stat label="AI flagged" value={summary.aiFlagged} icon="sparkle" tone="alert" />
+      </section>
 
-        <section
-          aria-label="Summary"
-          className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6"
+      {actionError ? (
+        <p
+          role="alert"
+          className="mb-4 rounded-panel border border-danger/30 bg-red-50 px-4 py-3 text-[0.88rem] font-medium text-danger"
         >
-          <Stat label="Total" value={summary.total} icon="user" />
-          <Stat label="Awaiting" value={summary.pending} icon="clock" />
-          <Stat label="Accepted" value={summary.accepted} icon="check" />
-          <Stat label="Booked" value={summary.booked} icon="calendar" />
-          <Stat label="No-shows" value={summary.noShows} icon="alert" tone="alert" />
-          <Stat label="AI flagged" value={summary.aiFlagged} icon="sparkle" tone="alert" />
-        </section>
+          {actionError}
+        </p>
+      ) : null}
 
-        {actionError ? (
-          <p
-            role="alert"
-            className="mb-4 rounded-panel border border-danger/30 bg-red-50 px-4 py-3 text-[0.88rem] font-medium text-danger"
-          >
-            {actionError}
-          </p>
-        ) : null}
-
-        <Card padded={false} className="overflow-hidden">
-          <div className="flex flex-wrap items-center gap-2 border-b border-line p-4 sm:p-5">
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
-              {STATUS_FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => chooseStatus(f.key)}
-                  aria-pressed={status === f.key}
-                  className={cn(
-                    'rounded-control px-3 py-2 text-[0.83rem] font-semibold transition-colors',
-                    status === f.key
-                      ? 'bg-ink text-white'
-                      : 'border border-line bg-white text-ink hover:border-violet',
-                  )}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by role">
+      <Card padded={false} className="overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 border-b border-line p-4 sm:p-5">
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
+            {STATUS_FILTERS.map((f) => (
               <button
+                key={f.key}
                 type="button"
-                onClick={() => chooseRole('all')}
-                aria-pressed={role === 'all'}
+                onClick={() => chooseStatus(f.key)}
+                aria-pressed={status === f.key}
                 className={cn(
                   'rounded-control px-3 py-2 text-[0.83rem] font-semibold transition-colors',
-                  role === 'all'
+                  status === f.key
+                    ? 'bg-ink text-white'
+                    : 'border border-line bg-white text-ink hover:border-violet',
+                )}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by role">
+            <button
+              type="button"
+              onClick={() => chooseRole('all')}
+              aria-pressed={role === 'all'}
+              className={cn(
+                'rounded-control px-3 py-2 text-[0.83rem] font-semibold transition-colors',
+                role === 'all'
+                  ? 'bg-violet text-white'
+                  : 'border border-line bg-white text-ink hover:border-violet',
+              )}
+            >
+              Both roles
+            </button>
+            {Object.values(ROLES).map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => chooseRole(r.key)}
+                aria-pressed={role === r.key}
+                className={cn(
+                  'rounded-control px-3 py-2 text-[0.83rem] font-semibold transition-colors',
+                  role === r.key
                     ? 'bg-violet text-white'
                     : 'border border-line bg-white text-ink hover:border-violet',
                 )}
               >
-                Both roles
+                {r.country}
               </button>
-              {Object.values(ROLES).map((r) => (
-                <button
-                  key={r.key}
-                  type="button"
-                  onClick={() => chooseRole(r.key)}
-                  aria-pressed={role === r.key}
-                  className={cn(
-                    'rounded-control px-3 py-2 text-[0.83rem] font-semibold transition-colors',
-                    role === r.key
-                      ? 'bg-violet text-white'
-                      : 'border border-line bg-white text-ink hover:border-violet',
-                  )}
-                >
-                  {r.country}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative ml-auto w-full sm:w-64">
-              <label htmlFor="applicant-search" className="sr-only">
-                Search applicants by name or email
-              </label>
-              <Icon
-                name="search"
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-              />
-              <input
-                id="applicant-search"
-                type="search"
-                value={query}
-                onChange={(e) => changeQuery(e.target.value)}
-                placeholder="Search name or email"
-                className="w-full rounded-control border-[1.5px] border-line bg-white py-2 pl-9 pr-3 text-[0.88rem] focus:border-violet focus:outline-none"
-              />
-            </div>
+            ))}
           </div>
 
-          {loading && applicants.length === 0 ? (
-            <RowSkeleton />
-          ) : loadError ? (
-            <EmptyState
-              title="Could not load applicants"
-              body={loadError}
-              action={
-                <Button variant="secondary" onClick={load}>
-                  Try again
-                </Button>
-              }
+          <div className="relative ml-auto w-full sm:w-64">
+            <label htmlFor="applicant-search" className="sr-only">
+              Search applicants by name or email
+            </label>
+            <Icon
+              name="search"
+              size={16}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
             />
-          ) : applicants.length > 0 ? (
-            <ul aria-busy={loading || undefined} className={cn(loading && 'opacity-60')}>
-              {applicants.map((applicant) => (
-                <ApplicantRow
-                  key={applicant.id}
-                  applicant={applicant}
-                  onDecide={(id, decision) => {
-                    setDecideError('');
-                    setConfirming({ id, decision });
-                  }}
-                  onReissue={reissue}
-                  onAttendance={markAttendance}
-                />
-              ))}
-            </ul>
-          ) : filtered ? (
-            <EmptyState
-              title="No applicants match those filters"
-              body="Try clearing the search or switching back to all roles."
-              action={
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setPage(1);
-                    setStatus('all');
-                    setRole('all');
-                    setQuery('');
-                  }}
-                >
-                  Clear filters
-                </Button>
-              }
+            <input
+              id="applicant-search"
+              type="search"
+              value={query}
+              onChange={(e) => changeQuery(e.target.value)}
+              placeholder="Search name or email"
+              className="w-full rounded-control border-[1.5px] border-line bg-white py-2 pl-9 pr-3 text-[0.88rem] focus:border-violet focus:outline-none"
             />
-          ) : (
-            <EmptyState
-              title="No applications yet"
-              body="Applications appear here the moment a candidate submits one."
-            />
-          )}
-        </Card>
+          </div>
+        </div>
 
-        {/* Announced, so a screen reader hears the result count change rather
+        {loading && applicants.length === 0 ? (
+          <RowSkeleton />
+        ) : loadError ? (
+          <EmptyState
+            title="Could not load applicants"
+            body={loadError}
+            action={
+              <Button variant="secondary" onClick={load}>
+                Try again
+              </Button>
+            }
+          />
+        ) : applicants.length > 0 ? (
+          <ul aria-busy={loading || undefined} className={cn(loading && 'opacity-60')}>
+            {applicants.map((applicant) => (
+              <ApplicantRow
+                key={applicant.id}
+                applicant={applicant}
+                onDecide={(id, decision) => {
+                  setDecideError('');
+                  setConfirming({ id, decision });
+                }}
+                onReissue={reissue}
+                onAttendance={markAttendance}
+              />
+            ))}
+          </ul>
+        ) : filtered ? (
+          <EmptyState
+            title="No applicants match those filters"
+            body="Try clearing the search or switching back to all roles."
+            action={
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setPage(1);
+                  setStatus('all');
+                  setRole('all');
+                  setQuery('');
+                }}
+              >
+                Clear filters
+              </Button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="No applications yet"
+            body="Applications appear here the moment a candidate submits one."
+          />
+        )}
+      </Card>
+
+      {/* Announced, so a screen reader hears the result count change rather
             than having to go looking for it. */}
-        <p role="status" className="mt-4 text-center text-[0.8rem] text-muted">
-          {total === 0
-            ? 'No applicants'
-            : `Showing ${applicants.length} of ${total} applicant${total === 1 ? '' : 's'}`}
-        </p>
+      <p role="status" className="mt-4 text-center text-[0.8rem] text-muted">
+        {total === 0
+          ? 'No applicants'
+          : `Showing ${applicants.length} of ${total} applicant${total === 1 ? '' : 's'}`}
+      </p>
 
-        {pages > 1 ? (
-          <nav aria-label="Pages" className="mt-3 flex items-center justify-center gap-3">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || loading}
-            >
-              <Icon name="arrowLeft" size={15} />
-              Previous
-            </Button>
-            <span className="text-[0.82rem] text-muted tabular">
-              Page {page} of {pages}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setPage((p) => Math.min(pages, p + 1))}
-              disabled={page >= pages || loading}
-            >
-              Next
-              <Icon name="arrowRight" size={15} />
-            </Button>
-          </nav>
-        ) : null}
-      </div>
+      {pages > 1 ? (
+        <nav aria-label="Pages" className="mt-3 flex items-center justify-center gap-3">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || loading}
+          >
+            <Icon name="arrowLeft" size={15} />
+            Previous
+          </Button>
+          <span className="text-[0.82rem] text-muted tabular">
+            Page {page} of {pages}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setPage((p) => Math.min(pages, p + 1))}
+            disabled={page >= pages || loading}
+          >
+            Next
+            <Icon name="arrowRight" size={15} />
+          </Button>
+        </nav>
+      ) : null}
 
       {/* Confirmation. A decision is recorded against your name and cannot be
           taken back — it should never be one stray click away. */}
@@ -564,7 +560,7 @@ export function DashboardPage() {
           </div>
         </Modal>
       ) : null}
-    </AppShell>
+    </AdminShell>
   );
 }
 
