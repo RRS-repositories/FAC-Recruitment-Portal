@@ -2,6 +2,7 @@ import { pool } from './db.js';
 import { sendMail, mailMode } from './mailer.js';
 import { renderQueued } from './templates.js';
 import { BATCH, MAX_ATTEMPTS, backoffSeconds } from './outboxPolicy.js';
+import { isEnabled } from './flags.js';
 
 /**
  * The email queue.
@@ -113,7 +114,20 @@ export async function historyFor(applicantId) {
  * which is what the tests assert on.
  */
 export async function drainOnce() {
-  const summary = { claimed: 0, sent: 0, failed: 0, mode: mailMode() };
+  const summary = { claimed: 0, sent: 0, failed: 0, cancelled: 0, mode: mailMode() };
+
+  /*
+   * Spec §2's `recruitment_alerts`, and the one decision in this file worth
+   * arguing about.
+   *
+   * With notifications off, a queued email is CANCELLED rather than held. The
+   * flag exists for a shadow run — real applications, nobody contacted — and
+   * holding the backlog would mean that switching it on later fires a week of
+   * stale mail at people all at once. Cancelling is visible instead of
+   * dangerous: the dashboard shows exactly who was not written to, and says
+   * why, so a manager can pick them up by hand.
+   */
+  const alerts = await isEnabled('recruitment_alerts');
 
   const client = await pool.connect();
   try {
@@ -122,6 +136,17 @@ export async function drainOnce() {
     summary.claimed = rows.length;
 
     for (const row of rows) {
+      if (!alerts) {
+        await client.query(
+          `UPDATE recruit_outbox
+              SET cancelled_at = now(), last_error = $2, vars = '{}'::jsonb, updated_at = now()
+            WHERE id = $1`,
+          [row.id, 'notifications were switched off'],
+        );
+        summary.cancelled += 1;
+        continue;
+      }
+
       try {
         const message = await renderQueued(row, client);
         const result = await sendMail({
@@ -192,9 +217,10 @@ export function startOutboxWorker({ intervalMs = Number(process.env.OUTBOX_INTER
     running = true;
     try {
       const summary = await drainOnce();
-      if (summary.sent || summary.failed) {
+      if (summary.sent || summary.failed || summary.cancelled) {
         console.log(
-          `[fac-recruit] outbox: ${summary.sent} sent, ${summary.failed} failed (${summary.mode})`,
+          `[fac-recruit] outbox: ${summary.sent} sent, ${summary.failed} failed, ` +
+            `${summary.cancelled} cancelled (${summary.mode})`,
         );
       }
     } finally {

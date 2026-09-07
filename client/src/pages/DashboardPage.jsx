@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ApplicantRow } from '@/features/dashboard/ApplicantRow';
 import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
+import { AdminNav } from '@/features/dashboard/AdminNav';
 import { ROLES } from '@/data/roles';
 import usePageMeta from '@/hooks/usePageMeta';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
@@ -270,33 +271,7 @@ export function DashboardPage() {
   const filtered = status !== 'all' || role !== 'all' || Boolean(search);
 
   return (
-    <AppShell
-      navRight={
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-          {/* A work email is longer than a 320px bar has room for, and it is
-              not what anyone came to the page for. It reappears as soon as
-              there is space; the sign-out button never disappears. */}
-          {adminEmail ? (
-            <span className="hidden max-w-[11rem] truncate text-[0.8rem] text-white/60 sm:inline lg:max-w-none">
-              {adminEmail}
-            </span>
-          ) : null}
-          <a
-            href="/admin/templates"
-            className="flex-shrink-0 rounded-control border border-white/20 px-3 py-1.5 text-[0.8rem] font-semibold text-white hover:bg-white/10"
-          >
-            Emails
-          </a>
-          <button
-            type="button"
-            onClick={signOut}
-            className="flex-shrink-0 rounded-control border border-white/20 px-3 py-1.5 text-[0.8rem] font-semibold text-white hover:bg-white/10"
-          >
-            Sign out
-          </button>
-        </div>
-      }
-    >
+    <AppShell navRight={<AdminNav current="applicants" email={adminEmail} onSignOut={signOut} />}>
       <div className="mx-auto max-w-wide px-5 py-8 sm:px-8">
         <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>

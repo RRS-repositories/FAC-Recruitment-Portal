@@ -9,6 +9,8 @@ import { notifyDecision, notifyNoShow } from '../lib/notify.js';
 import { cancelPendingFor, historyFor } from '../lib/outbox.js';
 import { describeTemplates } from '../lib/templates.js';
 import { mailMode } from '../lib/mailer.js';
+import { FLAGS, allFlags, setFlag } from '../lib/flags.js';
+import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
 
 /**
  * The manager's view: read applications, accept or decline them.
@@ -126,6 +128,140 @@ export function createAdminRouter() {
   router.get('/templates', (_req, res) =>
     res.json({ ok: true, mode: mailMode(), templates: describeTemplates() }),
   );
+
+  /**
+   * Everything on the settings screen: who interviews, the rules that decide
+   * which slots exist, the periods they are unavailable, and the flags.
+   *
+   * Spec §8.3. Until now these rules could only be changed by running SQL
+   * against production, which is not a thing anyone should have to do to move
+   * lunch by half an hour.
+   */
+  router.get('/settings', async (_req, res) => {
+    try {
+      const { rows: interviewers } = await pool.query(
+        `SELECT i.id, i.full_name, i.email, i.personal_timezone, i.active,
+                r.timezone, r.weekdays, r.day_start, r.day_end, r.slot_minutes,
+                r.buffer_minutes, r.min_notice_hours, r.max_days_ahead, r.blocks
+           FROM recruit_interviewers i
+           LEFT JOIN recruit_availability_rules r ON r.interviewer_id = i.id
+          WHERE i.active
+          ORDER BY i.id`,
+      );
+      if (!interviewers[0]) {
+        return res.status(503).json({ ok: false, error: 'No interviewer is configured.' });
+      }
+
+      return res.json({
+        ok: true,
+        interviewer: interviewers[0],
+        blackouts: await listBlackouts(interviewers[0].id),
+        flags: await allFlags(),
+        mailMode: mailMode(),
+      });
+    } catch (error) {
+      console.error('[fac-recruit] settings load failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not load the settings.' });
+    }
+  });
+
+  /** Changes the availability rules. */
+  router.put('/settings/availability', async (req, res) => {
+    const { interviewerId, dayStart, dayEnd, weekdays, slotMinutes, minNoticeHours, maxDaysAhead, blocks } =
+      req.body ?? {};
+
+    // Checked here rather than trusted to the form: these values decide what a
+    // candidate is offered, and a day that ends before it starts would empty
+    // the calendar with no error anywhere.
+    const clock = /^([01]\d|2[0-3]):[0-5]\d$/;
+    if (!clock.test(dayStart ?? '') || !clock.test(dayEnd ?? '')) {
+      return res.status(400).json({ ok: false, error: 'Times must look like 09:00.' });
+    }
+    if (dayEnd <= dayStart) {
+      return res.status(400).json({ ok: false, error: 'The day must end after it starts.' });
+    }
+    if (!Array.isArray(weekdays) || weekdays.length === 0) {
+      return res.status(400).json({ ok: false, error: 'Pick at least one working day.' });
+    }
+    if (![15, 20, 30, 45, 60].includes(Number(slotMinutes))) {
+      return res.status(400).json({ ok: false, error: 'That interview length is not one of the options.' });
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `UPDATE recruit_availability_rules
+            SET day_start = $2, day_end = $3, weekdays = $4, slot_minutes = $5,
+                min_notice_hours = $6, max_days_ahead = $7, blocks = $8::jsonb
+          WHERE interviewer_id = $1
+          RETURNING *`,
+        [
+          interviewerId,
+          dayStart,
+          dayEnd,
+          weekdays.map(Number).filter((d) => d >= 0 && d <= 6),
+          Number(slotMinutes),
+          Math.max(0, Number(minNoticeHours) || 0),
+          Math.min(90, Math.max(1, Number(maxDaysAhead) || 14)),
+          JSON.stringify(Array.isArray(blocks) ? blocks : []),
+        ],
+      );
+      if (!rows[0]) return res.status(404).json({ ok: false, error: 'No rules for that interviewer.' });
+
+      console.log(`[fac-recruit] ${req.admin.email} changed the availability rules`);
+      return res.json({ ok: true, rule: rows[0] });
+    } catch (error) {
+      console.error('[fac-recruit] availability update failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not save those rules.' });
+    }
+  });
+
+  /** Marks a period unavailable. */
+  router.post('/settings/blackouts', async (req, res) => {
+    try {
+      const { blackout, clashes } = await addBlackout({
+        interviewerId: req.body?.interviewerId,
+        startsAt: req.body?.startsAt,
+        endsAt: req.body?.endsAt,
+        reason: req.body?.reason,
+        createdByEmail: req.admin.email,
+      });
+      // Booked interviews inside the period are reported, never cancelled.
+      // Marking yourself away is not the same as calling off three interviews.
+      return res.status(201).json({ ok: true, blackout, clashes });
+    } catch (error) {
+      if (error.status === 400) return res.status(400).json({ ok: false, error: error.message });
+      console.error('[fac-recruit] blackout failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not save that.' });
+    }
+  });
+
+  router.delete('/settings/blackouts/:id', async (req, res) => {
+    try {
+      const removed = await removeBlackout(req.params.id, Number(req.query.interviewerId));
+      if (!removed) return res.status(404).json({ ok: false, error: 'No such entry.' });
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('[fac-recruit] blackout delete failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not remove that.' });
+    }
+  });
+
+  /** Flips a feature flag. Spec §2. */
+  router.put('/settings/flags/:name', async (req, res) => {
+    if (!FLAGS.includes(req.params.name)) {
+      return res.status(404).json({ ok: false, error: 'No such setting.' });
+    }
+    try {
+      const enabled = await setFlag(req.params.name, req.body?.enabled === true);
+      console.log(
+        `[fac-recruit] ${req.admin.email} turned ${req.params.name} ${enabled ? 'ON' : 'OFF'}`,
+      );
+      return res.json({ ok: true, name: req.params.name, enabled });
+    } catch (error) {
+      console.error('[fac-recruit] flag update failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not change that.' });
+    }
+  });
 
   router.get('/applications', async (req, res) => {
     const status = STATUSES.has(req.query.status) ? req.query.status : null;
