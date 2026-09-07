@@ -1,5 +1,5 @@
 import { Field, TextArea } from '@/components/ui/Field';
-import { WRITTEN_QUESTIONS } from '@/data/roles';
+import { WRITTEN_QUESTIONS } from '@/data/writtenQuestions';
 import { StepHeader } from '../StepHeader';
 import { StepNav } from '../StepNav';
 import { cn } from '@/lib/cn';

@@ -1,5 +1,5 @@
 import { OptionCard } from '@/components/ui/OptionCard';
-import { unanswered } from '@/lib/scoring';
+import { unanswered } from '@shared/scoring';
 import { StepHeader } from '../StepHeader';
 import { StepNav } from '../StepNav';
 
@@ -13,8 +13,8 @@ import { StepNav } from '../StepNav';
  * Each question is a fieldset with a legend, so a screen reader announces the
  * question before its options rather than reading eight unlabelled buttons.
  */
-export function AssessmentStep({ role, answers, onChange, onBack, onNext }) {
-  const remaining = unanswered(role.questions, answers);
+export function AssessmentStep({ role, questions, answers, onChange, onBack, onNext }) {
+  const remaining = unanswered(questions, answers);
 
   const choose = (question, index) => {
     if (question.multi) {
@@ -43,7 +43,7 @@ export function AssessmentStep({ role, answers, onChange, onBack, onNext }) {
       />
 
       <div className="grid gap-8">
-        {role.questions.map((question, qIndex) => (
+        {questions.map((question, qIndex) => (
           <fieldset key={question.id} className="border-0 p-0">
             <legend className="mb-3 block text-[0.95rem] font-semibold leading-snug text-ink">
               <span className="mr-2 text-violet-deep tabular">{qIndex + 1}.</span>
