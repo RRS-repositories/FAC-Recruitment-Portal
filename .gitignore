@@ -10,3 +10,10 @@ dist-ssr
 npm-debug.log*
 yarn-error.log*
 var/
+
+# Locally installed Claude Code skills. Machine-local tooling, not project
+# code — scoped to skills/ rather than all of .claude/ so shared project
+# settings can still be committed later if wanted.
+.claude/skills/
+.agents/skills/
+skills-lock.json
