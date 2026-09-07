@@ -8,6 +8,9 @@ import { createBookingRouter } from './routes/booking.js';
 import { createAdminRouter } from './routes/admin.js';
 import { startOutboxWorker } from './lib/outbox.js';
 import { verifyMail, mailMode } from './lib/mailer.js';
+// Imported for its side effects: registering every email template at boot, so
+// a queued row can never find its template missing.
+import './templates/index.js';
 
 const PORT = Number(process.env.PORT || 5000);
 

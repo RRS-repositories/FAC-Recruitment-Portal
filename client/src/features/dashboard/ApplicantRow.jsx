@@ -32,6 +32,45 @@ const INTERVIEW_TONE = {
 
 const AI_TONE = { clean: 'ok', possible: 'warn', ai_used: 'danger' };
 
+/**
+ * Template keys read as machine names. A manager should see what the email
+ * was, not what it is called in the code.
+ */
+const EMAIL_LABEL = {
+  'recruit.ack': 'Application received',
+  'recruit.india.accept': 'Shortlisted, with booking link',
+  'recruit.sa.accept': 'Shortlisted, with booking link',
+  'recruit.india.decline': 'Not successful',
+  'recruit.sa.decline': 'Not successful',
+  'recruit.booking.confirmed': 'Interview booked',
+  'recruit.rescheduled': 'Interview moved',
+  'recruit.cancelled': 'Interview cancelled',
+  'recruit.reminder.24h': 'Reminder, 24 hours before',
+  'recruit.reminder.10m': 'Reminder, 10 minutes before',
+  'recruit.noshow': 'We missed you, rebook',
+};
+
+/** One email's state, in words rather than a status code. */
+function deliveryState(email) {
+  if (email.cancelled_at)
+    return { text: `Called off — ${email.last_error ?? 'no longer needed'}`, tone: 'quiet' };
+  if (email.sent_at) return { text: `Sent ${formatDateTime(email.sent_at)}`, tone: 'ok' };
+  if (email.attempts >= 6)
+    return { text: `Failed after ${email.attempts} attempts`, tone: 'danger' };
+  if (email.attempts > 0) return { text: `Failed ${email.attempts}×, trying again`, tone: 'warn' };
+  if (new Date(email.send_after) > new Date()) {
+    return { text: `Scheduled for ${formatDateTime(email.send_after)}`, tone: 'quiet' };
+  }
+  return { text: 'Queued, sending shortly', tone: 'quiet' };
+}
+
+const DELIVERY_TEXT = {
+  ok: 'text-ok',
+  warn: 'text-warn',
+  danger: 'text-danger',
+  quiet: 'text-muted',
+};
+
 // Written out in full, not built as `text-${tone}`. Tailwind scans source for
 // complete class names, so an interpolated one is never generated and the text
 // silently loses its colour.
@@ -73,6 +112,8 @@ export function ApplicantRow({
 }) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState(null);
+  const [emails, setEmails] = useState(null);
+  const [mailMode, setMailMode] = useState(null);
   const [detailError, setDetailError] = useState('');
   const [downloadError, setDownloadError] = useState('');
   const [busy, setBusy] = useState('');
@@ -92,7 +133,10 @@ export function ApplicantRow({
 
     adminApplication(applicant.id)
       .then((result) => {
-        if (!cancelled) setDetail(normaliseApplicant(result.application));
+        if (cancelled) return;
+        setDetail(normaliseApplicant(result.application));
+        setEmails(result.emails ?? []);
+        setMailMode(result.mailMode ?? null);
       })
       .catch((failure) => {
         if (!cancelled) setDetailError(failure.message);
@@ -307,6 +351,40 @@ export function ApplicantRow({
             ) : null}
           </div>
 
+          {emails && emails.length > 0 ? (
+            <div className="mt-4 border-t border-line pt-4">
+              <p className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted">
+                Emails
+              </p>
+              <ul className="grid gap-1.5">
+                {emails.map((email) => {
+                  const state = deliveryState(email);
+                  return (
+                    <li
+                      key={email.id}
+                      className="flex flex-wrap items-baseline gap-x-2 text-[0.84rem]"
+                    >
+                      <span className="text-ink">
+                        {EMAIL_LABEL[email.template] ?? email.template}
+                      </span>
+                      <span className={cn('text-[0.8rem]', DELIVERY_TEXT[state.tone])}>
+                        · {state.text}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {mailMode === 'file' ? (
+                // Said here, next to the list, because this list otherwise
+                // reads exactly like proof the candidate was contacted.
+                <p className="mt-2 text-[0.78rem] leading-relaxed text-warn">
+                  Not actually delivered — no mailbox is configured yet, so these were written to a
+                  file on the server. Send the booking link by hand.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {canReissue || canMark || marked ? (
             <div className="mt-4 border-t border-line pt-4">
               <p className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted">
@@ -321,6 +399,9 @@ export function ApplicantRow({
                     onClick={async () => {
                       setBusy('link');
                       await onReissue?.(applicant.id);
+                      // The reissue queued another email; the list in hand is
+                      // now one short. Dropping the detail refetches both.
+                      setDetail(null);
                       setBusy('');
                     }}
                   >
@@ -342,6 +423,7 @@ export function ApplicantRow({
                       onClick={async () => {
                         setBusy('attended');
                         await onAttendance?.(applicant.id, 'attended');
+                        setDetail(null);
                         setBusy('');
                       }}
                     >
@@ -355,6 +437,7 @@ export function ApplicantRow({
                       onClick={async () => {
                         setBusy('no_show');
                         await onAttendance?.(applicant.id, 'no_show');
+                        setDetail(null);
                         setBusy('');
                       }}
                     >

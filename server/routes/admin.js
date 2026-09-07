@@ -5,6 +5,10 @@ import { pool } from '../lib/db.js';
 import { authenticate, issueToken, parseAdminUsers, requireAdmin } from '../lib/adminAuth.js';
 import { resolveCv, cvExists } from '../lib/storage.js';
 import { generateBookingToken, tokenExpiry } from '../lib/bookingToken.js';
+import { notifyDecision, notifyNoShow } from '../lib/notify.js';
+import { cancelPendingFor, historyFor } from '../lib/outbox.js';
+import { describeTemplates } from '../lib/templates.js';
+import { mailMode } from '../lib/mailer.js';
 
 /**
  * The manager's view: read applications, accept or decline them.
@@ -108,6 +112,21 @@ export function createAdminRouter() {
 
   router.get('/me', (req, res) => res.json({ ok: true, admin: req.admin }));
 
+  /**
+   * Every email the portal can send, rendered from invented sample data.
+   *
+   * A manager should be able to read what a candidate will receive BEFORE
+   * anybody receives it — a rejection letter is not something to discover the
+   * wording of afterwards. Nothing here touches a real record: the samples are
+   * fixed, so this page cannot leak an applicant.
+   *
+   * `mailMode` is on the response because the templates are only half the
+   * question. The other half is whether any of it is actually being sent.
+   */
+  router.get('/templates', (_req, res) =>
+    res.json({ ok: true, mode: mailMode(), templates: describeTemplates() }),
+  );
+
   router.get('/applications', async (req, res) => {
     const status = STATUSES.has(req.query.status) ? req.query.status : null;
     const role = ['india_intern', 'sa_paralegal'].includes(req.query.role) ? req.query.role : null;
@@ -157,7 +176,11 @@ export function createAdminRouter() {
         [req.params.id],
       );
 
-      return res.json({ ok: true, application: rows[0], audit });
+      // What has actually been sent to this person, so a manager can answer
+      // "did they get the link?" without guessing.
+      const emails = await historyFor(req.params.id);
+
+      return res.json({ ok: true, application: rows[0], audit, emails, mailMode: mailMode() });
     } catch (error) {
       console.error('[fac-recruit] admin detail failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not load that application.' });
@@ -223,7 +246,14 @@ export function createAdminRouter() {
         [rows[0].id, req.admin.email, status, JSON.stringify({ decidedBy: req.admin.email })],
       );
 
+      // Queued in the same transaction as the decision. Either both happen or
+      // neither does — nobody is accepted without their invitation queued, and
+      // no invitation goes out for a decision that rolled back.
+      await notifyDecision(client, { applicant: rows[0], status, bookingToken });
+
       await client.query('COMMIT');
+      // The token is still returned, so a manager can send it by hand if they
+      // would rather not wait — or if no mailbox is configured yet.
       return res.json({ ok: true, status, bookingToken });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
@@ -252,7 +282,7 @@ export function createAdminRouter() {
       await client.query('BEGIN');
 
       const { rows: applicant } = await client.query(
-        'SELECT id, status, full_name, email FROM recruit_applicants WHERE id = $1',
+        'SELECT id, status, full_name, email, role FROM recruit_applicants WHERE id = $1',
         [req.params.id],
       );
       if (!applicant[0]) {
@@ -274,22 +304,26 @@ export function createAdminRouter() {
       );
       const latest = existing[0];
 
-      if (latest && (latest.status === 'attended' || latest.status === 'no_show')) {
+      if (latest?.status === 'attended') {
         await client.query('ROLLBACK');
-        // A link to book an interview that has already happened would only
-        // confuse. Whatever comes next is a new decision, not a new link.
+        // They came. A link to book the interview they have already had would
+        // only confuse; whatever happens next is a new decision, not a link.
         return res.status(409).json({
           ok: false,
           error: 'That interview has already taken place.',
         });
       }
 
+      // A no-show is the one case where a fresh link IS the point — the spec
+      // allows a single rebook, and this is how it is offered.
+      const rebookingAfterNoShow = latest?.status === 'no_show';
+
       const { token, hash } = generateBookingToken();
 
       // A cancelled interview keeps its row — "they cancelled, and when" is
       // worth being able to answer. So a reissue after a cancellation starts
       // a new one rather than reviving the old.
-      if (!latest || latest.status === 'cancelled') {
+      if (!latest || latest.status === 'cancelled' || rebookingAfterNoShow) {
         const { rows: interviewer } = await client.query(
           'SELECT id FROM recruit_interviewers WHERE active ORDER BY id LIMIT 1',
         );
@@ -315,8 +349,33 @@ export function createAdminRouter() {
       await client.query(
         `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
          VALUES ($1, $2, 'link_reissued', $3)`,
-        [req.params.id, req.admin.email, JSON.stringify({ reissuedBy: req.admin.email })],
+        [
+          req.params.id,
+          req.admin.email,
+          JSON.stringify({ reissuedBy: req.admin.email, rebookingAfterNoShow }),
+        ],
       );
+
+      const { rows: freshInterview } = await client.query(
+        'SELECT id FROM recruit_interviews WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 1',
+        [req.params.id],
+      );
+
+      // After a no-show the candidate needs the "we missed you" email, not a
+      // second copy of the one congratulating them on being shortlisted.
+      if (rebookingAfterNoShow) {
+        await notifyNoShow(client, {
+          applicant: applicant[0],
+          interviewId: freshInterview[0]?.id ?? null,
+          bookingToken: token,
+        });
+      } else {
+        await notifyDecision(client, {
+          applicant: applicant[0],
+          status: 'accepted',
+          bookingToken: token,
+        });
+      }
 
       await client.query('COMMIT');
       console.log(`[fac-recruit] ${req.admin.email} reissued a booking link for ${req.params.id}`);
@@ -346,9 +405,13 @@ export function createAdminRouter() {
     }
 
     try {
+      // The most recent interview that actually HAS a time, not simply the
+      // most recent row. Offering a rebook creates a new, unbooked interview,
+      // and a mis-clicked no-show still has to be correctable afterwards.
       const { rows } = await pool.query(
         `SELECT id, status, starts_at FROM recruit_interviews
-          WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          WHERE applicant_id = $1 AND starts_at IS NOT NULL
+          ORDER BY created_at DESC LIMIT 1`,
         [req.params.id],
       );
       const interview = rows[0];
@@ -365,15 +428,32 @@ export function createAdminRouter() {
         return res.status(409).json({ ok: false, error: 'That interview has not happened yet.' });
       }
 
-      await pool.query(
-        'UPDATE recruit_interviews SET status = $2, updated_at = now() WHERE id = $1',
-        [interview.id, status],
-      );
-      await pool.query(
-        `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
-         VALUES ($1, $2, $3, $4)`,
-        [req.params.id, req.admin.email, status, JSON.stringify({ markedBy: req.admin.email })],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          'UPDATE recruit_interviews SET status = $2, updated_at = now() WHERE id = $1',
+          [interview.id, status],
+        );
+        await client.query(
+          `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
+           VALUES ($1, $2, $3, $4)`,
+          [req.params.id, req.admin.email, status, JSON.stringify({ markedBy: req.admin.email })],
+        );
+
+        // Correcting a mis-clicked no-show must call off the "we missed you"
+        // email too, or an apology reaches someone who was there all along.
+        if (status === 'attended') {
+          await cancelPendingFor(client, interview.id, 'they attended after all');
+        }
+
+        await client.query('COMMIT');
+      } catch (failure) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw failure;
+      } finally {
+        client.release();
+      }
 
       return res.json({ ok: true, status });
     } catch (error) {

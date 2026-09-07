@@ -272,7 +272,7 @@ export function DashboardPage() {
   return (
     <AppShell
       navRight={
-        <div className="flex min-w-0 items-center gap-3">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
           {/* A work email is longer than a 320px bar has room for, and it is
               not what anyone came to the page for. It reappears as soon as
               there is space; the sign-out button never disappears. */}
@@ -281,6 +281,12 @@ export function DashboardPage() {
               {adminEmail}
             </span>
           ) : null}
+          <a
+            href="/admin/templates"
+            className="flex-shrink-0 rounded-control border border-white/20 px-3 py-1.5 text-[0.8rem] font-semibold text-white hover:bg-white/10"
+          >
+            Emails
+          </a>
           <button
             type="button"
             onClick={signOut}

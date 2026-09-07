@@ -4,6 +4,7 @@ import { pool } from '../lib/db.js';
 import { hashBookingToken } from '../lib/bookingToken.js';
 import { buildAvailability, isSlotBookable } from '../lib/availability.js';
 import { formatDayIn, formatTimeIn } from '../lib/zonedTime.js';
+import { notifyBooked, notifyCancelled } from '../lib/notify.js';
 
 /**
  * Candidate self-service booking.
@@ -26,7 +27,7 @@ const LOCK_NAMESPACE = 4711;
 const FIND_BY_TOKEN = `
   SELECT i.id, i.status, i.starts_at, i.ends_at, i.reschedule_count, i.token_expires_at,
          i.meet_link, i.interviewer_id,
-         a.full_name, a.email, a.role, a.candidate_tz,
+         a.id AS applicant_id, a.full_name, a.email, a.role, a.candidate_tz,
          iv.full_name AS interviewer_name
     FROM recruit_interviews i
     JOIN recruit_applicants a   ON a.id = i.applicant_id
@@ -197,6 +198,17 @@ export function createBookingRouter() {
         [row.id, isReschedule ? 'rescheduled' : 'booked', JSON.stringify({ startsAt: check.startsAt })],
       );
 
+      // The confirmation and both reminders, queued in the booking's own
+      // transaction. On a reschedule this also calls off whatever was queued
+      // for the old time — the candidate must not be reminded about a slot
+      // they have already moved away from.
+      await notifyBooked(client, {
+        applicant: { id: row.applicant_id, email: row.email, full_name: row.full_name, role: row.role },
+        interviewId: row.id,
+        startsAt: check.startsAt,
+        isReschedule,
+      });
+
       await client.query('COMMIT');
 
       return res.json({
@@ -234,15 +246,33 @@ export function createBookingRouter() {
 
       // The slot is deliberately kept on the row. "They cancelled twice, and
       // when" is a question worth being able to answer later.
-      await pool.query(
-        `UPDATE recruit_interviews SET status = 'cancelled', updated_at = now() WHERE id = $1`,
-        [row.id],
-      );
-      await pool.query(
-        `INSERT INTO recruit_audit (applicant_id, action, payload)
-         SELECT applicant_id, 'cancelled', $2 FROM recruit_interviews WHERE id = $1`,
-        [row.id, JSON.stringify({ wasStartingAt: row.starts_at })],
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          `UPDATE recruit_interviews SET status = 'cancelled', updated_at = now() WHERE id = $1`,
+          [row.id],
+        );
+        await client.query(
+          `INSERT INTO recruit_audit (applicant_id, action, payload)
+           SELECT applicant_id, 'cancelled', $2 FROM recruit_interviews WHERE id = $1`,
+          [row.id, JSON.stringify({ wasStartingAt: row.starts_at })],
+        );
+
+        // Acknowledges it, and — the part that matters — cancels the reminders
+        // still queued for a slot nobody is turning up to.
+        await notifyCancelled(client, {
+          applicant: { id: row.applicant_id, email: row.email, full_name: row.full_name, role: row.role },
+          interviewId: row.id,
+        });
+
+        await client.query('COMMIT');
+      } catch (failure) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw failure;
+      } finally {
+        client.release();
+      }
 
       return res.json({ ok: true });
     } catch (err) {
