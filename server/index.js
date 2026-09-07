@@ -5,6 +5,7 @@ import { createHealthRouter } from './routes/health.js';
 import { createRolesRouter } from './routes/roles.js';
 import { createApplicationsRouter } from './routes/applications.js';
 import { createBookingRouter } from './routes/booking.js';
+import { createAdminRouter } from './routes/admin.js';
 
 const PORT = Number(process.env.PORT || 5020);
 
@@ -27,6 +28,7 @@ app.use('/api/health', createHealthRouter());
 app.use('/api/recruit/roles', createRolesRouter());
 app.use('/api/recruit/applications', createApplicationsRouter({ ipSalt }));
 app.use('/api/recruit/book', createBookingRouter());
+app.use('/api/recruit/admin', createAdminRouter());
 
 // Malformed JSON should read as a client error, not a stack trace.
 app.use((error, _req, res, next) => {
