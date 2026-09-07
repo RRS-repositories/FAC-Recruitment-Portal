@@ -215,6 +215,14 @@ export const adminRemoveBlackout = (id, interviewerId) =>
     headers: withAuth(),
   });
 
+/** How long a declined applicant's CV is kept. 0 switches deletion off. */
+export const adminSetRetention = (months) =>
+  request('/recruit/admin/settings/retention', {
+    method: 'PUT',
+    body: { months },
+    headers: withAuth(),
+  });
+
 /** Turns one feature flag on or off. */
 export const adminSetFlag = (name, enabled) =>
   request(`/recruit/admin/settings/flags/${name}`, {

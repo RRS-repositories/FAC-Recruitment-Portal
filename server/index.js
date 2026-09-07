@@ -7,6 +7,7 @@ import { createApplicationsRouter } from './routes/applications.js';
 import { createBookingRouter } from './routes/booking.js';
 import { createAdminRouter } from './routes/admin.js';
 import { startOutboxWorker } from './lib/outbox.js';
+import { startRetentionSweep } from './lib/retention.js';
 import { verifyMail, mailMode } from './lib/mailer.js';
 // Imported for its side effects: registering every email template at boot, so
 // a queued row can never find its template missing.
@@ -49,6 +50,7 @@ app.use((error, _req, res, _next) => {
 });
 
 let stopOutbox = () => {};
+let stopRetention = () => {};
 
 const server = app.listen(PORT, '127.0.0.1', async () => {
   console.log(`[fac-recruit] listening on 127.0.0.1:${PORT}`);
@@ -72,12 +74,17 @@ const server = app.listen(PORT, '127.0.0.1', async () => {
   }
 
   stopOutbox = startOutboxWorker();
+  // Spec §12. Deletes declined applicants' CVs once they are past the
+  // retention period — the one obligation that is breached by doing
+  // nothing at all.
+  stopRetention = startRetentionSweep();
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
     console.log(`[fac-recruit] ${signal} — shutting down`);
     stopOutbox();
+    stopRetention();
     server.close(() => pool.end().then(() => process.exit(0)));
     setTimeout(() => process.exit(1), 10_000).unref();
   });
