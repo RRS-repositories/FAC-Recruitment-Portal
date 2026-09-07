@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 /**
  * Captures the behavioural signals the AI-use check reads (build spec §13).
@@ -83,7 +83,20 @@ export function useTelemetry() {
     };
   }, [markStep]);
 
-  return { onPaste, onKeyDown, enterWrittenStep, leaveWrittenStep, markStep, snapshot };
+  /**
+   * Memoised, and that is load-bearing rather than an optimisation.
+   *
+   * Returning a fresh object literal made this hook's identity change on every
+   * render. Callers put it in effect dependency arrays, so those effects
+   * re-ran on every keystroke — one of them moved focus to the top of the
+   * form, which made the field lose focus after a single character. Every
+   * function below is already stable via useCallback; this makes the container
+   * stable too.
+   */
+  return useMemo(
+    () => ({ onPaste, onKeyDown, enterWrittenStep, leaveWrittenStep, markStep, snapshot }),
+    [onPaste, onKeyDown, enterWrittenStep, leaveWrittenStep, markStep, snapshot],
+  );
 }
 
 export default useTelemetry;
