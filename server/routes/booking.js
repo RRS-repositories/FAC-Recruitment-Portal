@@ -1,0 +1,257 @@
+import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import { pool } from '../lib/db.js';
+import { hashBookingToken } from '../lib/bookingToken.js';
+import { buildAvailability, isSlotBookable } from '../lib/availability.js';
+import { formatDayIn, formatTimeIn } from '../lib/zonedTime.js';
+
+/**
+ * Candidate self-service booking.
+ *
+ * Every route is reached with a token and nothing else — there is no login,
+ * because the candidate has no account. The token is the credential, so it is
+ * looked up by hash, checked for expiry, and never echoed back.
+ *
+ * Concurrency is handled in two layers. This code takes a Postgres advisory
+ * lock on the interviewer and re-checks availability inside it, which produces
+ * a civil "just taken" message. Underneath, an exclusion constraint on the
+ * table makes an overlapping booking impossible regardless — so even if this
+ * logic were wrong, two candidates could not end up in the same slot.
+ */
+
+// One lock namespace for interviewer booking. Arbitrary but fixed: two
+// different features using the same number would block each other.
+const LOCK_NAMESPACE = 4711;
+
+const FIND_BY_TOKEN = `
+  SELECT i.id, i.status, i.starts_at, i.ends_at, i.reschedule_count, i.token_expires_at,
+         i.meet_link, i.interviewer_id,
+         a.full_name, a.email, a.role, a.candidate_tz,
+         iv.full_name AS interviewer_name
+    FROM recruit_interviews i
+    JOIN recruit_applicants a   ON a.id = i.applicant_id
+    JOIN recruit_interviewers iv ON iv.id = i.interviewer_id
+   WHERE i.booking_token_hash = $1
+`;
+
+const RULE_FOR = `SELECT * FROM recruit_availability_rules WHERE interviewer_id = $1`;
+
+const TAKEN_FOR = `
+  SELECT starts_at AS "startsAt", ends_at AS "endsAt"
+    FROM recruit_interviews
+   WHERE interviewer_id = $1 AND status = 'booked' AND starts_at IS NOT NULL
+     AND ($2::uuid IS NULL OR id <> $2)
+`;
+
+const MAX_RESCHEDULES = 2;
+const RESCHEDULE_CUTOFF_MS = 2 * 3_600_000;
+
+/** Everything the booking page shows about who they are meeting. */
+const publicInterview = (row) => ({
+  firstName: (row.full_name ?? '').split(' ')[0],
+  role: row.role,
+  interviewerName: row.interviewer_name,
+  status: row.status,
+  rescheduleCount: row.reschedule_count,
+  maxReschedules: MAX_RESCHEDULES,
+  ...(row.starts_at
+    ? {
+        booked: {
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          localTime: formatTimeIn(row.starts_at, row.candidate_tz),
+          localDay: formatDayIn(row.starts_at, row.candidate_tz),
+          ukTime: formatTimeIn(row.starts_at, 'Europe/London'),
+          meetLink: row.meet_link,
+        },
+      }
+    : {}),
+});
+
+export function createBookingRouter() {
+  const router = Router();
+
+  const limiter = rateLimit({
+    windowMs: Number(process.env.BOOK_RATE_WINDOW_MS || 15 * 60 * 1000),
+    limit: Number(process.env.BOOK_RATE_MAX || 60),
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { ok: false, error: 'Too many requests. Please wait a moment and try again.' },
+  });
+
+  router.use(limiter);
+  // A booking page is personal to one candidate and changes as slots go — it
+  // must never be cached by a proxy or served from the back-forward cache.
+  router.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store, max-age=0');
+    next();
+  });
+
+  /** Loads the interview behind a token, or answers for us why it cannot. */
+  async function loadByToken(token) {
+    const { rows } = await pool.query(FIND_BY_TOKEN, [hashBookingToken(token)]);
+    const row = rows[0];
+
+    // The same response for "no such token" and "expired token": telling the
+    // difference would let someone probe for valid links.
+    if (!row) return { error: { status: 404, body: { ok: false, error: 'expired' } } };
+    if (new Date(row.token_expires_at) < new Date()) {
+      return { error: { status: 410, body: { ok: false, error: 'expired' } } };
+    }
+    if (row.status === 'cancelled') {
+      return { error: { status: 410, body: { ok: false, error: 'cancelled' } } };
+    }
+    return { row };
+  }
+
+  async function loadContext(row, excludeSelf = true) {
+    const [{ rows: ruleRows }, { rows: taken }] = await Promise.all([
+      pool.query(RULE_FOR, [row.interviewer_id]),
+      pool.query(TAKEN_FOR, [row.interviewer_id, excludeSelf ? row.id : null]),
+    ]);
+    return { rule: ruleRows[0], taken };
+  }
+
+  // ── The booking page ──────────────────────────────────────────────────────
+  router.get('/:token', async (req, res) => {
+    try {
+      const { row, error } = await loadByToken(req.params.token);
+      if (error) return res.status(error.status).json(error.body);
+
+      const { rule, taken } = await loadContext(row);
+      if (!rule) return res.status(503).json({ ok: false, error: 'No availability is configured.' });
+
+      const days = buildAvailability({
+        rule,
+        taken,
+        candidateTimezone: row.candidate_tz,
+      });
+
+      return res.json({
+        ok: true,
+        interview: publicInterview(row),
+        timezone: row.candidate_tz,
+        days,
+      });
+    } catch (err) {
+      console.error('[fac-recruit] booking load failed:', err.message);
+      return res.status(503).json({ ok: false, error: 'Could not load your booking page.' });
+    }
+  });
+
+  // ── Choosing a slot, and moving it ────────────────────────────────────────
+  async function book(req, res, { isReschedule }) {
+    const { row, error } = await loadByToken(req.params.token);
+    if (error) return res.status(error.status).json(error.body);
+
+    if (!isReschedule && row.status === 'booked') {
+      return res.status(409).json({ ok: false, error: 'This interview is already booked.' });
+    }
+    if (isReschedule) {
+      if (row.status !== 'booked') {
+        return res.status(409).json({ ok: false, error: 'There is no booking to move.' });
+      }
+      if (row.reschedule_count >= MAX_RESCHEDULES) {
+        return res.status(409).json({
+          ok: false,
+          error: 'This interview has already been rescheduled twice. Please reply to your invitation email.',
+        });
+      }
+      if (new Date(row.starts_at).getTime() - Date.now() < RESCHEDULE_CUTOFF_MS) {
+        return res.status(409).json({
+          ok: false,
+          error: 'Interviews can only be moved up to 2 hours beforehand. Please reply to your invitation email.',
+        });
+      }
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Serialise bookings for this interviewer. Held until commit, so the
+      // re-check below cannot race another request between check and write.
+      await client.query('SELECT pg_advisory_xact_lock($1, $2)', [LOCK_NAMESPACE, row.interviewer_id]);
+
+      const { rows: ruleRows } = await client.query(RULE_FOR, [row.interviewer_id]);
+      const { rows: taken } = await client.query(TAKEN_FOR, [row.interviewer_id, row.id]);
+      const rule = ruleRows[0];
+      if (!rule) throw new Error('no availability rule');
+
+      const check = isSlotBookable({ startsAt: req.body?.startsAt, rule, taken });
+      if (!check.ok) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ ok: false, error: check.reason });
+      }
+
+      await client.query(
+        `UPDATE recruit_interviews
+            SET status = 'booked', starts_at = $2, ends_at = $3,
+                reschedule_count = reschedule_count + $4, updated_at = now()
+          WHERE id = $1`,
+        [row.id, check.startsAt, check.endsAt, isReschedule ? 1 : 0],
+      );
+
+      await client.query(
+        `INSERT INTO recruit_audit (applicant_id, action, payload)
+         SELECT applicant_id, $2, $3 FROM recruit_interviews WHERE id = $1`,
+        [row.id, isReschedule ? 'rescheduled' : 'booked', JSON.stringify({ startsAt: check.startsAt })],
+      );
+
+      await client.query('COMMIT');
+
+      return res.json({
+        ok: true,
+        booked: {
+          startsAt: check.startsAt.toISOString(),
+          endsAt: check.endsAt.toISOString(),
+          localDay: formatDayIn(check.startsAt, row.candidate_tz),
+          localTime: formatTimeIn(check.startsAt, row.candidate_tz),
+          ukTime: formatTimeIn(check.startsAt, 'Europe/London'),
+        },
+      });
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      // 23P01 = exclusion_violation: the database caught a clash this code
+      // did not. Rare, and exactly what that constraint is there for.
+      if (err.code === '23P01') {
+        return res.status(409).json({ ok: false, error: 'That time has just been taken. Please choose another.' });
+      }
+      console.error('[fac-recruit] booking failed:', err.message);
+      return res.status(503).json({ ok: false, error: 'Could not save your booking. Please try again.' });
+    } finally {
+      client.release();
+    }
+  }
+
+  router.post('/:token', (req, res) => book(req, res, { isReschedule: false }));
+  router.post('/:token/reschedule', (req, res) => book(req, res, { isReschedule: true }));
+
+  // ── Cancelling ────────────────────────────────────────────────────────────
+  router.post('/:token/cancel', async (req, res) => {
+    try {
+      const { row, error } = await loadByToken(req.params.token);
+      if (error) return res.status(error.status).json(error.body);
+
+      // The slot is deliberately kept on the row. "They cancelled twice, and
+      // when" is a question worth being able to answer later.
+      await pool.query(
+        `UPDATE recruit_interviews SET status = 'cancelled', updated_at = now() WHERE id = $1`,
+        [row.id],
+      );
+      await pool.query(
+        `INSERT INTO recruit_audit (applicant_id, action, payload)
+         SELECT applicant_id, 'cancelled', $2 FROM recruit_interviews WHERE id = $1`,
+        [row.id, JSON.stringify({ wasStartingAt: row.starts_at })],
+      );
+
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('[fac-recruit] cancel failed:', err.message);
+      return res.status(503).json({ ok: false, error: 'Could not cancel. Please try again.' });
+    }
+  });
+
+  return router;
+}
+
+export default createBookingRouter;

@@ -4,6 +4,7 @@ import { pool, assertConnection } from './lib/db.js';
 import { createHealthRouter } from './routes/health.js';
 import { createRolesRouter } from './routes/roles.js';
 import { createApplicationsRouter } from './routes/applications.js';
+import { createBookingRouter } from './routes/booking.js';
 
 const PORT = Number(process.env.PORT || 5020);
 
@@ -25,6 +26,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use('/api/health', createHealthRouter());
 app.use('/api/recruit/roles', createRolesRouter());
 app.use('/api/recruit/applications', createApplicationsRouter({ ipSalt }));
+app.use('/api/recruit/book', createBookingRouter());
 
 // Malformed JSON should read as a client error, not a stack trace.
 app.use((error, _req, res, next) => {
