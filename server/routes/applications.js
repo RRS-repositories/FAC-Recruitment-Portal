@@ -14,6 +14,7 @@ import {
 import { storeCv, deleteCv, UploadError, CV_LIMITS } from '../lib/storage.js';
 import { scoreApplication } from '../../shared/scoring.js';
 import { detectAiUse } from '../../shared/aiDetect.js';
+import { notifyApplicationReceived } from '../lib/notify.js';
 
 /**
  * Application intake.
@@ -44,7 +45,10 @@ const INSERT_APPLICANT = `
      started_at, duration_sec, cv_object_key, cv_filename,
      candidate_tz, source, ip_hash)
   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-  RETURNING id, created_at
+  -- full_name and email come back so the acknowledgement addresses the
+  -- candidate with exactly what was stored, rather than a second copy of the
+  -- request body that could have been normalised differently.
+  RETURNING id, created_at, full_name, email
 `;
 
 const hashIp = (ip, salt) => (ip && salt ? createHash('sha256').update(`${salt}:${ip}`).digest('hex') : null);
@@ -179,6 +183,11 @@ export function createApplicationsRouter({ ipSalt }) {
           [req.body.sessionId, applicant.id],
         );
       }
+
+      // Queued, not sent. Inside the transaction, so the acknowledgement and
+      // the application it acknowledges commit together — a candidate can
+      // never be told we have their application when we do not.
+      await notifyApplicationReceived(client, applicant);
 
       await client.query('COMMIT');
       // Nothing about the score or the AI verdict goes back to the candidate.

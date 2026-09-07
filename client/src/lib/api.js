@@ -184,6 +184,14 @@ export const adminReissueLink = (id) =>
     headers: withAuth(),
   });
 
+/**
+ * Every email the portal can send, rendered from sample data.
+ *
+ * Also reports whether mail is actually being delivered — the templates are
+ * only half the question.
+ */
+export const adminTemplates = () => request('/recruit/admin/templates', { headers: withAuth() });
+
 /** Records whether the candidate turned up. */
 export const adminMarkAttendance = (id, status) =>
   request(`/recruit/admin/applications/${id}/interview`, {
