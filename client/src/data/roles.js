@@ -110,7 +110,7 @@ export const ROLES = {
     ],
     stats: [
       { value: '20+', label: 'Team members in India' },
-      { value: '£4m+', label: 'Recovered for clients' },
+      { value: '£12M+', label: 'Recovered for clients' },
       { value: '7 days', label: 'Average time to interview' },
       { value: '100%', label: 'Remote' },
     ],
@@ -144,7 +144,7 @@ export const ROLES = {
     ],
     stats: [
       { value: 'Full-time', label: 'Permanent contract' },
-      { value: '£4m+', label: 'Recovered for clients' },
+      { value: '£12M+', label: 'Recovered for clients' },
       { value: '7 days', label: 'Average time to interview' },
       { value: '100%', label: 'Remote' },
     ],

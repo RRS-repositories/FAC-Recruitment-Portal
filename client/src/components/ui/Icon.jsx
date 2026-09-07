@@ -97,6 +97,43 @@ const PATHS = {
       <path d="M3 12h18M12 3c2.5 3 2.5 15 0 18-2.5-3-2.5-15 0-18z" />
     </>
   ),
+  // The six practice areas. Drawn rather than reached for as emoji: emoji
+  // render differently on every platform and cannot take the brand colour.
+  coins: (
+    <>
+      <ellipse cx="12" cy="6" rx="8" ry="3" />
+      <path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6" />
+      <path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+    </>
+  ),
+  heart: <path d="M12 20c-5-3.2-8-6.6-8-10a4.5 4.5 0 018-2.8A4.5 4.5 0 0120 10c0 3.4-3 6.8-8 10z" />,
+  car: (
+    <>
+      <path d="M5 16v2M19 16v2" />
+      <path d="M3 16v-3l2-5h14l2 5v3z" />
+      <path d="M6.5 13h.01M17.5 13h.01" />
+    </>
+  ),
+  gavel: (
+    <>
+      <path d="M14 4l6 6-3 3-6-6z" />
+      <path d="M11.5 6.5L5 13l3 3 6.5-6.5" />
+      <path d="M3 21h10" />
+    </>
+  ),
+  wallet: (
+    <>
+      <path d="M3 7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+      <path d="M16 12h5v-3h-5a1.5 1.5 0 000 3z" />
+    </>
+  ),
+  receipt: (
+    <>
+      <path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" />
+      <path d="M9 8h6M9 12h6" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
 };
 
 /**
