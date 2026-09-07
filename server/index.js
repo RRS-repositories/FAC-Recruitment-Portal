@@ -6,6 +6,8 @@ import { createRolesRouter } from './routes/roles.js';
 import { createApplicationsRouter } from './routes/applications.js';
 import { createBookingRouter } from './routes/booking.js';
 import { createAdminRouter } from './routes/admin.js';
+import { startOutboxWorker } from './lib/outbox.js';
+import { verifyMail, mailMode } from './lib/mailer.js';
 
 const PORT = Number(process.env.PORT || 5000);
 
@@ -43,6 +45,8 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ ok: false, error: 'Something went wrong at our end.' });
 });
 
+let stopOutbox = () => {};
+
 const server = app.listen(PORT, '127.0.0.1', async () => {
   console.log(`[fac-recruit] listening on 127.0.0.1:${PORT}`);
   try {
@@ -52,11 +56,25 @@ const server = app.listen(PORT, '127.0.0.1', async () => {
     // /api/health/db reports the truth either way.
     console.error('[fac-recruit] database not reachable at boot:', error.message);
   }
+
+  // Said at boot rather than discovered when somebody is accepted. A wrong
+  // password should be visible on deploy, not the first time it matters.
+  const mail = await verifyMail();
+  if (mailMode() === 'file') {
+    console.warn(`[fac-recruit] email is NOT being sent — ${mail.detail}`);
+  } else if (mail.ok) {
+    console.log(`[fac-recruit] mail server reachable: ${mail.detail}`);
+  } else {
+    console.error(`[fac-recruit] mail server NOT reachable: ${mail.detail}`);
+  }
+
+  stopOutbox = startOutboxWorker();
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
     console.log(`[fac-recruit] ${signal} — shutting down`);
+    stopOutbox();
     server.close(() => pool.end().then(() => process.exit(0)));
     setTimeout(() => process.exit(1), 10_000).unref();
   });
