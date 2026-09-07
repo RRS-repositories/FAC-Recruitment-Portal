@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AppShell } from '@/components/layout/AppShell';
+import { AdminShell } from '@/components/layout/AdminShell';
 import { Card } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { Field, TextInput, Select } from '@/components/ui/Field';
 import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
-import { AdminNav } from '@/features/dashboard/AdminNav';
 import {
   adminAddBlackout,
   adminRemoveBlackout,
@@ -239,15 +238,13 @@ export function SettingsPage() {
   if (!signedIn) return <AdminSignIn onSignedIn={() => setSignedIn(true)} />;
 
   return (
-    <AppShell navRight={<AdminNav current="settings" onSignOut={signOut} />}>
-      <div className="mx-auto max-w-3xl px-5 py-8 sm:px-8">
-        <header className="mb-6">
-          <h1 className="text-display-md font-extrabold text-ink">Settings</h1>
-          <p className="mt-1 text-[0.92rem] text-muted">
-            When interviews can be booked, when you are unavailable, and who can reach the portal.
-          </p>
-        </header>
-
+    <AdminShell
+      current="settings"
+      title="Settings"
+      subtitle="When interviews can be booked, when you are unavailable, and who can reach the portal."
+      onSignOut={signOut}
+    >
+      <div className="mx-auto max-w-3xl">
         {saved ? (
           <p
             role="status"
@@ -604,7 +601,7 @@ export function SettingsPage() {
           </div>
         )}
       </div>
-    </AppShell>
+    </AdminShell>
   );
 }
 
