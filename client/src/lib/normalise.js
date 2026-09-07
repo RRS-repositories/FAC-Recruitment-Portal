@@ -19,6 +19,13 @@ const SLUG_BY_API_KEY = Object.fromEntries(
   Object.values(ROLES).map((role) => [role.apiKey, role.key]),
 );
 
+/**
+ * The same translation on its own, for callers that have a bare role value
+ * rather than a whole row — the booking page gets one from the interview
+ * record and needs the matching `ROLES` entry for its timezone label.
+ */
+export const roleFromApiKey = (apiKey) => ROLES[SLUG_BY_API_KEY[apiKey]] ?? null;
+
 /** Reasons are stored as a JSON array; anything else is treated as none. */
 const reasonsOf = (value) => (Array.isArray(value) ? value.filter((r) => typeof r === 'string') : []);
 

@@ -75,6 +75,29 @@ export function submitApplication({ role, details, written, answers, telemetry, 
 }
 
 
+/* ── Booking ──────────────────────────────────────────────────────────────
+ * The token in the URL is the entire credential — the candidate has no
+ * account and never signs in. So it is never put in a query string, where it
+ * would end up in proxy and browser history logs; it stays in the path, which
+ * the server matches against a stored hash.
+ */
+
+/** The slots on offer, plus who they are meeting. Bookable slots only. */
+export const fetchBooking = (token) => request(`/recruit/book/${encodeURIComponent(token)}`);
+
+/** Takes a slot. The server re-checks it — the list may be minutes stale. */
+export const confirmBooking = (token, startsAt) =>
+  request(`/recruit/book/${encodeURIComponent(token)}`, { method: 'POST', body: { startsAt } });
+
+export const rescheduleBooking = (token, startsAt) =>
+  request(`/recruit/book/${encodeURIComponent(token)}/reschedule`, {
+    method: 'POST',
+    body: { startsAt },
+  });
+
+export const cancelBooking = (token) =>
+  request(`/recruit/book/${encodeURIComponent(token)}/cancel`, { method: 'POST' });
+
 /* ── Admin ────────────────────────────────────────────────────────────────
  * The token is held in sessionStorage rather than localStorage: it should not
  * outlive the browser session, and an admin who closes the tab should be
