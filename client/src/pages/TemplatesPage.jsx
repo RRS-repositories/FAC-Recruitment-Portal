@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
+import { AdminNav } from '@/features/dashboard/AdminNav';
 import { adminSignOut, adminTemplates, getAdminToken } from '@/lib/api';
 import usePageMeta from '@/hooks/usePageMeta';
 import { cn } from '@/lib/cn';
@@ -89,25 +90,7 @@ export function TemplatesPage() {
   })).filter((group) => group.items.length > 0);
 
   return (
-    <AppShell
-      navRight={
-        <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-          <a
-            href="/admin"
-            className="flex-shrink-0 rounded-control border border-white/20 px-3 py-1.5 text-[0.8rem] font-semibold text-white hover:bg-white/10"
-          >
-            Applicants
-          </a>
-          <button
-            type="button"
-            onClick={signOut}
-            className="flex-shrink-0 rounded-control border border-white/20 px-3 py-1.5 text-[0.8rem] font-semibold text-white hover:bg-white/10"
-          >
-            Sign out
-          </button>
-        </div>
-      }
-    >
+    <AppShell navRight={<AdminNav current="templates" onSignOut={signOut} />}>
       <div className="mx-auto max-w-wide px-5 py-8 sm:px-8">
         <header className="mb-6">
           <h1 className="text-display-md font-extrabold text-ink">Email templates</h1>

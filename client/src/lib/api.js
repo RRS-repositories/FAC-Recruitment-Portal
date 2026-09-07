@@ -192,6 +192,37 @@ export const adminReissueLink = (id) =>
  */
 export const adminTemplates = () => request('/recruit/admin/templates', { headers: withAuth() });
 
+/* ── Settings (spec §8.3 and §2) ────────────────────────────────────────── */
+
+/** The interviewer, their availability rules, their time off, and the flags. */
+export const adminSettings = () => request('/recruit/admin/settings', { headers: withAuth() });
+
+export const adminSaveAvailability = (body) =>
+  request('/recruit/admin/settings/availability', { method: 'PUT', body, headers: withAuth() });
+
+/**
+ * Marks a period unavailable.
+ *
+ * The response reports any interviews already booked inside it. They are not
+ * cancelled — the screen shows them so a person can decide.
+ */
+export const adminAddBlackout = (body) =>
+  request('/recruit/admin/settings/blackouts', { method: 'POST', body, headers: withAuth() });
+
+export const adminRemoveBlackout = (id, interviewerId) =>
+  request(`/recruit/admin/settings/blackouts/${id}?interviewerId=${interviewerId}`, {
+    method: 'DELETE',
+    headers: withAuth(),
+  });
+
+/** Turns one feature flag on or off. */
+export const adminSetFlag = (name, enabled) =>
+  request(`/recruit/admin/settings/flags/${name}`, {
+    method: 'PUT',
+    body: { enabled },
+    headers: withAuth(),
+  });
+
 /** Records whether the candidate turned up. */
 export const adminMarkAttendance = (id, status) =>
   request(`/recruit/admin/applications/${id}/interview`, {

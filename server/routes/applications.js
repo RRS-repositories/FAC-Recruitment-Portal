@@ -15,6 +15,7 @@ import { storeCv, deleteCv, UploadError, CV_LIMITS } from '../lib/storage.js';
 import { scoreApplication } from '../../shared/scoring.js';
 import { detectAiUse } from '../../shared/aiDetect.js';
 import { notifyApplicationReceived } from '../lib/notify.js';
+import { requireFlag } from '../lib/flags.js';
 
 /**
  * Application intake.
@@ -63,6 +64,15 @@ export function createApplicationsRouter({ ipSalt }) {
     legacyHeaders: false,
     message: { ok: false, error: 'Too many attempts from this connection. Please try again later.' },
   });
+
+  // Spec §2. With this off nothing can be submitted, so the pages can go up
+  // and be checked before anyone is able to apply.
+  router.use(
+    requireFlag(
+      'recruitment_portal',
+      'We are not accepting applications at the moment. Please check back shortly.',
+    ),
+  );
 
   /** Opens a session as the form is first shown. */
   router.post('/start', limiter, async (req, res) => {

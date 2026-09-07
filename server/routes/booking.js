@@ -5,6 +5,8 @@ import { hashBookingToken } from '../lib/bookingToken.js';
 import { buildAvailability, isSlotBookable } from '../lib/availability.js';
 import { formatDayIn, formatTimeIn } from '../lib/zonedTime.js';
 import { notifyBooked, notifyCancelled } from '../lib/notify.js';
+import { blackoutsFor } from '../lib/blackouts.js';
+import { requireFlag } from '../lib/flags.js';
 
 /**
  * Candidate self-service booking.
@@ -81,6 +83,14 @@ export function createBookingRouter() {
   });
 
   router.use(limiter);
+  // Spec §2. Off by default, so booking can be deployed and watched before a
+  // candidate can reach it.
+  router.use(
+    requireFlag(
+      'recruitment_booking',
+      'Interview booking is not open yet. Please reply to your invitation email and we will arrange a time.',
+    ),
+  );
   // A booking page is personal to one candidate and changes as slots go — it
   // must never be cached by a proxy or served from the back-forward cache.
   router.use((_req, res, next) => {
@@ -106,11 +116,15 @@ export function createBookingRouter() {
   }
 
   async function loadContext(row, excludeSelf = true) {
-    const [{ rows: ruleRows }, { rows: taken }] = await Promise.all([
+    const [{ rows: ruleRows }, { rows: taken }, blackouts] = await Promise.all([
       pool.query(RULE_FOR, [row.interviewer_id]),
       pool.query(TAKEN_FOR, [row.interviewer_id, excludeSelf ? row.id : null]),
+      blackoutsFor(row.interviewer_id),
     ]);
-    return { rule: ruleRows[0], taken };
+    // One list of periods to avoid. A slot the interviewer has blacked out and
+    // a slot another candidate has taken are the same thing to the engine, and
+    // calendar busy periods will join this list unchanged.
+    return { rule: ruleRows[0], taken: [...taken, ...blackouts] };
   }
 
   // ── The booking page ──────────────────────────────────────────────────────
@@ -178,7 +192,15 @@ export function createBookingRouter() {
       const rule = ruleRows[0];
       if (!rule) throw new Error('no availability rule');
 
-      const check = isSlotBookable({ startsAt: req.body?.startsAt, rule, taken });
+      // Re-checked here as well as when the list was drawn: a blackout added
+      // in the last two minutes has to beat a page opened before it.
+      const blocked = await blackoutsFor(row.interviewer_id);
+
+      const check = isSlotBookable({
+        startsAt: req.body?.startsAt,
+        rule,
+        taken: [...taken, ...blocked],
+      });
       if (!check.ok) {
         await client.query('ROLLBACK');
         return res.status(409).json({ ok: false, error: check.reason });
