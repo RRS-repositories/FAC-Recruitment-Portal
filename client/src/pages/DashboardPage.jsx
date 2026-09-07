@@ -10,7 +10,15 @@ import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
 import { ROLES } from '@/data/roles';
 import usePageMeta from '@/hooks/usePageMeta';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
-import { adminApplications, adminDecide, adminMe, adminSignOut, getAdminToken } from '@/lib/api';
+import {
+  adminApplications,
+  adminDecide,
+  adminMarkAttendance,
+  adminMe,
+  adminReissueLink,
+  adminSignOut,
+  getAdminToken,
+} from '@/lib/api';
 import { normaliseApplicant, normaliseSummary } from '@/lib/normalise';
 import { cn } from '@/lib/cn';
 
@@ -95,6 +103,7 @@ export function DashboardPage() {
   const [deciding, setDeciding] = useState(false);
   const [decideError, setDecideError] = useState('');
   const [bookingLink, setBookingLink] = useState(null);
+  const [actionError, setActionError] = useState('');
 
   // Filtering happens server-side — the list is paged, so filtering the
   // twenty-five rows in hand would silently ignore every match on page two.
@@ -172,6 +181,42 @@ export function DashboardPage() {
   const chooseStatus = applyFilter(setStatus);
   const chooseRole = applyFilter(setRole);
   const changeQuery = applyFilter(setQuery);
+
+  /**
+   * A fresh booking link.
+   *
+   * The token is returned once and stored only as a hash, so a manager who
+   * closed the dialog without copying it — or sent it to a typo — previously
+   * had no way to help the candidate at all.
+   */
+  const reissue = async (id) => {
+    setActionError('');
+    try {
+      const result = await adminReissueLink(id);
+      setBookingLink({
+        name: result.fullName,
+        email: result.email,
+        url: `${window.location.origin}/book/${result.bookingToken}`,
+        reissued: true,
+      });
+      await load();
+    } catch (failure) {
+      if (failure.status === 401) signOut();
+      else setActionError(failure.message);
+    }
+  };
+
+  /** Whether they turned up. The only thing that can ever set the no-show count. */
+  const markAttendance = async (id, status) => {
+    setActionError('');
+    try {
+      await adminMarkAttendance(id, status);
+      await load();
+    } catch (failure) {
+      if (failure.status === 401) signOut();
+      else setActionError(failure.message);
+    }
+  };
 
   const confirmingApplicant = confirming ? applicants.find((a) => a.id === confirming.id) : null;
 
@@ -272,6 +317,15 @@ export function DashboardPage() {
           <Stat label="AI flagged" value={summary.aiFlagged} icon="sparkle" tone="alert" />
         </section>
 
+        {actionError ? (
+          <p
+            role="alert"
+            className="mb-4 rounded-panel border border-danger/30 bg-red-50 px-4 py-3 text-[0.88rem] font-medium text-danger"
+          >
+            {actionError}
+          </p>
+        ) : null}
+
         <Card padded={false} className="overflow-hidden">
           <div className="flex flex-wrap items-center gap-2 border-b border-line p-4 sm:p-5">
             <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
@@ -367,6 +421,8 @@ export function DashboardPage() {
                     setDecideError('');
                     setConfirming({ id, decision });
                   }}
+                  onReissue={reissue}
+                  onAttendance={markAttendance}
                 />
               ))}
             </ul>
@@ -491,13 +547,14 @@ export function DashboardPage() {
           dismissable={false}
         >
           <h2 id="booking-title" className="text-[1.15rem] font-bold text-ink">
-            Send {bookingLink.name} their booking link
+            Send {bookingLink.name} their {bookingLink.reissued ? 'new ' : ''}booking link
           </h2>
           <p className="mt-2 text-[0.9rem] leading-relaxed text-muted">
             Automatic emails are not switched on yet, so send this to{' '}
             <b className="font-semibold text-ink">{bookingLink.email}</b> yourself.{' '}
             <b className="font-semibold text-ink">This link is shown once</b> — it cannot be
-            retrieved again.
+            retrieved again.{' '}
+            {bookingLink.reissued ? 'Their previous link has stopped working.' : ''}
           </p>
           <p className="mt-4 break-all rounded-panel border border-line bg-lav-soft p-3 font-mono text-[0.8rem] text-ink">
             {bookingLink.url}

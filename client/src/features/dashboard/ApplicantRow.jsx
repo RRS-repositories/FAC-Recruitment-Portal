@@ -64,11 +64,18 @@ function Detail({ label, children }) {
  * would be most of the payload wasted. They load when a row is opened, once,
  * and are kept for the rest of the page's life.
  */
-export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
+export function ApplicantRow({
+  applicant,
+  onDecide,
+  onReissue,
+  onAttendance,
+  fastSubmitSeconds = 240,
+}) {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [detailError, setDetailError] = useState('');
   const [downloadError, setDownloadError] = useState('');
+  const [busy, setBusy] = useState('');
 
   const role = ROLES[applicant.role];
   const grade = gradeFor(applicant.score);
@@ -107,6 +114,17 @@ export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
 
   const full = detail ?? applicant;
 
+  // An accepted applicant always has somewhere their link could go wrong.
+  const canReissue =
+    applicant.status === 'accepted' && !['attended', 'no_show'].includes(applicant.interviewStatus);
+  // Attendance is a record of something that happened, so the interview has
+  // to have started before it can be recorded.
+  const interviewPast =
+    applicant.interviewAt != null && new Date(applicant.interviewAt) <= new Date();
+  const canMark =
+    interviewPast && ['booked', 'attended', 'no_show'].includes(applicant.interviewStatus);
+  const marked = ['attended', 'no_show'].includes(applicant.interviewStatus);
+
   return (
     <li className="border-b border-line last:border-0">
       <div className="grid gap-3 px-4 py-4 sm:grid-cols-[1fr_auto] sm:items-start sm:gap-5 sm:px-5">
@@ -130,7 +148,10 @@ export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pl-11 text-[0.84rem] text-muted">
-            <a href={`mailto:${applicant.email}`} className="text-violet-deep underline underline-offset-2">
+            <a
+              href={`mailto:${applicant.email}`}
+              className="text-violet-deep underline underline-offset-2"
+            >
               {applicant.email}
             </a>
             <span>{formatDateTime(applicant.createdAt)}</span>
@@ -179,7 +200,11 @@ export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            aria-label={open ? `Hide details for ${applicant.fullName}` : `Show details for ${applicant.fullName}`}
+            aria-label={
+              open
+                ? `Hide details for ${applicant.fullName}`
+                : `Show details for ${applicant.fullName}`
+            }
             className="grid h-9 w-9 place-items-center rounded-control text-muted hover:bg-lav-soft hover:text-violet-deep"
           >
             <Icon
@@ -253,7 +278,10 @@ export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
 
           {detailError ? (
             <p className="mt-3 text-[0.84rem] font-medium text-danger">
-              {detailError} <button type="button" onClick={() => setDetail(null)} className="underline">Try again</button>
+              {detailError}{' '}
+              <button type="button" onClick={() => setDetail(null)} className="underline">
+                Try again
+              </button>
             </p>
           ) : null}
 
@@ -278,6 +306,86 @@ export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
               </span>
             ) : null}
           </div>
+
+          {canReissue || canMark || marked ? (
+            <div className="mt-4 border-t border-line pt-4">
+              <p className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted">
+                Interview
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                {canReissue ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={Boolean(busy)}
+                    onClick={async () => {
+                      setBusy('link');
+                      await onReissue?.(applicant.id);
+                      setBusy('');
+                    }}
+                  >
+                    <Icon name="mail" size={15} />
+                    {busy === 'link'
+                      ? 'Creating…'
+                      : applicant.interviewStatus === 'not_invited'
+                        ? 'Create booking link'
+                        : 'New booking link'}
+                  </Button>
+                ) : null}
+
+                {canMark ? (
+                  <>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={Boolean(busy) || applicant.interviewStatus === 'attended'}
+                      onClick={async () => {
+                        setBusy('attended');
+                        await onAttendance?.(applicant.id, 'attended');
+                        setBusy('');
+                      }}
+                    >
+                      <Icon name="check" size={15} />
+                      {busy === 'attended' ? 'Saving…' : 'They attended'}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={Boolean(busy) || applicant.interviewStatus === 'no_show'}
+                      onClick={async () => {
+                        setBusy('no_show');
+                        await onAttendance?.(applicant.id, 'no_show');
+                        setBusy('');
+                      }}
+                    >
+                      <Icon name="close" size={15} />
+                      {busy === 'no_show' ? 'Saving…' : 'No-show'}
+                    </Button>
+                  </>
+                ) : null}
+
+                {marked ? (
+                  <span className="text-[0.84rem] text-muted">
+                    Recorded as{' '}
+                    <b className="font-semibold text-ink">
+                      {applicant.interviewStatus === 'attended' ? 'attended' : 'a no-show'}
+                    </b>
+                    .
+                  </span>
+                ) : null}
+              </div>
+
+              {/* A booking link that has not been sent is the commonest way a
+                  candidate gets stuck: it is shown once and cannot be looked
+                  up again. Say so where the button is. */}
+              {canReissue && applicant.interviewStatus !== 'not_invited' ? (
+                <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
+                  Creating a new link stops the old one working. Use it if the first never arrived —
+                  it is shown once and cannot be looked up later.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </li>
