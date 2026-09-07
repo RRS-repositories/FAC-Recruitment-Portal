@@ -47,14 +47,23 @@ const COUNT = `
           OR a.email::text ILIKE '%' || $3 || '%')
 `;
 
+// The summary counts every application, not just the filtered page: it is the
+// state of the pipeline, and a figure that moved when you typed in the search
+// box would be worse than no figure at all.
 const SUMMARY = `
   SELECT
     count(*)::int                                              AS total,
-    count(*) FILTER (WHERE status = 'pending')::int            AS pending,
-    count(*) FILTER (WHERE status = 'accepted')::int           AS accepted,
-    count(*) FILTER (WHERE status = 'declined')::int           AS declined,
-    count(*) FILTER (WHERE ai_use_level <> 'clean')::int       AS ai_flagged
-  FROM recruit_applicants
+    count(*) FILTER (WHERE a.status = 'pending')::int          AS pending,
+    count(*) FILTER (WHERE a.status = 'accepted')::int         AS accepted,
+    count(*) FILTER (WHERE a.status = 'declined')::int         AS declined,
+    count(*) FILTER (WHERE a.ai_use_level <> 'clean')::int     AS ai_flagged,
+    count(*) FILTER (WHERE i.status = 'booked')::int           AS booked,
+    count(*) FILTER (WHERE i.status = 'no_show')::int          AS no_shows
+  FROM recruit_applicants a
+  LEFT JOIN LATERAL (
+    SELECT status FROM recruit_interviews
+     WHERE applicant_id = a.id ORDER BY created_at DESC LIMIT 1
+  ) i ON true
 `;
 
 export function createAdminRouter() {

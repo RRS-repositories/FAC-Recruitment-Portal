@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -6,6 +6,8 @@ import { ROLES } from '@/data/roles';
 import { WRITTEN_QUESTIONS } from '@/data/writtenQuestions';
 import { gradeFor } from '@shared/scoring';
 import { AI_LEVEL_LABEL } from '@shared/aiDetect';
+import { adminApplication, adminDownloadCv } from '@/lib/api';
+import { normaliseApplicant } from '@/lib/normalise';
 import { formatDateTime, formatDuration, initials } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
@@ -56,12 +58,54 @@ function Detail({ label, children }) {
  * The collapsed row carries only what a manager triages on — who, role, score,
  * AI flag, interview state. Everything else is one click away, because a table
  * that shows everything shows nothing.
+ *
+ * The written answers are the bulk of a record and are not on the list
+ * response: fetching all of them for twenty-five rows to show none of them
+ * would be most of the payload wasted. They load when a row is opened, once,
+ * and are kept for the rest of the page's life.
  */
 export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
   const [open, setOpen] = useState(false);
+  const [detail, setDetail] = useState(null);
+  const [detailError, setDetailError] = useState('');
+  const [downloadError, setDownloadError] = useState('');
+
   const role = ROLES[applicant.role];
   const grade = gradeFor(applicant.score);
   const fast = applicant.durationSec != null && applicant.durationSec < fastSubmitSeconds;
+
+  useEffect(() => {
+    if (!open || detail) return undefined;
+
+    // The row can be closed — or the whole list refiltered out from under it —
+    // while this is in flight. `cancelled` keeps that from setting state on a
+    // component that is no longer showing the answer.
+    let cancelled = false;
+    setDetailError('');
+
+    adminApplication(applicant.id)
+      .then((result) => {
+        if (!cancelled) setDetail(normaliseApplicant(result.application));
+      })
+      .catch((failure) => {
+        if (!cancelled) setDetailError(failure.message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, detail, applicant.id]);
+
+  const download = async () => {
+    setDownloadError('');
+    try {
+      await adminDownloadCv(applicant.id, applicant.cvFilename);
+    } catch (failure) {
+      setDownloadError(failure.message);
+    }
+  };
+
+  const full = detail ?? applicant;
 
   return (
     <li className="border-b border-line last:border-0">
@@ -150,10 +194,18 @@ export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
       {open ? (
         <div className="animate-fade-in border-t border-line bg-lav-soft/60 px-5 py-5 motion-reduce:animate-none">
           <dl className="grid gap-4 sm:grid-cols-3">
-            <Detail label="Phone">{applicant.phone}</Detail>
+            <Detail label="Phone">{full.phone}</Detail>
             <Detail label="Applied">{formatDateTime(applicant.createdAt)}</Detail>
             <Detail label="Time taken">{formatDuration(applicant.durationSec)}</Detail>
           </dl>
+
+          {applicant.decidedByEmail ? (
+            <p className="mt-4 text-[0.82rem] text-muted">
+              {applicant.status === 'accepted' ? 'Accepted' : 'Declined'} by{' '}
+              <b className="font-semibold text-ink">{applicant.decidedByEmail}</b>
+              {applicant.decidedAt ? ` on ${formatDateTime(applicant.decidedAt)}` : ''}.
+            </p>
+          ) : null}
 
           {applicant.ai.reasons.length > 0 ? (
             <div className="mt-5 rounded-panel border border-amber-200 bg-amber-50 p-4">
@@ -177,23 +229,53 @@ export function ApplicantRow({ applicant, onDecide, fastSubmitSeconds = 240 }) {
             {WRITTEN_QUESTIONS.map((question) => (
               <div key={question.id}>
                 <p className="text-[0.78rem] font-semibold text-muted">{question.label}</p>
-                <p className="mt-1 whitespace-pre-wrap rounded-panel bg-white p-3.5 text-[0.88rem] leading-relaxed text-body">
-                  {applicant.written[question.id] ?? '—'}
-                </p>
+                {full.written ? (
+                  <p className="mt-1 whitespace-pre-wrap rounded-panel bg-white p-3.5 text-[0.88rem] leading-relaxed text-body">
+                    {full.written[question.id] ?? '—'}
+                  </p>
+                ) : (
+                  // A grey block the size of the answer, so the layout does not
+                  // jump when it arrives.
+                  <div
+                    aria-hidden="true"
+                    className="mt-1 h-20 animate-pulse rounded-panel bg-white/70 motion-reduce:animate-none"
+                  />
+                )}
               </div>
             ))}
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm">
-              <Icon name="file" size={15} />
-              Download CV
-            </Button>
+          {!full.written ? (
+            <p role="status" className="sr-only">
+              {detailError ? detailError : 'Loading answers'}
+            </p>
+          ) : null}
+
+          {detailError ? (
+            <p className="mt-3 text-[0.84rem] font-medium text-danger">
+              {detailError} <button type="button" onClick={() => setDetail(null)} className="underline">Try again</button>
+            </p>
+          ) : null}
+
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {applicant.cvFilename ? (
+              <Button variant="secondary" size="sm" onClick={download}>
+                <Icon name="file" size={15} />
+                Download CV
+              </Button>
+            ) : (
+              <span className="text-[0.84rem] text-muted">No CV on file</span>
+            )}
             {applicant.interviewAt ? (
-              <Button variant="secondary" size="sm">
+              <span className="inline-flex items-center gap-2 rounded-control border-[1.5px] border-line bg-white px-4 py-2 text-[0.85rem] font-semibold text-ink">
                 <Icon name="calendar" size={15} />
                 Interview {formatDateTime(applicant.interviewAt)}
-              </Button>
+              </span>
+            ) : null}
+            {downloadError ? (
+              <span role="alert" className="text-[0.84rem] font-medium text-danger">
+                {downloadError}
+              </span>
             ) : null}
           </div>
         </div>
