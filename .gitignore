@@ -17,3 +17,6 @@ var/
 .claude/skills/
 .agents/skills/
 skills-lock.json
+
+# Local dev database cluster (created by initdb, never committed)
+.devdb/

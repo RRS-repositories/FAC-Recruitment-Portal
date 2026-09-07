@@ -5,7 +5,7 @@ API for the FAC recruitment portal. Express + PostgreSQL, no CRM connection.
 ```bash
 cp .env.example .env    # then fill it in
 npm install
-npm run dev             # http://127.0.0.1:5020
+npm run dev             # http://127.0.0.1:5000
 npm test
 ```
 

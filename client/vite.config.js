@@ -17,7 +17,7 @@ export default defineConfig({
     // and proxies /api), so mirror that in dev and CORS never has to exist.
     proxy: {
       '/api': {
-        target: `http://127.0.0.1:${process.env.PORT || 5020}`,
+        target: `http://127.0.0.1:${process.env.PORT || 5000}`,
         changeOrigin: true,
       },
     },
