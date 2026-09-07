@@ -11,6 +11,7 @@ import { describeTemplates } from '../lib/templates.js';
 import { mailMode } from '../lib/mailer.js';
 import { FLAGS, allFlags, setFlag } from '../lib/flags.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
+import { dueForDeletion, retentionMonths, setRetentionMonths } from '../lib/retention.js';
 
 /**
  * The manager's view: read applications, accept or decline them.
@@ -27,7 +28,7 @@ const LIST = `
   SELECT a.id, a.created_at, a.role, a.full_name, a.email, a.phone,
          a.rule_score, a.final_score, a.status, a.duration_sec,
          a.ai_use_level, a.ai_use_score, a.ai_use_reasons,
-         a.decided_by_email, a.decided_at, a.cv_filename,
+         a.decided_by_email, a.decided_at, a.cv_filename, a.cv_deleted_at,
          i.status AS interview_status, i.starts_at AS interview_at
     FROM recruit_applicants a
     LEFT JOIN LATERAL (
@@ -152,12 +153,17 @@ export function createAdminRouter() {
         return res.status(503).json({ ok: false, error: 'No interviewer is configured.' });
       }
 
+      // What is about to be deleted, so the policy is visible rather than
+      // something that quietly happens overnight.
+      const { months, due } = await dueForDeletion();
+
       return res.json({
         ok: true,
         interviewer: interviewers[0],
         blackouts: await listBlackouts(interviewers[0].id),
         flags: await allFlags(),
         mailMode: mailMode(),
+        retention: { months, dueCount: due.length },
       });
     } catch (error) {
       console.error('[fac-recruit] settings load failed:', error.message);
@@ -243,6 +249,32 @@ export function createAdminRouter() {
     } catch (error) {
       console.error('[fac-recruit] blackout delete failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not remove that.' });
+    }
+  });
+
+  /**
+   * Changes how long a declined applicant's CV is kept. Spec §12.
+   *
+   * Zero switches deletion off, which is a legitimate thing to want while
+   * someone works out what the period should be — and far better than the
+   * alternative of a wrong number quietly deleting things.
+   */
+  router.put('/settings/retention', async (req, res) => {
+    const months = Number(req.body?.months);
+    if (!Number.isFinite(months) || months < 0 || months > 120) {
+      return res.status(400).json({ ok: false, error: 'That has to be a number of months, 0 to 120.' });
+    }
+
+    try {
+      const saved = await setRetentionMonths(months);
+      const { due } = await dueForDeletion();
+      console.log(
+        `[fac-recruit] ${req.admin.email} set CV retention to ${saved} month(s); ${due.length} due`,
+      );
+      return res.json({ ok: true, months: saved, dueCount: due.length });
+    } catch (error) {
+      console.error('[fac-recruit] retention update failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not save that.' });
     }
   });
 
@@ -602,10 +634,18 @@ export function createAdminRouter() {
   router.get('/applications/:id/cv', async (req, res) => {
     try {
       const { rows } = await pool.query(
-        'SELECT cv_object_key, cv_filename FROM recruit_applicants WHERE id = $1',
+        'SELECT cv_object_key, cv_filename, cv_deleted_at FROM recruit_applicants WHERE id = $1',
         [req.params.id],
       );
       const row = rows[0];
+      if (row?.cv_deleted_at) {
+        // Deleted on purpose, and saying so is the honest answer. "Not found"
+        // would look like a bug and invite somebody to go hunting for it.
+        return res.status(410).json({
+          ok: false,
+          error: 'That CV was deleted under our retention policy.',
+        });
+      }
       if (!row?.cv_object_key) return res.status(404).json({ ok: false, error: 'No CV on file.' });
       if (!(await cvExists(row.cv_object_key))) {
         return res.status(404).json({ ok: false, error: 'That file is missing from storage.' });

@@ -21,6 +21,9 @@ export function validateDetails(values) {
  * requires: told before they write, not discovered afterwards. Being open
  * about the check is also the point — it deters more than it catches.
  */
+/** Set VITE_PRIVACY_URL to add the link. Unset, the sentence stands alone. */
+const PRIVACY_URL = import.meta.env.VITE_PRIVACY_URL ?? '';
+
 export function DetailsStep({ role, values, errors, onChange, onBack, onNext }) {
   const set = (field) => (event) => onChange({ ...values, [field]: event.target.value });
 
@@ -106,13 +109,32 @@ export function DetailsStep({ role, values, errors, onChange, onBack, onNext }) 
         </Field>
       </div>
 
+      {/* Spec §12: candidate data crosses India/South Africa to a UK server,
+          so this has to be said before they hand it over.
+
+          The link is conditional on purpose. It used to point at /privacy,
+          which is not a route — it fell through to the role page and showed
+          the careers home page instead. A promise of "how we handle your data"
+          that delivers a job advert is worse than saying nothing, so until
+          VITE_PRIVACY_URL is set the sentence stands on its own. */}
       <p className="mt-6 text-[0.78rem] leading-relaxed text-muted">
         Your application is processed in the United Kingdom. By continuing you consent to your
-        details being stored and reviewed by our recruitment team.{' '}
-        <a href="/privacy" className="font-medium text-violet-deep underline">
-          How we handle your data
-        </a>
-        .
+        details being stored and reviewed by our recruitment team, and to your CV being held while
+        we consider it.
+        {PRIVACY_URL ? (
+          <>
+            {' '}
+            <a
+              href={PRIVACY_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-violet-deep underline"
+            >
+              How we handle your data
+            </a>
+            .
+          </>
+        ) : null}
       </p>
 
       <StepNav onBack={onBack} onNext={onNext} />

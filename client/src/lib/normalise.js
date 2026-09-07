@@ -27,7 +27,8 @@ const SLUG_BY_API_KEY = Object.fromEntries(
 export const roleFromApiKey = (apiKey) => ROLES[SLUG_BY_API_KEY[apiKey]] ?? null;
 
 /** Reasons are stored as a JSON array; anything else is treated as none. */
-const reasonsOf = (value) => (Array.isArray(value) ? value.filter((r) => typeof r === 'string') : []);
+const reasonsOf = (value) =>
+  Array.isArray(value) ? value.filter((r) => typeof r === 'string') : [];
 
 /**
  * One row from `GET /admin/applications`, or the fuller record from
@@ -62,6 +63,9 @@ export function normaliseApplicant(row) {
     },
 
     cvFilename: row.cv_filename ?? null,
+    // Set once the retention sweep has removed the file. The filename
+    // survives so the row can say what is gone rather than show nothing.
+    cvDeletedAt: row.cv_deleted_at ?? null,
     decidedByEmail: row.decided_by_email ?? null,
     decidedAt: row.decided_at ?? null,
 

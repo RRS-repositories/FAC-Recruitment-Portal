@@ -11,6 +11,7 @@ import {
   adminRemoveBlackout,
   adminSaveAvailability,
   adminSetFlag,
+  adminSetRetention,
   adminSettings,
   adminSignOut,
   getAdminToken,
@@ -112,6 +113,7 @@ export function SettingsPage() {
   const [busy, setBusy] = useState('');
 
   const [blackout, setBlackout] = useState({ from: '', to: '', reason: '' });
+  const [months, setMonths] = useState('');
   const [clashes, setClashes] = useState(null);
 
   const signOut = useCallback(() => {
@@ -134,6 +136,7 @@ export function SettingsPage() {
         maxDaysAhead: result.interviewer.max_days_ahead ?? 14,
         blocks: result.interviewer.blocks ?? [],
       });
+      setMonths(String(result.retention?.months ?? 0));
     } catch (failure) {
       if (failure.status === 401) signOut();
       else setError(failure.message);
@@ -193,6 +196,24 @@ export function SettingsPage() {
     setBusy(`remove-${id}`);
     try {
       await adminRemoveBlackout(id, data.interviewer.id);
+      await load();
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const saveRetention = async () => {
+    setBusy('retention');
+    setError('');
+    try {
+      const result = await adminSetRetention(Number(months));
+      announce(
+        result.months === 0
+          ? 'CV deletion is switched off. Nothing will be deleted.'
+          : `CVs of declined applicants will be deleted after ${result.months} months.`,
+      );
       await load();
     } catch (failure) {
       setError(failure.message);
@@ -492,6 +513,65 @@ export function SettingsPage() {
                   No time off recorded.
                 </p>
               )}
+            </Card>
+
+            {/* ── Retention ───────────────────────────────────────────── */}
+            <Card>
+              <h2 className="text-[1.1rem] font-bold text-ink">Keeping CVs</h2>
+              <p className="mt-1 text-[0.86rem] leading-relaxed text-muted">
+                A CV is personal data belonging to someone who is not a client, so it should not be
+                kept indefinitely. Once a declined applicant passes this age, their CV file is
+                deleted automatically.
+              </p>
+              <p className="mt-2 text-[0.84rem] leading-relaxed text-muted">
+                The application itself is never deleted — the decision, the score and who made it
+                stay on record. Only the file goes.
+              </p>
+
+              <div className="mt-5 flex flex-wrap items-end gap-3">
+                <Field
+                  label="Delete after"
+                  hint="Months. 0 switches deletion off."
+                  required
+                  className="w-40"
+                >
+                  {(props) => (
+                    <TextInput
+                      {...props}
+                      type="number"
+                      min="0"
+                      max="120"
+                      value={months}
+                      onChange={(e) => setMonths(e.target.value)}
+                    />
+                  )}
+                </Field>
+                <Button variant="secondary" onClick={saveRetention} disabled={busy === 'retention'}>
+                  {busy === 'retention' ? 'Saving…' : 'Save'}
+                </Button>
+              </div>
+
+              {Number(data.retention?.months) === 0 ? (
+                <p className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-3.5 text-[0.85rem] leading-relaxed text-amber-900">
+                  Deletion is switched off, so CVs are kept indefinitely. That is a decision worth
+                  making deliberately rather than by leaving this at zero.
+                </p>
+              ) : data.retention?.dueCount > 0 ? (
+                <p className="mt-4 text-[0.85rem] text-muted">
+                  <b className="font-semibold text-ink">{data.retention.dueCount}</b> CV
+                  {data.retention.dueCount === 1 ? ' is' : 's are'} past that age and will be
+                  deleted at the next daily sweep.
+                </p>
+              ) : (
+                <p className="mt-4 text-[0.85rem] text-muted">
+                  Nothing is currently due for deletion.
+                </p>
+              )}
+
+              <p className="mt-3 text-[0.78rem] leading-relaxed text-muted">
+                This covers declined applicants only. Nobody has set a policy for applications still
+                awaiting a decision, or for accepted candidates — worth deciding.
+              </p>
             </Card>
 
             {/* ── Flags ───────────────────────────────────────────────── */}

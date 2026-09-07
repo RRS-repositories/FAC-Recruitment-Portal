@@ -330,7 +330,13 @@ export function ApplicantRow({
           ) : null}
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
-            {applicant.cvFilename ? (
+            {applicant.cvDeletedAt ? (
+              // Deleted under the retention policy, said plainly. A missing
+              // button would look like something broke.
+              <span className="text-[0.84rem] text-muted">
+                CV deleted {formatDateTime(applicant.cvDeletedAt)} — retention policy
+              </span>
+            ) : applicant.cvFilename ? (
               <Button variant="secondary" size="sm" onClick={download}>
                 <Icon name="file" size={15} />
                 Download CV
