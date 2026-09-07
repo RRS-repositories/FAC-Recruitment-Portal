@@ -74,6 +74,87 @@ export function submitApplication({ role, details, written, answers, telemetry, 
   return request('/recruit/applications', { method: 'POST', body: form });
 }
 
+
+/* ── Admin ────────────────────────────────────────────────────────────────
+ * The token is held in sessionStorage rather than localStorage: it should not
+ * outlive the browser session, and an admin who closes the tab should be
+ * signed out. It is short-lived and signed server-side, so a stale one simply
+ * stops working rather than needing revocation.
+ */
+const TOKEN_KEY = 'fac.admin.token';
+
+export const getAdminToken = () => {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    // Private browsing, or storage blocked. Sign-in still works for this
+    // page load; it just will not survive a refresh.
+    return null;
+  }
+};
+
+export const setAdminToken = (token) => {
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore — see above */
+  }
+};
+
+const withAuth = (headers = {}) => {
+  const token = getAdminToken();
+  return token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
+};
+
+export async function adminSignIn(username, password) {
+  const result = await request('/recruit/admin/session', {
+    method: 'POST',
+    body: { username, password },
+  });
+  setAdminToken(result.token);
+  return result;
+}
+
+export const adminSignOut = () => setAdminToken(null);
+
+/** Who the held token belongs to. Also the cheapest way to test it is still valid. */
+export const adminMe = () => request('/recruit/admin/me', { headers: withAuth() });
+
+export function adminApplications({ status, role, q, page = 1 } = {}) {
+  const params = new URLSearchParams();
+  if (status && status !== 'all') params.set('status', status);
+  if (role && role !== 'all') params.set('role', role);
+  if (q) params.set('q', q);
+  params.set('page', String(page));
+  return request(`/recruit/admin/applications?${params}`, { headers: withAuth() });
+}
+
+export const adminApplication = (id) =>
+  request(`/recruit/admin/applications/${id}`, { headers: withAuth() });
+
+export const adminDecide = (id, status) =>
+  request(`/recruit/admin/applications/${id}`, {
+    method: 'PATCH',
+    body: { status },
+    headers: withAuth(),
+  });
+
+/** The CV needs the auth header, so it is fetched and handed over as a blob. */
+export async function adminDownloadCv(id, filename) {
+  const response = await fetch(`/api/recruit/admin/applications/${id}/cv`, { headers: withAuth() });
+  if (!response.ok) throw new ApiError('Could not download that CV.', { status: response.status });
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename || 'cv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 export const apiHealth = () => request('/health');
 
 export default request;
