@@ -2,8 +2,17 @@ import 'dotenv/config';
 import express from 'express';
 import { pool, assertConnection } from './lib/db.js';
 import { createHealthRouter } from './routes/health.js';
+import { createRolesRouter } from './routes/roles.js';
+import { createApplicationsRouter } from './routes/applications.js';
 
 const PORT = Number(process.env.PORT || 5020);
+
+// Without a salt the stored IP hashes would be reversible with a rainbow
+// table, which defeats the point of hashing them at all.
+const ipSalt = process.env.IP_HASH_SALT;
+if (!ipSalt) {
+  throw new Error('[fac-recruit] IP_HASH_SALT is not set. Refusing to start.');
+}
 
 const app = express();
 
@@ -14,6 +23,8 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 
 app.use('/api/health', createHealthRouter());
+app.use('/api/recruit/roles', createRolesRouter());
+app.use('/api/recruit/applications', createApplicationsRouter({ ipSalt }));
 
 // Malformed JSON should read as a client error, not a stack trace.
 app.use((error, _req, res, next) => {

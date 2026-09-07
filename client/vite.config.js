@@ -5,7 +5,12 @@ import { fileURLToPath, URL } from 'node:url';
 export default defineConfig({
   plugins: [react()],
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // Scoring and AI detection live outside the client because the server
+      // must run the same code, not a copy. See shared/README.md.
+      '@shared': fileURLToPath(new URL('../shared', import.meta.url)),
+    },
   },
   server: {
     // The client and API are same-origin in production (nginx serves the build

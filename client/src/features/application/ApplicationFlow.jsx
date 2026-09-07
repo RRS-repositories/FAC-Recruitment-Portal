@@ -1,30 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { useTelemetry } from '@/hooks/useTelemetry';
-import { scoreApplication } from '@/lib/scoring';
-import { detectAiUse } from '@/lib/aiDetect';
+import { fetchRole, startApplication, submitApplication } from '@/lib/api';
 import { DetailsStep, validateDetails } from './steps/DetailsStep';
 import { WrittenStep } from './steps/WrittenStep';
 import { AssessmentStep } from './steps/AssessmentStep';
 import { CvStep } from './steps/CvStep';
 
 const STEPS = ['details', 'written', 'assessment', 'cv'];
-
 const EMPTY_DETAILS = { fullName: '', email: '', phone: '', city: '' };
+const DETAIL_FIELDS = ['fullName', 'email', 'phone', 'city'];
 
 /**
  * The four-step application.
  *
  * State lives here rather than in each step, so moving backwards never loses
- * what someone has typed — the single most annoying way a form like this can
- * fail. Steps stay presentational and are easy to reorder or extend.
+ * what someone has typed — the most annoying way a form like this can fail.
  *
- * Submission is mocked: it waits, then shows the confirmation. The computed
- * score and AI verdict are logged rather than displayed, because the candidate
- * must never see either.
+ * The questions are fetched rather than bundled: they carry the marking
+ * scheme, and shipping it to the browser would let a candidate read which
+ * answer scores highest. The server sends them with the weights stripped and
+ * does the scoring itself, so there is no score computed here at all.
  */
 export function ApplicationFlow({ role, onExit }) {
   const [stepIndex, setStepIndex] = useState(0);
@@ -33,23 +32,53 @@ export function ApplicationFlow({ role, onExit }) {
   const [written, setWritten] = useState({});
   const [answers, setAnswers] = useState({});
   const [file, setFile] = useState(null);
+
+  const [questions, setQuestions] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const [sessionId, setSessionId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [done, setDone] = useState(false);
 
   const telemetry = useTelemetry();
-  const startedAt = useMemo(() => Date.now(), []);
   const topRef = useRef(null);
-
   const step = STEPS[stepIndex];
 
-  // Each step change moves focus to the new heading. Without this a keyboard
-  // or screen-reader user stays where the old button was and has no idea the
+  // Load the questions and open a session. The session is what lets the server
+  // measure how long the application took rather than believing the browser.
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchRole(role.key)
+      .then((payload) => {
+        if (!cancelled) setQuestions(payload.role.questions);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoadError('We could not load the application form. Please refresh and try again.');
+        }
+      });
+
+    // A failed session is deliberately not fatal: the application still
+    // submits, we just lose the server-side timing for it. Never block someone
+    // from applying over a metric.
+    startApplication(role.key)
+      .then((r) => {
+        if (!cancelled) setSessionId(r.sessionId);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [role.key]);
+
+  // Each step change moves focus to the top of the card. Without it a keyboard
+  // or screen-reader user stays where the old button was, with no idea the
   // page changed underneath them.
   useEffect(() => {
     telemetry.markStep(step);
     topRef.current?.focus();
-    // Scrolling to the card top matters on mobile, where step 3 is long.
     topRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, [step, telemetry]);
 
@@ -75,34 +104,50 @@ export function ApplicationFlow({ role, onExit }) {
   const submit = useCallback(async () => {
     setSubmitError('');
     setSubmitting(true);
+    try {
+      await submitApplication({
+        role: role.key,
+        details,
+        written,
+        answers,
+        telemetry: telemetry.snapshot(),
+        sessionId,
+        cv: file,
+        source: role.source,
+      });
+      setDone(true);
+    } catch (error) {
+      // A per-field rejection means the server disagreed with something the
+      // browser let through. Show it against the field, and jump back to the
+      // step that owns it, rather than reporting a generic failure.
+      const fieldErrors = error.payload?.errors;
+      if (fieldErrors) {
+        setDetailErrors(fieldErrors);
+        if (DETAIL_FIELDS.some((f) => fieldErrors[f])) setStepIndex(0);
+        else if (fieldErrors.cv) setSubmitError(fieldErrors.cv);
+        else setSubmitError('Some of your answers were not accepted. Please check them and try again.');
+      } else {
+        setSubmitError(error.message);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }, [role, details, written, answers, telemetry, sessionId, file]);
 
-    const payload = {
-      role: role.apiKey,
-      ...details,
-      written,
-      answers,
-      cvName: file?.name,
-      startedAt,
-      durationSec: Math.round((Date.now() - startedAt) / 1000),
-      telemetry: telemetry.snapshot(),
-    };
-
-    // Mock: the real POST /api/recruit/applications lands in a later stage.
-    // Scoring and AI detection are computed here to prove the shared logic
-    // works end to end — the server recomputes both and its answer is the one
-    // that counts.
-    await new Promise((resolve) => setTimeout(resolve, 900));
-
-    // eslint-disable-next-line no-console
-    console.info('[mock submit]', {
-      ...payload,
-      score: scoreApplication(role.questions, answers),
-      ai: detectAiUse(written, payload.telemetry),
-    });
-
-    setSubmitting(false);
-    setDone(true);
-  }, [role, details, written, answers, file, startedAt, telemetry]);
+  if (loadError) {
+    return (
+      <Card className="mx-auto max-w-form text-center">
+        <p role="alert" className="text-[0.95rem] font-medium text-danger">
+          {loadError}
+        </p>
+        <div className="mt-5">
+          <Button variant="secondary" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        </div>
+      </Card>
+    );
+  }
 
   if (done) {
     return (
@@ -136,29 +181,36 @@ export function ApplicationFlow({ role, onExit }) {
 
   return (
     <Card className="mx-auto max-w-form">
-      {/* tabIndex -1 makes this focusable programmatically without adding it to
-          the tab order for people who never leave the mouse. */}
+      {/* tabIndex -1 so focus can be moved here on each step change without
+          adding it to the tab order for anyone using a mouse. */}
       <div ref={topRef} tabIndex={-1} className="outline-none">
         <ProgressBar current={stepIndex + 1} total={STEPS.length} className="mb-7" />
       </div>
 
-      {/* Keyed so React remounts on step change, which restarts the entrance
-          animation and guarantees no state leaks between steps. */}
+      {/* Keyed so React remounts on step change: the entrance animation
+          restarts, and no state can leak between steps. */}
       <div key={step} className="animate-slide-in motion-reduce:animate-none">
         {step === 'details' && (
-          <DetailsStep
-            {...shared}
-            values={details}
-            errors={detailErrors}
-            onChange={setDetails}
-          />
+          <DetailsStep {...shared} values={details} errors={detailErrors} onChange={setDetails} />
         )}
+
         {step === 'written' && (
           <WrittenStep {...shared} answers={written} onChange={setWritten} telemetry={telemetry} />
         )}
-        {step === 'assessment' && (
-          <AssessmentStep {...shared} answers={answers} onChange={setAnswers} />
-        )}
+
+        {step === 'assessment' &&
+          (questions ? (
+            <AssessmentStep {...shared} questions={questions} answers={answers} onChange={setAnswers} />
+          ) : (
+            // Skeletons rather than a spinner, so the layout does not jump when
+            // the questions arrive.
+            <div aria-busy="true" aria-label="Loading questions" className="grid gap-4">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="skeleton h-20 w-full" />
+              ))}
+            </div>
+          ))}
+
         {step === 'cv' && (
           <CvStep
             role={role}

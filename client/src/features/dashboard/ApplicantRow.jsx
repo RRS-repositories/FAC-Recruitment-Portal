@@ -3,9 +3,9 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { ROLES } from '@/data/roles';
-import { WRITTEN_QUESTIONS } from '@/data/roles';
-import { gradeFor } from '@/lib/scoring';
-import { AI_LEVEL_LABEL } from '@/lib/aiDetect';
+import { WRITTEN_QUESTIONS } from '@/data/writtenQuestions';
+import { gradeFor } from '@shared/scoring';
+import { AI_LEVEL_LABEL } from '@shared/aiDetect';
 import { formatDateTime, formatDuration, initials } from '@/lib/format';
 import { cn } from '@/lib/cn';
 

@@ -1,86 +1,18 @@
-import { SHARED_QUESTIONS, WRITTEN_QUESTIONS } from './questions';
-
 /**
- * The two open roles.
+ * Role marketing content — and nothing else.
  *
- * Copy and questions are held as data rather than baked into components, so a
- * third role is a new entry here plus a route — no component changes. This
- * mirrors the shape of `GET /api/recruit/roles/:role`, which replaces this
- * file when the API lands.
+ * The assessment questions used to live here, which meant their `score`
+ * weights were compiled into the JavaScript bundle every visitor downloads: a
+ * candidate with devtools open could read exactly which answer was worth three
+ * marks. Making the repository private would not have fixed that, because the
+ * leak was in the built bundle rather than the source.
+ *
+ * Questions now live in `server/lib/questions.js` and reach the form through
+ * `GET /api/recruit/roles/:slug` with every score stripped. Everything in this
+ * file is public copy — the same words that appear on the page.
+ *
+ * A third role is a new entry here plus a route; no component changes.
  */
-
-const ROLE_SPECIFIC = {
-  india: [
-    {
-      id: 'q1',
-      question: 'Which of the following best describes your current situation?',
-      options: [
-        { label: 'Currently working in a legal or paralegal role', score: 3 },
-        { label: 'Final-year law student or recently graduated', score: 2 },
-        { label: 'Have previous legal experience but currently in a different field', score: 2 },
-        { label: 'No legal background but keen to start a career in law', score: 1 },
-      ],
-    },
-    {
-      id: 'q2',
-      question: 'What qualifications do you hold?',
-      multi: true,
-      options: [
-        { label: 'BA LLB / BBA LLB (5-year integrated) or 3-year LLB', score: 3 },
-        { label: 'LLM completed or in progress', score: 3 },
-        { label: 'Pursuing or completed CS / CA / Company Secretary', score: 2 },
-        { label: 'Other undergraduate degree (non-law)', score: 1 },
-        { label: '12th pass / currently in final year of degree', score: 1 },
-      ],
-    },
-  ],
-  'south-africa': [
-    {
-      id: 'q1',
-      question: 'Which of the following best describes your current situation?',
-      options: [
-        { label: 'Working as a paralegal or legal secretary now', score: 3 },
-        { label: 'Admitted attorney or completed articles', score: 3 },
-        { label: 'LLB graduate seeking a first legal role', score: 2 },
-        { label: 'Working in another field, moving into law', score: 1 },
-      ],
-    },
-    {
-      id: 'q2',
-      question: 'What qualifications do you hold?',
-      multi: true,
-      options: [
-        { label: 'LLB', score: 3 },
-        { label: 'Paralegal diploma or certificate', score: 2 },
-        { label: 'BCom Law / BA Law', score: 2 },
-        { label: 'Matric only', score: 1 },
-      ],
-    },
-  ],
-};
-
-const CLOSING_QUESTION = {
-  india: {
-    id: 'q11',
-    question: 'What interests you most about this role at Fast Action Claims?',
-    options: [
-      { label: 'Gaining hands-on experience in UK consumer law while working from India', score: 3 },
-      { label: 'The opportunity to grow with an international legal firm and earn a full-time contract', score: 3 },
-      { label: 'Building a career in the legal sector with real casework from day one', score: 2 },
-      { label: 'I just need any internship right now', score: 0 },
-    ],
-  },
-  'south-africa': {
-    id: 'q11',
-    question: 'What interests you most about this role at Fast Action Claims?',
-    options: [
-      { label: 'Working on UK consumer law matters with a growing firm', score: 3 },
-      { label: 'A stable full-time remote position with real casework', score: 3 },
-      { label: 'Building specialist experience I cannot get locally', score: 2 },
-      { label: 'I am applying widely at the moment', score: 0 },
-    ],
-  },
-};
 
 export const ROLES = {
   india: {
@@ -114,7 +46,6 @@ export const ROLES = {
       { value: '7 days', label: 'Average time to interview' },
       { value: '100%', label: 'Remote' },
     ],
-    questions: [...ROLE_SPECIFIC.india, ...SHARED_QUESTIONS, CLOSING_QUESTION.india],
   },
 
   'south-africa': {
@@ -148,12 +79,9 @@ export const ROLES = {
       { value: '7 days', label: 'Average time to interview' },
       { value: '100%', label: 'Remote' },
     ],
-    questions: [...ROLE_SPECIFIC['south-africa'], ...SHARED_QUESTIONS, CLOSING_QUESTION['south-africa']],
   },
 };
 
 export const ROLE_KEYS = Object.keys(ROLES);
 
 export const getRole = (key) => ROLES[key] ?? null;
-
-export { WRITTEN_QUESTIONS };
