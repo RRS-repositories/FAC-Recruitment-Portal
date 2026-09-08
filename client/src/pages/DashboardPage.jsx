@@ -90,6 +90,10 @@ export function DashboardPage() {
   const [applicants, setApplicants] = useState([]);
   const [summary, setSummary] = useState(EMPTY_SUMMARY);
   const [total, setTotal] = useState(0);
+  // Whether a decision actually reaches the candidate, answered by the server
+  // rather than assumed. The confirmation says so in as many words, and it
+  // must not promise an email that is only being written to a file.
+  const [emailLive, setEmailLive] = useState(false);
   const [pageSize, setPageSize] = useState(25);
 
   const [status, setStatus] = useState('all');
@@ -131,6 +135,7 @@ export function DashboardPage() {
       setSummary(normaliseSummary(result.summary));
       setTotal(result.total);
       setPageSize(result.pageSize);
+      setEmailLive(Boolean(result.emailLive));
     } catch (failure) {
       // An expired or rejected token is not an error to show — it is a request
       // to sign in again.
@@ -489,6 +494,39 @@ export function DashboardPage() {
                 unsuccessful. It cannot be undone.
               </>
             )}
+          </p>
+          {/* The consequence people most need to see before clicking: this
+              leaves the building. Said only when it is true. */}
+          <p
+            className={cn(
+              'mt-3 flex items-start gap-2 rounded-panel border p-3 text-[0.85rem] leading-relaxed',
+              emailLive
+                ? 'border-amber-300 bg-amber-50 text-amber-900'
+                : 'border-line bg-lav-soft/60 text-muted',
+            )}
+          >
+            <Icon
+              name={emailLive ? 'alert' : 'file'}
+              size={16}
+              className="mt-0.5 flex-shrink-0"
+            />
+            <span>
+              {emailLive ? (
+                <>
+                  <b className="font-semibold">A real email is sent immediately.</b>{' '}
+                  {confirmingApplicant.fullName} will receive this
+                  {confirming.decision === 'accepted'
+                    ? ' shortlisting email, with their booking link.'
+                    : ' decision by email.'}{' '}
+                  It cannot be recalled.
+                </>
+              ) : (
+                <>
+                  No email will reach them: the message is written to a file on the server instead.
+                  Contact them yourself.
+                </>
+              )}
+            </span>
           </p>
           {decideError ? (
             <p role="alert" className="mt-3 text-[0.85rem] font-medium text-danger">

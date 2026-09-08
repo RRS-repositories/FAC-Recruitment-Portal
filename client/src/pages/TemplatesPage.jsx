@@ -107,14 +107,6 @@ export function TemplatesPage() {
             hand from the applicant list.
           </span>
         </p>
-      ) : mode === 'smtp' ? (
-        <p className="mb-6 flex items-center gap-3 rounded-panel border border-emerald-300 bg-emerald-50 p-4 text-[0.88rem] text-emerald-900">
-          <Icon name="check" size={18} className="flex-shrink-0" />
-          <span>
-            <b className="font-semibold">These emails are being sent for real.</b> Anything below
-            will reach the candidate it is addressed to.
-          </span>
-        </p>
       ) : null}
 
       {loading ? (

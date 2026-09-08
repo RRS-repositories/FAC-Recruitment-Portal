@@ -17,7 +17,8 @@ import { notifyDecision, notifyNoShow } from '../lib/notify.js';
 import { cancelPendingFor, historyFor } from '../lib/outbox.js';
 import { describeTemplates } from '../lib/templates.js';
 import { mailMode } from '../lib/mailer.js';
-import { FLAGS, allFlags, setFlag } from '../lib/flags.js';
+import { FLAGS, allFlags, isEnabled, setFlag } from '../lib/flags.js';
+import { EMAIL, FIELD_LIMITS } from '../lib/validate.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
 import { dueForDeletion, retentionMonths, setRetentionMonths } from '../lib/retention.js';
 import { buildCalendar } from '../lib/calendar.js';
@@ -392,6 +393,41 @@ export function createAdminRouter() {
     }
   });
 
+  /**
+   * The address the interviewer is told about bookings at.
+   *
+   * Its own route rather than part of the availability form: it is the one
+   * field here that decides whether a person hears about an interview at all,
+   * and it should not be saveable as a side effect of moving working hours.
+   */
+  router.put('/settings/interviewer', requireRole('administrator'), async (req, res) => {
+    const email = String(req.body?.email ?? '').trim();
+
+    if (!email) return res.status(400).json({ ok: false, error: 'Enter an email address.' });
+    if (email.length > FIELD_LIMITS.email) {
+      return res.status(400).json({ ok: false, error: 'That email address is too long.' });
+    }
+    if (!EMAIL.test(email)) {
+      return res.status(400).json({ ok: false, error: 'Enter a valid email address.' });
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `UPDATE recruit_interviewers SET email = $1
+          WHERE id = (SELECT id FROM recruit_interviewers WHERE active ORDER BY id LIMIT 1)
+      RETURNING id, full_name, email`,
+        [email],
+      );
+      if (!rows[0]) {
+        return res.status(503).json({ ok: false, error: 'No interviewer is configured.' });
+      }
+      return res.json({ ok: true, interviewer: rows[0] });
+    } catch (error) {
+      console.error('[fac-recruit] interviewer email save failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not save that address.' });
+    }
+  });
+
   /** Changes the availability rules. */
   router.put('/settings/availability', requireRole('administrator'), async (req, res) => {
     const { interviewerId, dayStart, dayEnd, weekdays, slotMinutes, minNoticeHours, maxDaysAhead, blocks } =
@@ -569,6 +605,10 @@ export function createAdminRouter() {
         pageSize: PAGE_SIZE,
         total: count.rows[0].total,
         summary: summary.rows[0],
+        // Whether a decision actually reaches the candidate. The confirmation
+        // dialog says so in as many words, and it must not claim an email that
+        // is only being written to a file — or none at all.
+        emailLive: (await isEnabled('recruitment_alerts')) && mailMode() === 'smtp',
       });
     } catch (error) {
       console.error('[fac-recruit] admin list failed:', error.message);
