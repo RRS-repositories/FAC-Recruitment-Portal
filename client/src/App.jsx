@@ -14,6 +14,7 @@ const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
 const CalendarPage = lazy(() => import('@/pages/CalendarPage'));
 const BookingPage = lazy(() => import('@/pages/BookingPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
 
 /** Holds the fold while a split chunk arrives, so nothing jumps. */
 function RouteFallback() {
@@ -36,6 +37,8 @@ export default function App() {
         {/* Each role has its own URL — the link that goes on a job board.
             Under /recruitment so the whole candidate journey sits at one path
             on the main site: /recruitment/intern and /recruitment/paralegal. */}
+        {/* Before the :roleKey route, or "privacy" would be read as a role. */}
+        <Route path="/recruitment/privacy" element={split(PrivacyPage)} />
         <Route path="/recruitment/:roleKey" element={<RoleLandingPage />} />
         <Route path="/recruitment/apply/:roleKey" element={split(ApplyPage)} />
 

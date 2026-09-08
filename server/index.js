@@ -3,6 +3,7 @@ import express from 'express';
 import { pool, assertConnection } from './lib/db.js';
 import { createHealthRouter } from './routes/health.js';
 import { createRolesRouter } from './routes/roles.js';
+import { createPrivacyRouter } from './routes/privacy.js';
 import { createApplicationsRouter } from './routes/applications.js';
 import { createBookingRouter } from './routes/booking.js';
 import { createAdminRouter } from './routes/admin.js';
@@ -32,6 +33,7 @@ app.use(express.json({ limit: '1mb' }));
 
 app.use('/api/health', createHealthRouter());
 app.use('/api/recruit/roles', createRolesRouter());
+app.use('/api/recruit/privacy', createPrivacyRouter());
 app.use('/api/recruit/applications', createApplicationsRouter({ ipSalt }));
 app.use('/api/recruit/book', createBookingRouter());
 app.use('/api/recruit/admin', createAdminRouter());

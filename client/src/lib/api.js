@@ -70,6 +70,7 @@ export function submitApplication({
   sessionId,
   cv,
   source,
+  captchaToken,
 }) {
   const form = new FormData();
   form.set('role', role);
@@ -80,6 +81,7 @@ export function submitApplication({
   if (sessionId) form.set('sessionId', sessionId);
   if (source) form.set('source', source);
   if (cv) form.set('cv', cv, cv.name);
+  if (captchaToken) form.set('captchaToken', captchaToken);
 
   return request('/recruit/applications', { method: 'POST', body: form });
 }

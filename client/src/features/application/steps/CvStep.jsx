@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Turnstile, captchaConfigured } from '@/components/ui/Turnstile';
 import { Icon } from '@/components/ui/Icon';
 import { StepHeader } from '../StepHeader';
 import { StepNav } from '../StepNav';
@@ -20,7 +21,17 @@ const prettySize = (bytes) =>
  * Validation happens on selection, not on submit, so a wrong file type is
  * caught while the person is still looking at the picker.
  */
-export function CvStep({ role, file, onFile, onBack, onSubmit, submitting, submitError }) {
+export function CvStep({
+  role,
+  file,
+  onFile,
+  onBack,
+  onSubmit,
+  submitting,
+  submitError,
+  captchaToken,
+  onCaptchaToken,
+}) {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState('');
   const inputRef = useRef(null);
@@ -132,13 +143,23 @@ export function CvStep({ role, file, onFile, onBack, onSubmit, submitting, submi
         </p>
       ) : null}
 
+      {/* Last thing before submitting, so the token is as fresh as it can
+          be. Renders nothing unless a site key is configured. */}
+      <Turnstile onToken={onCaptchaToken} className="mt-6" />
+
       <StepNav
         onBack={onBack}
         onNext={onSubmit}
         nextLabel="Submit application"
         busy={submitting}
-        disabled={!file}
-        hint="Please attach your CV to finish your application."
+        disabled={!file || (captchaConfigured && !captchaToken)}
+        hint={
+          !file
+            ? 'Please attach your CV to finish your application.'
+            : captchaConfigured && !captchaToken
+              ? 'Please tick the box above to confirm you are a person.'
+              : undefined
+        }
       />
     </>
   );

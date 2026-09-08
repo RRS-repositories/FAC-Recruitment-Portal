@@ -17,6 +17,7 @@ import { notifyDecision, notifyNoShow } from '../lib/notify.js';
 import { cancelPendingFor, historyFor } from '../lib/outbox.js';
 import { describeTemplates } from '../lib/templates.js';
 import { mailMode } from '../lib/mailer.js';
+import { captchaMode } from '../lib/captcha.js';
 import { FLAGS, allFlags, isEnabled, setFlag } from '../lib/flags.js';
 import { EMAIL, FIELD_LIMITS } from '../lib/validate.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
@@ -385,6 +386,10 @@ export function createAdminRouter() {
         blackouts: await listBlackouts(interviewers[0].id),
         flags: await allFlags(),
         mailMode: mailMode(),
+        // Whether the public form is actually protected. A widget on the page
+        // is not the control; the server verifying the token is, and only this
+        // knows whether it does.
+        captchaMode: captchaMode(),
         retention: { months, dueCount: due.length },
       });
     } catch (error) {

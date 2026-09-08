@@ -21,8 +21,12 @@ export function validateDetails(values) {
  * requires: told before they write, not discovered afterwards. Being open
  * about the check is also the point — it deters more than it catches.
  */
-/** Set VITE_PRIVACY_URL to add the link. Unset, the sentence stands alone. */
-const PRIVACY_URL = import.meta.env.VITE_PRIVACY_URL ?? '';
+/**
+ * The notice lives in this app, at /recruitment/privacy. VITE_PRIVACY_URL
+ * still wins if it is set, so a firm-wide policy page can replace ours
+ * without a code change.
+ */
+const PRIVACY_URL = import.meta.env.VITE_PRIVACY_URL || '/recruitment/privacy';
 
 export function DetailsStep({ role, values, errors, onChange, onBack, onNext }) {
   const set = (field) => (event) => onChange({ ...values, [field]: event.target.value });
