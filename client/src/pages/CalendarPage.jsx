@@ -15,6 +15,7 @@ import {
   getAdminToken,
 } from '@/lib/api';
 import { roleFromApiKey } from '@/lib/normalise';
+import { formatTimeIn } from '@/lib/format';
 import usePageMeta from '@/hooks/usePageMeta';
 import { cn } from '@/lib/cn';
 
@@ -43,6 +44,22 @@ const DAY_NAMES = [
   'Sunday',
 ];
 const SHORT = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/**
+ * The zones worth offering: the interviewer's working day, and the two the
+ * candidates live in. Not a list of every timezone — this answers "what time
+ * is that for them", and three options answer it.
+ *
+ * The grid never moves. Slots are absolute instants, so switching zone
+ * relabels the same columns rather than reshuffling the week.
+ */
+const ZONES = [
+  { id: 'Europe/London', label: 'UK', note: "the interviewer's day" },
+  { id: 'Asia/Kolkata', label: 'India', note: 'IST' },
+  { id: 'Africa/Johannesburg', label: 'South Africa', note: 'SAST' },
+];
+
+const ZONE_KEY = 'fac.admin.calendarZone';
 
 /** What each state looks like, and what it means. One place, so the key on the
  *  page and the cells themselves can never disagree. */
@@ -113,6 +130,25 @@ export function CalendarPage() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // Remembered, because somebody who works in one zone will want it every
+  // time rather than switching on every visit.
+  const [zone, setZone] = useState(() => {
+    try {
+      return localStorage.getItem(ZONE_KEY) || 'Europe/London';
+    } catch {
+      return 'Europe/London';
+    }
+  });
+
+  const chooseZone = (id) => {
+    setZone(id);
+    try {
+      localStorage.setItem(ZONE_KEY, id);
+    } catch {
+      /* the preference simply will not stick */
+    }
+  };
+
   // What the manager clicked: a booked slot to look at, or a free one to hold.
   const [chosen, setChosen] = useState(null);
   const [reason, setReason] = useState('');
@@ -141,7 +177,10 @@ export function CalendarPage() {
 
   // Every day has the same slots at the same times, so one column of times
   // labels the whole grid rather than repeating on each day.
-  const times = useMemo(() => data?.days?.[0]?.slots.map((s) => s.time) ?? [], [data]);
+  const times = useMemo(
+    () => data?.days?.[0]?.slots.map((s) => formatTimeIn(s.startsAt, zone)) ?? [],
+    [data, zone],
+  );
 
   const totals = useMemo(() => {
     const days = data?.days ?? [];
@@ -198,7 +237,7 @@ export function CalendarPage() {
       title="Calendar"
       subtitle={
         data
-          ? `Interview hours ${data.dayStart?.slice(0, 5)}–${data.dayEnd?.slice(0, 5)}, shown in ${data.timezone.replace('_', ' ')}`
+          ? `Interview hours ${data.dayStart?.slice(0, 5)}–${data.dayEnd?.slice(0, 5)} ${data.timezone.replace('_', ' ')}`
           : 'Interviews and blocked time, week by week'
       }
       onSignOut={signOut}
@@ -253,16 +292,43 @@ export function CalendarPage() {
                 ) : null}
               </h2>
             </div>
-            <p className="text-[0.84rem] text-muted" role="status">
-              <b className="font-semibold text-ink">{totals.booked}</b> booked ·{' '}
-              <b className="font-semibold text-ink">{totals.free}</b> still free
-              {totals.blocked ? (
-                <>
-                  {' '}
-                  · <b className="font-semibold text-ink">{totals.blocked}</b> blocked
-                </>
-              ) : null}
-            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <div
+                className="flex flex-wrap items-center gap-1"
+                role="group"
+                aria-label="Show times in"
+              >
+                <span className="mr-1 text-[0.78rem] text-muted">Times in</span>
+                {ZONES.map((z) => (
+                  <button
+                    key={z.id}
+                    type="button"
+                    onClick={() => chooseZone(z.id)}
+                    aria-pressed={zone === z.id}
+                    title={z.note}
+                    className={cn(
+                      'rounded-control px-2.5 py-1.5 text-[0.8rem] font-semibold transition-colors',
+                      zone === z.id
+                        ? 'bg-ink text-white'
+                        : 'border border-line bg-white text-ink hover:border-violet',
+                    )}
+                  >
+                    {z.label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-[0.84rem] text-muted" role="status">
+                <b className="font-semibold text-ink">{totals.booked}</b> booked ·{' '}
+                <b className="font-semibold text-ink">{totals.free}</b> still free
+                {totals.blocked ? (
+                  <>
+                    {' '}
+                    · <b className="font-semibold text-ink">{totals.blocked}</b> blocked
+                  </>
+                ) : null}
+              </p>
+            </div>
           </div>
 
           {/* The grid scrolls sideways rather than squeezing seven days into a
@@ -328,7 +394,7 @@ export function CalendarPage() {
 
                       const label =
                         slot.state === 'booked'
-                          ? `${slot.interview.fullName}, ${SHORT[day.weekday]} ${time}`
+                          ? `Interview with ${slot.interview.fullName}, ${SHORT[day.weekday]} ${time}`
                           : `${look.label}, ${SHORT[day.weekday]} ${time}`;
 
                       return (
@@ -347,9 +413,14 @@ export function CalendarPage() {
                               )}
                             >
                               {slot.state === 'booked' ? (
-                                <span className="block truncate font-semibold">
-                                  {slot.interview.fullName}
-                                </span>
+                                <>
+                                  <span className="block text-[0.62rem] uppercase tracking-wide text-white/70">
+                                    Interview with
+                                  </span>
+                                  <span className="block truncate font-semibold">
+                                    {slot.interview.fullName}
+                                  </span>
+                                </>
                               ) : null}
                             </button>
                           ) : (
@@ -397,7 +468,8 @@ export function CalendarPage() {
           onClose={() => (busy ? null : setChosen(null))}
         >
           <h2 id="slot-title" className="text-[1.15rem] font-bold text-ink">
-            {DAY_NAMES[chosen.day.weekday]} {prettyDate(chosen.day.date)}, {chosen.slot.time}
+            {DAY_NAMES[chosen.day.weekday]} {prettyDate(chosen.day.date)},{' '}
+            {formatTimeIn(chosen.slot.startsAt, zone)}
           </h2>
 
           {chosen.slot.state === 'booked' ? (

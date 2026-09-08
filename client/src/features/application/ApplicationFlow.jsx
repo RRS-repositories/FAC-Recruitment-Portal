@@ -39,6 +39,9 @@ export function ApplicationFlow({ role, onExit }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [done, setDone] = useState(false);
+  // Whether an acknowledgement is actually going to reach them. The server
+  // knows; the page must not assume.
+  const [acknowledged, setAcknowledged] = useState(false);
 
   const telemetry = useTelemetry();
   const topRef = useRef(null);
@@ -105,7 +108,7 @@ export function ApplicationFlow({ role, onExit }) {
     setSubmitError('');
     setSubmitting(true);
     try {
-      await submitApplication({
+      const result = await submitApplication({
         role: role.key,
         details,
         written,
@@ -115,6 +118,7 @@ export function ApplicationFlow({ role, onExit }) {
         cv: file,
         source: role.source,
       });
+      setAcknowledged(result?.acknowledged === true);
       setDone(true);
     } catch (error) {
       // A per-field rejection means the server disagreed with something the
@@ -125,7 +129,10 @@ export function ApplicationFlow({ role, onExit }) {
         setDetailErrors(fieldErrors);
         if (DETAIL_FIELDS.some((f) => fieldErrors[f])) setStepIndex(0);
         else if (fieldErrors.cv) setSubmitError(fieldErrors.cv);
-        else setSubmitError('Some of your answers were not accepted. Please check them and try again.');
+        else
+          setSubmitError(
+            'Some of your answers were not accepted. Please check them and try again.',
+          );
       } else {
         setSubmitError(error.message);
       }
@@ -159,14 +166,24 @@ export function ApplicationFlow({ role, onExit }) {
           <Icon name="check" size={28} strokeWidth={2.6} />
         </span>
         <h1 className="text-display-md font-extrabold text-ink">Application received</h1>
+        {/* Only claim the email if one is genuinely going. Telling somebody
+            to watch for a confirmation that nothing sends is how a candidate
+            ends up waiting on an empty inbox and assuming they were ignored. */}
         <p className="mx-auto mt-3 max-w-md text-[0.95rem] leading-relaxed text-muted">
-          Thanks {details.fullName.split(' ')[0]}. We&rsquo;ve sent a confirmation to{' '}
-          <b className="font-semibold text-ink">{details.email}</b>. Our team reviews every
-          application and will reply within 48 hours.
+          Thanks {details.fullName.split(' ')[0]}, we have your application
+          {acknowledged ? (
+            <>
+              {' '}
+              and have sent a confirmation to{' '}
+              <b className="font-semibold text-ink">{details.email}</b>
+            </>
+          ) : null}
+          . Our team reviews every one, and will reply to{' '}
+          <b className="font-semibold text-ink">{details.email}</b> within 48 hours.
         </p>
         <p className="mt-5 rounded-panel bg-lav-soft px-4 py-3 text-[0.85rem] text-violet-deep">
-          If you&rsquo;re shortlisted, your next email will include a link to book your interview
-          at a time that suits you.
+          If you&rsquo;re shortlisted, we&rsquo;ll send you a link to book your interview at a time
+          that suits you.
         </p>
         <div className="mt-7">
           <Button variant="secondary" onClick={onExit}>
@@ -200,7 +217,12 @@ export function ApplicationFlow({ role, onExit }) {
 
         {step === 'assessment' &&
           (questions ? (
-            <AssessmentStep {...shared} questions={questions} answers={answers} onChange={setAnswers} />
+            <AssessmentStep
+              {...shared}
+              questions={questions}
+              answers={answers}
+              onChange={setAnswers}
+            />
           ) : (
             // Skeletons rather than a spinner, so the layout does not jump when
             // the questions arrive.
