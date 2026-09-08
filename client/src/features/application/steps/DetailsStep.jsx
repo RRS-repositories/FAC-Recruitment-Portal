@@ -86,7 +86,7 @@ export function DetailsStep({ role, values, errors, onChange, onBack, onNext }) 
                 onChange={set('phone')}
                 error={errors.phone}
                 autoComplete="tel"
-                placeholder={role.key === 'india' ? '+91 …' : '+27 …'}
+                placeholder={role.countryCode === 'IN' ? '+91 …' : '+27 …'}
               />
             )}
           </Field>
