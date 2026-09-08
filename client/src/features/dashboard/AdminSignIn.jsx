@@ -69,7 +69,7 @@ export function AdminSignIn({ onSignedIn }) {
             </p>
           ) : null}
 
-          <Field label="Username" required>
+          <Field label="Username or email" required>
             {(props) => (
               <TextInput
                 {...props}

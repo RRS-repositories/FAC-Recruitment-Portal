@@ -67,6 +67,24 @@ export function parseAdminUsers(raw = process.env.ADMIN_USERS) {
   return users;
 }
 
+/**
+ * Finds somebody in the bootstrap list by username or email address.
+ *
+ * The list is keyed by username, so an email has to be looked for. Username
+ * wins on an exact match — see `findAdminRow` for why that ordering matters.
+ */
+export function findInBootstrap(users, identifier) {
+  if (!identifier) return null;
+  const wanted = String(identifier).toLowerCase();
+
+  const byUsername = users.get(identifier) ?? [...users.values()].find(
+    (u) => u.username.toLowerCase() === wanted,
+  );
+  if (byUsername) return byUsername;
+
+  return [...users.values()].find((u) => u.email.toLowerCase() === wanted) ?? null;
+}
+
 function secret() {
   const value = process.env.ADMIN_TOKEN_SECRET;
   if (!value) throw new Error('[fac-recruit] ADMIN_TOKEN_SECRET is not set.');

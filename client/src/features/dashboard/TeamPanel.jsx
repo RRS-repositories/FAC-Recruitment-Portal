@@ -156,7 +156,7 @@ export function TeamPanel({ you, onError }) {
       {adding ? (
         <div className="mt-5 rounded-panel border border-line bg-lav-soft/60 p-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Username" hint="What they type to sign in" required>
+            <Field label="Username" hint="They can sign in with this or their email" required>
               {(props) => (
                 <TextInput
                   {...props}
