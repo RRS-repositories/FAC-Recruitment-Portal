@@ -154,6 +154,27 @@ async function notifyInterviewer(client, { applicant, interviewId, when, moved }
   });
 }
 
+/**
+ * The video link, sent by hand from the dashboard.
+ *
+ * The caller has already saved it on the interview, which is the half that
+ * keeps working after this email: every template resolves its merge fields at
+ * send time, so both reminders pick the link up from then on.
+ *
+ * Keyed to the minute rather than the millisecond. A double-click cannot send
+ * two identical emails, but somebody deliberately resending later - because a
+ * candidate says it never arrived, or the link changed - still gets through.
+ */
+export const notifyMeetingLink = (client, { applicant, interviewId }) =>
+  enqueue(client, {
+    template: 'recruit.meet.link',
+    toEmail: applicant.email,
+    toName: applicant.full_name,
+    applicantId: applicant.id,
+    interviewId,
+    dedupeKey: dedupeKey('meetlink', interviewId, Math.floor(Date.now() / 60_000)),
+  });
+
 /** Cancelled by the candidate. Their reminders must not still arrive. */
 export async function notifyCancelled(client, { applicant, interviewId }) {
   await cancelPendingFor(client, interviewId, 'interview cancelled');

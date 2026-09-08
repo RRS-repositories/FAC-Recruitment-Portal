@@ -6,7 +6,7 @@ import { ROLES } from '@/data/roles';
 import { WRITTEN_QUESTIONS } from '@/data/writtenQuestions';
 import { gradeFor } from '@shared/scoring';
 import { AI_LEVEL_LABEL } from '@shared/aiDetect';
-import { adminApplication, adminDownloadCv } from '@/lib/api';
+import { adminApplication, adminDownloadCv, adminSendMeetingLink } from '@/lib/api';
 import { normaliseApplicant } from '@/lib/normalise';
 import { formatDateTime, formatDuration, initials } from '@/lib/format';
 import { cn } from '@/lib/cn';
@@ -48,6 +48,7 @@ const EMAIL_LABEL = {
   'recruit.reminder.24h': 'Reminder, 24 hours before',
   'recruit.reminder.10m': 'Reminder, 10 minutes before',
   'recruit.noshow': 'We missed you, rebook',
+  'recruit.meet.link': 'Joining link',
 };
 
 /** One email's state, in words rather than a status code. */
@@ -117,6 +118,10 @@ export function ApplicantRow({
   const [detailError, setDetailError] = useState('');
   const [downloadError, setDownloadError] = useState('');
   const [busy, setBusy] = useState('');
+  // The link panel: closed, or open with whatever is being typed into it.
+  const [linkPanel, setLinkPanel] = useState(null);
+  const [linkError, setLinkError] = useState('');
+  const [linkSent, setLinkSent] = useState('');
 
   const role = ROLES[applicant.role];
   const grade = gradeFor(applicant.score);
@@ -168,6 +173,29 @@ export function ApplicantRow({
   const canMark =
     interviewPast && ['booked', 'attended', 'no_show'].includes(applicant.interviewStatus);
   const marked = ['attended', 'no_show'].includes(applicant.interviewStatus);
+  // Only worth offering once there is a time to join: a link with no
+  // interview behind it is a link to nowhere.
+  const canSendLink = applicant.interviewStatus === 'booked';
+
+  const sendMeetingLink = async () => {
+    setBusy('meetlink');
+    setLinkError('');
+    try {
+      const result = await adminSendMeetingLink(applicant.id, linkPanel.trim());
+      setLinkPanel(null);
+      setLinkSent(
+        result.delivered
+          ? 'Sent. The reminders will carry the link too.'
+          : 'Saved, but no email left the building - mail is going to a file. Send it by hand.',
+      );
+      // The email list in hand is now one short, and the saved link changed.
+      setDetail(null);
+    } catch (failure) {
+      setLinkError(failure.message);
+    } finally {
+      setBusy('');
+    }
+  };
 
   return (
     <li className="border-b border-line last:border-0">
@@ -391,7 +419,7 @@ export function ApplicantRow({
             </div>
           ) : null}
 
-          {canReissue || canMark || marked ? (
+          {canReissue || canMark || marked || canSendLink ? (
             <div className="mt-4 border-t border-line pt-4">
               <p className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted">
                 Interview
@@ -417,6 +445,25 @@ export function ApplicantRow({
                       : applicant.interviewStatus === 'not_invited'
                         ? 'Create booking link'
                         : 'New booking link'}
+                  </Button>
+                ) : null}
+
+                {canSendLink ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={Boolean(busy)}
+                    aria-expanded={linkPanel !== null}
+                    onClick={() => {
+                      setLinkError('');
+                      setLinkSent('');
+                      // Pre-filled with the link already saved, so updating a
+                      // link is editing rather than retyping.
+                      setLinkPanel(linkPanel === null ? (full.meetLink ?? '') : null);
+                    }}
+                  >
+                    <Icon name="video" size={15} />
+                    {full.meetLink ? 'Update meeting link' : 'Send meeting link'}
                   </Button>
                 ) : null}
 
@@ -463,6 +510,86 @@ export function ApplicantRow({
                   </span>
                 ) : null}
               </div>
+
+              {/* Where the link is pasted. Inline rather than a dialog: it is
+                  a single field, and the interview time it belongs to is
+                  already on screen above it. */}
+              {linkPanel !== null ? (
+                <div className="mt-3 rounded-panel border border-line bg-lav-soft/60 p-3">
+                  <label
+                    className="block text-[0.78rem] font-semibold text-ink"
+                    htmlFor={`meetlink-${applicant.id}`}
+                  >
+                    Meeting link
+                  </label>
+                  <p className="mt-1 text-[0.78rem] leading-relaxed text-muted">
+                    Paste the Teams, Meet or Zoom link. It is emailed to{' '}
+                    <b className="font-semibold text-ink">{applicant.email}</b> and saved, so both
+                    reminders carry it from now on.
+                  </p>
+                  <input
+                    id={`meetlink-${applicant.id}`}
+                    type="url"
+                    inputMode="url"
+                    value={linkPanel}
+                    autoComplete="off"
+                    spellCheck="false"
+                    placeholder="https://teams.microsoft.com/l/meetup-join/..."
+                    onChange={(e) => setLinkPanel(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && linkPanel.trim() && !busy) sendMeetingLink();
+                    }}
+                    className="mt-2 w-full rounded-control border border-line bg-white px-3 py-2 text-[0.86rem] text-ink placeholder:text-muted/70 focus:border-violet focus:outline-none focus:ring-2 focus:ring-violet/40"
+                  />
+                  {linkError ? (
+                    <p role="alert" className="mt-2 text-[0.82rem] font-medium text-danger">
+                      {linkError}
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      disabled={Boolean(busy) || !linkPanel.trim()}
+                      onClick={sendMeetingLink}
+                    >
+                      <Icon name="mail" size={15} />
+                      {busy === 'meetlink' ? 'Sending...' : 'Send to candidate'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={Boolean(busy)}
+                      onClick={() => {
+                        setLinkPanel(null);
+                        setLinkError('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {linkSent ? (
+                <p role="status" className="mt-2 text-[0.82rem] font-medium text-ink">
+                  {linkSent}
+                </p>
+              ) : null}
+
+              {/* Once it is saved there is no guessing whether it went. */}
+              {canSendLink && full.meetLink && linkPanel === null ? (
+                <p className="mt-2 break-all text-[0.78rem] leading-relaxed text-muted">
+                  Current link:{' '}
+                  <a
+                    href={full.meetLink}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="font-medium text-violet underline underline-offset-2"
+                  >
+                    {full.meetLink}
+                  </a>
+                </p>
+              ) : null}
 
               {/* A booking link that has not been sent is the commonest way a
                   candidate gets stuck: it is shown once and cannot be looked
