@@ -32,6 +32,10 @@ const SAMPLE = {
   roleCountry: 'India',
   interviewerName: 'Priyanshu Srivastava',
   interviewerFirstName: 'Priyanshu',
+  interviewerEmail: 'interviewer@example.com',
+  interviewerTimezone: 'Asia/Kolkata',
+  interviewerDay: 'Tue 8 Sept',
+  interviewerTime: '18:30',
   localDay: 'Tue 8 Sept',
   localTime: '18:30',
   ukTime: '14:00',
@@ -233,6 +237,65 @@ registerTemplate({
       '',
       SIGN_OFF,
     ].join('\n'),
+  }),
+});
+
+/**
+ * The only email in here addressed to us rather than to a candidate.
+ *
+ * It exists because a booking the interviewer never hears about is a booking
+ * that does not happen. Times are given in their own zone first — that is the
+ * day they are actually standing in — with the candidate's local time beside
+ * it, so neither party is the one doing the arithmetic.
+ */
+registerTemplate({
+  key: 'recruit.interviewer.booked',
+  title: 'New interview in your diary',
+  when: 'To the interviewer, when a candidate books or moves a slot.',
+  description:
+    'Sent to the interviewer rather than the candidate, so a booking cannot happen without them knowing. Carries the candidate’s name, role and address, the time in the interviewer’s own zone and the candidate’s, and a calendar file. Sent to the address on the Settings screen; if none is set, nothing is queued and the booking still succeeds.',
+  mergeFields: ['interviewerFirstName', 'fullName', 'roleTitle', 'interviewerDay', 'interviewerTime', 'localTime', 'ukTime'],
+  sample: { ...SAMPLE, moved: false },
+  load,
+  render: (data) => ({
+    subject: data.moved
+      ? `Interview moved — ${data.fullName} — ${data.interviewerDay} at ${data.interviewerTime}`
+      : `New interview — ${data.fullName} — ${data.interviewerDay} at ${data.interviewerTime}`,
+    text: [
+      `Hi ${data.interviewerFirstName || 'there'},`,
+      '',
+      data.moved
+        ? `${data.fullName} has moved their interview.`
+        : `${data.fullName} has booked an interview with you.`,
+      '',
+      `When:      ${data.interviewerDay} at ${data.interviewerTime} (your time)`,
+      `           ${data.ukTime} UK time — ${data.localTime} for the candidate`,
+      `Candidate: ${data.fullName} <${data.email}>`,
+      `Role:      ${data.roleTitle}`,
+      '',
+      data.moved ? 'Please remove the earlier time from your diary.' : 'A calendar file is attached.',
+      joinLine(data),
+      '',
+      SIGN_OFF,
+    ].join('\n'),
+    attachments: data.startsAt
+      ? [
+          {
+            filename: 'interview.ics',
+            content: buildIcs({
+              uid: `interviewer-${data.startsAt}@fastactionclaims.co.uk`,
+              startsAt: data.startsAt,
+              endsAt: data.endsAt,
+              summary: `Interview — ${data.fullName} — ${data.roleTitle}`,
+              description: `Candidate: ${data.fullName} <${data.email}>. ${joinLine(data)}`,
+              location: data.meetLink ?? 'Video call — link to follow',
+              organiserEmail: process.env.MAIL_FROM || 'recruitment@fastactionclaims.co.uk',
+              attendeeEmail: data.interviewerEmail ?? undefined,
+            }),
+            contentType: 'text/calendar; charset=utf-8; method=PUBLISH',
+          },
+        ]
+      : [],
   }),
 });
 

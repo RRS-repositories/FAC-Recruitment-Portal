@@ -111,6 +111,47 @@ export async function notifyBooked(client, { applicant, interviewId, startsAt, i
       dedupeKey: dedupeKey('reminder10', interviewId, when),
     });
   }
+
+  await notifyInterviewer(client, { applicant, interviewId, when, moved: isReschedule });
+}
+
+/**
+ * Tells the interviewer, at the address on the Settings screen.
+ *
+ * A booking nobody told the interviewer about is a booking that does not
+ * happen, so this goes out on a move as well as a first booking — a stale
+ * time in their diary is the same failure as no time at all.
+ *
+ * Deliberately best-effort. If no address is configured there is nothing to
+ * send and the candidate's booking must still succeed: the interviewer not
+ * being told is a worse outcome than nothing, but a candidate unable to book
+ * at all is worse still.
+ */
+async function notifyInterviewer(client, { applicant, interviewId, when, moved }) {
+  const { rows } = await client.query(
+    `SELECT iv.email
+       FROM recruit_interviews i
+       JOIN recruit_interviewers iv ON iv.id = i.interviewer_id
+      WHERE i.id = $1 AND iv.active`,
+    [interviewId],
+  );
+
+  const to = rows[0]?.email;
+  if (!to) {
+    console.warn('[fac-recruit] no interviewer address configured — nobody told about the booking');
+    return;
+  }
+
+  await enqueue(client, {
+    template: 'recruit.interviewer.booked',
+    toEmail: to,
+    applicantId: applicant.id,
+    interviewId,
+    // `moved` is not something the live lookup knows, so it is frozen here.
+    // Everything else is resolved at send time as usual.
+    vars: { moved },
+    dedupeKey: dedupeKey(moved ? 'iv-moved' : 'iv-booked', interviewId, when),
+  });
 }
 
 /** Cancelled by the candidate. Their reminders must not still arrive. */

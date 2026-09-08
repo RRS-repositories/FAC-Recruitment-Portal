@@ -9,7 +9,7 @@ import { ROLE_BY_API_KEY } from './roles.js';
  * than stored.
  */
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const FIELD_LIMITS = {
   fullName: 120,

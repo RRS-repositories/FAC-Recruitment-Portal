@@ -22,7 +22,9 @@ const ONE = `
          i.id            AS interview_id,
          i.starts_at, i.ends_at, i.status AS interview_status,
          i.meet_link, i.reschedule_count,
-         iv.full_name    AS interviewer_name
+         iv.full_name    AS interviewer_name,
+         iv.email        AS interviewer_email,
+         iv.personal_timezone AS interviewer_tz
     FROM recruit_applicants a
     LEFT JOIN recruit_interviews i  ON i.id = $2
     LEFT JOIN recruit_interviewers iv ON iv.id = i.interviewer_id
@@ -60,6 +62,8 @@ export async function loadContext(row, db) {
 
     interviewerName: record.interviewer_name ?? 'a member of our team',
     interviewerFirstName: firstNameOf(record.interviewer_name),
+    interviewerEmail: record.interviewer_email ?? null,
+    interviewerTimezone: record.interviewer_tz || UK,
 
     applicantStatus: record.applicant_status,
     interviewStatus: record.interview_status,
@@ -70,6 +74,11 @@ export async function loadContext(row, db) {
     localDay: null,
     localTime: null,
     ukTime: null,
+    // The same instant in the interviewer's own day. Their zone is not the
+    // candidate's and need not be the UK one either, so the email that tells
+    // them to be somewhere has to say it in the time they live in.
+    interviewerDay: null,
+    interviewerTime: null,
     timezone: tz,
     startsAt: record.starts_at ?? null,
     endsAt: record.ends_at ?? null,
@@ -81,6 +90,8 @@ export async function loadContext(row, db) {
     context.localDay = formatDayIn(record.starts_at, tz);
     context.localTime = formatTimeIn(record.starts_at, tz);
     context.ukTime = formatTimeIn(record.starts_at, UK);
+    context.interviewerDay = formatDayIn(record.starts_at, context.interviewerTimezone);
+    context.interviewerTime = formatTimeIn(record.starts_at, context.interviewerTimezone);
   }
 
   return context;

@@ -230,6 +230,14 @@ export const adminSettings = () => request('/recruit/admin/settings', { headers:
 export const adminSaveAvailability = (body) =>
   request('/recruit/admin/settings/availability', { method: 'PUT', body, headers: withAuth() });
 
+/** The address the interviewer is told about bookings at. */
+export const adminSaveInterviewer = (email) =>
+  request('/recruit/admin/settings/interviewer', {
+    method: 'PUT',
+    body: { email },
+    headers: withAuth(),
+  });
+
 /**
  * Marks a period unavailable.
  *

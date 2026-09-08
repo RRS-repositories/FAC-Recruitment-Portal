@@ -10,6 +10,7 @@ import {
   adminAddBlackout,
   adminRemoveBlackout,
   adminSaveAvailability,
+  adminSaveInterviewer,
   adminSetFlag,
   adminSetRetention,
   adminSettings,
@@ -117,6 +118,7 @@ export function SettingsPage() {
 
   const [blackout, setBlackout] = useState({ from: '', to: '', reason: '' });
   const [months, setMonths] = useState('');
+  const [interviewerEmail, setInterviewerEmail] = useState('');
   const [clashes, setClashes] = useState(null);
 
   const signOut = useCallback(() => {
@@ -140,6 +142,7 @@ export function SettingsPage() {
         blocks: result.interviewer.blocks ?? [],
       });
       setMonths(String(result.retention?.months ?? 0));
+      setInterviewerEmail(result.interviewer.email ?? '');
     } catch (failure) {
       if (failure.status === 401) signOut();
       else setError(failure.message);
@@ -155,6 +158,20 @@ export function SettingsPage() {
   const announce = (message) => {
     setSaved(message);
     setTimeout(() => setSaved(''), 4000);
+  };
+
+  const saveInterviewerEmail = async () => {
+    setBusy('interviewer');
+    setError('');
+    try {
+      await adminSaveInterviewer(interviewerEmail.trim());
+      announce('Saved. Bookings will be sent to that address.');
+      await load();
+    } catch (failure) {
+      setError(failure.message);
+    } finally {
+      setBusy('');
+    }
   };
 
   const saveAvailability = async () => {
@@ -284,10 +301,6 @@ export function SettingsPage() {
             <Card>
               <h2 className="text-[1.1rem] font-bold text-ink">Interviewer</h2>
               <p className="mt-1 text-[0.9rem] text-muted">
-                {/* The address is deliberately not shown. The seeded one is a
-                    placeholder that does not exist, and displaying it invites
-                    somebody to write to it. Nothing in the portal emails the
-                    interviewer, so it has no job here. */}
                 <b className="font-semibold text-ink">{data.interviewer.full_name}</b>
               </p>
               <p className="mt-2 text-[0.82rem] leading-relaxed text-muted">
@@ -295,6 +308,49 @@ export function SettingsPage() {
                 <b className="font-semibold">{form.timezone ?? data.interviewer.timezone}</b> and
                 shown to each candidate in their own timezone alongside UK time.
               </p>
+
+              {/* The address now has a job: every booking is sent to it. It is
+                  editable rather than seeded because the seeded one was a
+                  placeholder, and a booking sent to an address nobody reads is
+                  the same as no booking email at all. */}
+              {isAdmin ? (
+                <div className="mt-4 border-t border-line pt-4">
+                  <Field
+                    label="Where to send bookings"
+                    hint="The interviewer is emailed whenever a candidate books or moves a slot."
+                    required
+                  >
+                    {(props) => (
+                      <TextInput
+                        {...props}
+                        type="email"
+                        value={interviewerEmail}
+                        placeholder="name@fastactionclaims.co.uk"
+                        autoComplete="off"
+                        onChange={(e) => setInterviewerEmail(e.target.value)}
+                      />
+                    )}
+                  </Field>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <Button
+                      size="sm"
+                      onClick={saveInterviewerEmail}
+                      disabled={
+                        busy === 'interviewer' ||
+                        !interviewerEmail.trim() ||
+                        interviewerEmail.trim() === (data.interviewer.email ?? '')
+                      }
+                    >
+                      {busy === 'interviewer' ? 'Saving...' : 'Save address'}
+                    </Button>
+                    {!data.interviewer.email ? (
+                      <span className="text-[0.82rem] text-warn">
+                        No address set, so nobody is told when a candidate books.
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </Card>
 
             {isAdmin ? (
