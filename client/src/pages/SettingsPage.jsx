@@ -35,7 +35,10 @@ const DAYS = [
   { value: 4, label: 'Thu' },
   { value: 5, label: 'Fri' },
   { value: 6, label: 'Sat' },
-  { value: 0, label: 'Sun' },
+  // 7, not 0: the database uses ISO numbering, where Sunday is 7. Stored
+  // as 0 it would be a day nothing ever matches, and Sunday would quietly
+  // never be offered.
+  { value: 7, label: 'Sun' },
 ];
 
 const FLAG_COPY = {

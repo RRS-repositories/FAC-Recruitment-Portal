@@ -12,6 +12,7 @@ import { mailMode } from '../lib/mailer.js';
 import { FLAGS, allFlags, setFlag } from '../lib/flags.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
 import { dueForDeletion, retentionMonths, setRetentionMonths } from '../lib/retention.js';
+import { buildCalendar } from '../lib/calendar.js';
 
 /**
  * The manager's view: read applications, accept or decline them.
@@ -204,7 +205,8 @@ export function createAdminRouter() {
           interviewerId,
           dayStart,
           dayEnd,
-          weekdays.map(Number).filter((d) => d >= 0 && d <= 6),
+          // ISO weekdays: Monday 1 through Sunday 7. Zero is not a day.
+          weekdays.map(Number).filter((d) => d >= 1 && d <= 7),
           Number(slotMinutes),
           Math.max(0, Number(minNoticeHours) || 0),
           Math.min(90, Math.max(1, Number(maxDaysAhead) || 14)),
@@ -249,6 +251,37 @@ export function createAdminRouter() {
     } catch (error) {
       console.error('[fac-recruit] blackout delete failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not remove that.' });
+    }
+  });
+
+  /**
+   * The manager's calendar for a date range.
+   *
+   * A view, not a decision: everything it reports was already decided by the
+   * availability rules, the bookings and the blocked periods. Blocking time
+   * from it goes through the same endpoint the settings screen uses.
+   */
+  router.get('/calendar', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        'SELECT id FROM recruit_interviewers WHERE active ORDER BY id LIMIT 1',
+      );
+      if (!rows[0]) return res.status(503).json({ ok: false, error: 'No interviewer is configured.' });
+
+      const calendar = await buildCalendar({
+        interviewerId: rows[0].id,
+        from: req.query.from,
+        to: req.query.to,
+      });
+      if (!calendar) {
+        return res.status(503).json({ ok: false, error: 'No availability is configured.' });
+      }
+
+      return res.json({ ok: true, interviewerId: rows[0].id, ...calendar });
+    } catch (error) {
+      if (error.status === 400) return res.status(400).json({ ok: false, error: error.message });
+      console.error('[fac-recruit] calendar failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not load the calendar.' });
     }
   });
 
