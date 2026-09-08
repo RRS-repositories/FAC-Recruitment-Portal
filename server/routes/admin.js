@@ -13,7 +13,7 @@ import {
 } from '../lib/adminAuth.js';
 import { resolveCv, cvExists } from '../lib/storage.js';
 import { generateBookingToken, tokenExpiry } from '../lib/bookingToken.js';
-import { notifyDecision, notifyNoShow } from '../lib/notify.js';
+import { notifyDecision, notifyMeetingLink, notifyNoShow } from '../lib/notify.js';
 import { cancelPendingFor, historyFor } from '../lib/outbox.js';
 import { describeTemplates } from '../lib/templates.js';
 import { mailMode } from '../lib/mailer.js';
@@ -584,6 +584,9 @@ export function createAdminRouter() {
     }
   });
 
+  // Teams and Meet links are long, but not arbitrarily so.
+  const MEETING_LINK_MAX = 1000;
+
   router.get('/applications', async (req, res) => {
     const status = STATUSES.has(req.query.status) ? req.query.status : null;
     const role = ['india_intern', 'sa_paralegal'].includes(req.query.role) ? req.query.role : null;
@@ -620,10 +623,11 @@ export function createAdminRouter() {
   router.get('/applications/:id', async (req, res) => {
     try {
       const { rows } = await pool.query(
-        `SELECT a.*, i.status AS interview_status, i.starts_at AS interview_at
+        `SELECT a.*, i.status AS interview_status, i.starts_at AS interview_at,
+                i.meet_link AS meet_link
            FROM recruit_applicants a
            LEFT JOIN LATERAL (
-             SELECT status, starts_at FROM recruit_interviews
+             SELECT status, starts_at, meet_link FROM recruit_interviews
               WHERE applicant_id = a.id ORDER BY created_at DESC LIMIT 1
            ) i ON true
           WHERE a.id = $1`,
@@ -859,6 +863,95 @@ export function createAdminRouter() {
    * the only signal that distinguishes a candidate who did not turn up from
    * one who is still waiting for their interview.
    */
+  /**
+   * Sends the candidate their video link.
+   *
+   * A stand-in for the calendar integration, and deliberately not a throwaway
+   * one: the link is SAVED on the interview as well as emailed. That is what
+   * makes it worth more than a copy-and-paste into Outlook -- every template
+   * resolves its merge fields when it sends, so from this moment both
+   * reminders carry the link too, and so does the booking page.
+   */
+  router.post('/applications/:id/meeting-link', async (req, res) => {
+    const link = String(req.body?.link ?? '').trim();
+
+    if (!link) return res.status(400).json({ ok: false, error: 'Paste the meeting link first.' });
+    if (link.length > MEETING_LINK_MAX) {
+      return res.status(400).json({ ok: false, error: 'That link is too long to be a meeting link.' });
+    }
+
+    // Parsed rather than pattern-matched: this ends up in an email as
+    // something a candidate is told to click, so it has to be a real URL.
+    let parsed;
+    try {
+      parsed = new URL(link);
+    } catch {
+      return res.status(400).json({ ok: false, error: 'That does not look like a link. It should start with https://' });
+    }
+    // https only. A plain-http link in an email is a downgrade we would be
+    // asking somebody to accept on our word.
+    if (parsed.protocol !== 'https:') {
+      return res.status(400).json({ ok: false, error: 'The link must start with https://' });
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, status, starts_at FROM recruit_interviews
+          WHERE applicant_id = $1 AND starts_at IS NOT NULL
+          ORDER BY created_at DESC LIMIT 1`,
+        [req.params.id],
+      );
+      const interview = rows[0];
+
+      if (!interview) {
+        return res.status(409).json({ ok: false, error: 'That candidate has not booked an interview yet.' });
+      }
+      if (interview.status === 'cancelled') {
+        return res.status(409).json({ ok: false, error: 'That interview was cancelled.' });
+      }
+
+      const { rows: who } = await pool.query(
+        'SELECT id, full_name, email FROM recruit_applicants WHERE id = $1',
+        [req.params.id],
+      );
+      if (!who[0]) return res.status(404).json({ ok: false, error: 'No such applicant.' });
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          'UPDATE recruit_interviews SET meet_link = $2, updated_at = now() WHERE id = $1',
+          [interview.id, link],
+        );
+        await client.query(
+          `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
+           VALUES ($1, $2, $3, $4)`,
+          [req.params.id, req.admin.email, 'meeting_link_sent', JSON.stringify({ link })],
+        );
+        // Queued in the same transaction as the saved link, so the email can
+        // never promise a link the interview does not have.
+        await notifyMeetingLink(client, { applicant: who[0], interviewId: interview.id });
+        await client.query('COMMIT');
+      } catch (failure) {
+        await client.query('ROLLBACK').catch(() => {});
+        throw failure;
+      } finally {
+        client.release();
+      }
+
+      return res.json({
+        ok: true,
+        link,
+        // Said plainly rather than assumed by the screen: in file mode this
+        // email is written to disk and the candidate is told nothing.
+        delivered: (await isEnabled('recruitment_alerts')) && mailMode() === 'smtp',
+      });
+    } catch (error) {
+      console.error('[fac-recruit] meeting link send failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not send that link.' });
+    }
+  });
+
   router.patch('/applications/:id/interview', async (req, res) => {
     const { status } = req.body ?? {};
     if (status !== 'attended' && status !== 'no_show') {
