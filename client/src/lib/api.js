@@ -202,6 +202,26 @@ export const adminTemplates = () => request('/recruit/admin/templates', { header
 export const adminCalendar = (from, to) =>
   request(`/recruit/admin/calendar?from=${from}&to=${to}`, { headers: withAuth() });
 
+/* ── The team (spec §8.1) ───────────────────────────────────────────────── */
+
+/** Everyone with a login. Administrators only. */
+export const adminTeam = () => request('/recruit/admin/team', { headers: withAuth() });
+
+export const adminAddTeamMember = (body) =>
+  request('/recruit/admin/team', { method: 'POST', body, headers: withAuth() });
+
+/** Changes a role, deactivates, reactivates, or sets someone a new password. */
+export const adminUpdateTeamMember = (id, body) =>
+  request(`/recruit/admin/team/${id}`, { method: 'PATCH', body, headers: withAuth() });
+
+/** Your own password. Everyone can change theirs; nobody could before. */
+export const adminChangePassword = (currentPassword, newPassword) =>
+  request('/recruit/admin/me/password', {
+    method: 'PUT',
+    body: { currentPassword, newPassword },
+    headers: withAuth(),
+  });
+
 /* ── Settings (spec §8.3 and §2) ────────────────────────────────────────── */
 
 /** The interviewer, their availability rules, their time off, and the flags. */

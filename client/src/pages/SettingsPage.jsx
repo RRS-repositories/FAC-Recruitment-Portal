@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { Field, TextInput, Select } from '@/components/ui/Field';
 import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
+import { PasswordPanel, TeamPanel } from '@/features/dashboard/TeamPanel';
 import {
   adminAddBlackout,
   adminRemoveBlackout,
@@ -240,6 +241,10 @@ export function SettingsPage() {
 
   if (!signedIn) return <AdminSignIn onSignedIn={() => setSignedIn(true)} />;
 
+  // Everything that changes how the portal RUNS is administrator-only on the
+  // server. This only decides what to offer; it is not the guard.
+  const isAdmin = data?.you?.role === 'administrator';
+
   return (
     <AdminShell
       current="settings"
@@ -289,318 +294,353 @@ export function SettingsPage() {
               </p>
             </Card>
 
-            {/* ── When ────────────────────────────────────────────────── */}
-            <Card>
-              <h2 className="text-[1.1rem] font-bold text-ink">Interview hours</h2>
-              <p className="mt-1 text-[0.86rem] text-muted">
-                These decide every slot a candidate is offered.
-              </p>
+            {isAdmin ? (
+              <>
+                {/* ── When ────────────────────────────────────────────────── */}
+                <Card>
+                  <h2 className="text-[1.1rem] font-bold text-ink">Interview hours</h2>
+                  <p className="mt-1 text-[0.86rem] text-muted">
+                    These decide every slot a candidate is offered.
+                  </p>
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <Field label="Day starts" required>
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      type="time"
-                      value={form.dayStart}
-                      onChange={(e) => setForm((f) => ({ ...f, dayStart: e.target.value }))}
-                    />
-                  )}
-                </Field>
-                <Field
-                  label="Day ends"
-                  hint="The last interview must finish by this time."
-                  required
-                >
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      type="time"
-                      value={form.dayEnd}
-                      onChange={(e) => setForm((f) => ({ ...f, dayEnd: e.target.value }))}
-                    />
-                  )}
-                </Field>
-              </div>
-
-              <fieldset className="mt-5">
-                <legend className="mb-2 text-[0.82rem] font-semibold text-ink">Working days</legend>
-                <div className="flex flex-wrap gap-1.5">
-                  {DAYS.map((day) => {
-                    const on = form.weekdays.includes(day.value);
-                    return (
-                      <button
-                        key={day.value}
-                        type="button"
-                        aria-pressed={on}
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            weekdays: on
-                              ? f.weekdays.filter((d) => d !== day.value)
-                              : [...f.weekdays, day.value].sort(),
-                          }))
-                        }
-                        className={cn(
-                          'rounded-control px-3.5 py-2 text-[0.85rem] font-semibold transition-colors',
-                          on
-                            ? 'bg-ink text-white'
-                            : 'border border-line bg-white text-ink hover:border-violet',
-                        )}
-                      >
-                        {day.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                <Field label="Interview length" required>
-                  {(props) => (
-                    <Select
-                      {...props}
-                      value={form.slotMinutes}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, slotMinutes: Number(e.target.value) }))
-                      }
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <Field label="Day starts" required>
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="time"
+                          value={form.dayStart}
+                          onChange={(e) => setForm((f) => ({ ...f, dayStart: e.target.value }))}
+                        />
+                      )}
+                    </Field>
+                    <Field
+                      label="Day ends"
+                      hint="The last interview must finish by this time."
+                      required
                     >
-                      {[15, 20, 30, 45, 60].map((m) => (
-                        <option key={m} value={m}>
-                          {m} minutes
-                        </option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
-                <Field label="Shortest notice" hint="Hours" required>
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      type="number"
-                      min="0"
-                      max="168"
-                      value={form.minNoticeHours}
-                      onChange={(e) => setForm((f) => ({ ...f, minNoticeHours: e.target.value }))}
-                    />
-                  )}
-                </Field>
-                <Field label="Book up to" hint="Days ahead" required>
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      type="number"
-                      min="1"
-                      max="90"
-                      value={form.maxDaysAhead}
-                      onChange={(e) => setForm((f) => ({ ...f, maxDaysAhead: e.target.value }))}
-                    />
-                  )}
-                </Field>
-              </div>
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="time"
+                          value={form.dayEnd}
+                          onChange={(e) => setForm((f) => ({ ...f, dayEnd: e.target.value }))}
+                        />
+                      )}
+                    </Field>
+                  </div>
 
-              {form.blocks?.length ? (
-                <p className="mt-4 text-[0.84rem] text-muted">
-                  Blocked every day:{' '}
-                  {form.blocks.map((b) => `${b.label ?? 'Blocked'} ${b.start}–${b.end}`).join(', ')}
-                  .
-                </p>
-              ) : null}
+                  <fieldset className="mt-5">
+                    <legend className="mb-2 text-[0.82rem] font-semibold text-ink">
+                      Working days
+                    </legend>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DAYS.map((day) => {
+                        const on = form.weekdays.includes(day.value);
+                        return (
+                          <button
+                            key={day.value}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                weekdays: on
+                                  ? f.weekdays.filter((d) => d !== day.value)
+                                  : [...f.weekdays, day.value].sort(),
+                              }))
+                            }
+                            className={cn(
+                              'rounded-control px-3.5 py-2 text-[0.85rem] font-semibold transition-colors',
+                              on
+                                ? 'bg-ink text-white'
+                                : 'border border-line bg-white text-ink hover:border-violet',
+                            )}
+                          >
+                            {day.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
 
-              <div className="mt-6 border-t border-line pt-5">
-                <Button onClick={saveAvailability} disabled={busy === 'availability'}>
-                  {busy === 'availability' ? 'Saving…' : 'Save interview hours'}
-                </Button>
-              </div>
-            </Card>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-3">
+                    <Field label="Interview length" required>
+                      {(props) => (
+                        <Select
+                          {...props}
+                          value={form.slotMinutes}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, slotMinutes: Number(e.target.value) }))
+                          }
+                        >
+                          {[15, 20, 30, 45, 60].map((m) => (
+                            <option key={m} value={m}>
+                              {m} minutes
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </Field>
+                    <Field label="Shortest notice" hint="Hours" required>
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="number"
+                          min="0"
+                          max="168"
+                          value={form.minNoticeHours}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, minNoticeHours: e.target.value }))
+                          }
+                        />
+                      )}
+                    </Field>
+                    <Field label="Book up to" hint="Days ahead" required>
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="number"
+                          min="1"
+                          max="90"
+                          value={form.maxDaysAhead}
+                          onChange={(e) => setForm((f) => ({ ...f, maxDaysAhead: e.target.value }))}
+                        />
+                      )}
+                    </Field>
+                  </div>
 
-            {/* ── Time off ────────────────────────────────────────────── */}
-            <Card>
-              <h2 className="text-[1.1rem] font-bold text-ink">Time off</h2>
-              <p className="mt-1 text-[0.86rem] leading-relaxed text-muted">
-                Days you are not available. Candidates simply will not see those slots — they are
-                never told why.
-              </p>
+                  {form.blocks?.length ? (
+                    <p className="mt-4 text-[0.84rem] text-muted">
+                      Blocked every day:{' '}
+                      {form.blocks
+                        .map((b) => `${b.label ?? 'Blocked'} ${b.start}–${b.end}`)
+                        .join(', ')}
+                      .
+                    </p>
+                  ) : null}
 
-              <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_1.4fr]">
-                <Field label="From" required>
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      type="date"
-                      value={blackout.from}
-                      onChange={(e) => setBlackout((b) => ({ ...b, from: e.target.value }))}
-                    />
-                  )}
-                </Field>
-                <Field label="To" hint="Leave blank for one day">
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      type="date"
-                      value={blackout.to}
-                      onChange={(e) => setBlackout((b) => ({ ...b, to: e.target.value }))}
-                    />
-                  )}
-                </Field>
-                <Field label="Reason" hint="Only you see this">
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      value={blackout.reason}
-                      placeholder="Annual leave"
-                      onChange={(e) => setBlackout((b) => ({ ...b, reason: e.target.value }))}
-                    />
-                  )}
-                </Field>
-              </div>
+                  <div className="mt-6 border-t border-line pt-5">
+                    <Button onClick={saveAvailability} disabled={busy === 'availability'}>
+                      {busy === 'availability' ? 'Saving…' : 'Save interview hours'}
+                    </Button>
+                  </div>
+                </Card>
 
-              <Button
-                className="mt-2"
-                variant="secondary"
-                onClick={addBlackout}
-                disabled={!blackout.from || busy === 'blackout'}
-              >
-                <Icon name="plus" size={15} />
-                {busy === 'blackout' ? 'Saving…' : 'Add time off'}
-              </Button>
+                {/* ── Time off ────────────────────────────────────────────── */}
+                <Card>
+                  <h2 className="text-[1.1rem] font-bold text-ink">Time off</h2>
+                  <p className="mt-1 text-[0.86rem] leading-relaxed text-muted">
+                    Days you are not available. Candidates simply will not see those slots — they
+                    are never told why.
+                  </p>
 
-              {/* Booked interviews inside the period are reported, never
+                  <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_1fr_1.4fr]">
+                    <Field label="From" required>
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="date"
+                          value={blackout.from}
+                          onChange={(e) => setBlackout((b) => ({ ...b, from: e.target.value }))}
+                        />
+                      )}
+                    </Field>
+                    <Field label="To" hint="Leave blank for one day">
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="date"
+                          value={blackout.to}
+                          onChange={(e) => setBlackout((b) => ({ ...b, to: e.target.value }))}
+                        />
+                      )}
+                    </Field>
+                    <Field label="Reason" hint="Only you see this">
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          value={blackout.reason}
+                          placeholder="Annual leave"
+                          onChange={(e) => setBlackout((b) => ({ ...b, reason: e.target.value }))}
+                        />
+                      )}
+                    </Field>
+                  </div>
+
+                  <Button
+                    className="mt-2"
+                    variant="secondary"
+                    onClick={addBlackout}
+                    disabled={!blackout.from || busy === 'blackout'}
+                  >
+                    <Icon name="plus" size={15} />
+                    {busy === 'blackout' ? 'Saving…' : 'Add time off'}
+                  </Button>
+
+                  {/* Booked interviews inside the period are reported, never
                   cancelled — being away is not the same as calling them off. */}
-              {clashes?.length ? (
-                <div
-                  role="alert"
-                  className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-4"
-                >
-                  <p className="text-[0.88rem] font-semibold text-amber-900">
-                    That period already has {clashes.length} booked interview
-                    {clashes.length === 1 ? '' : 's'}.
-                  </p>
-                  <ul className="mt-2 grid gap-1">
-                    {clashes.map((c) => (
-                      <li key={c.id} className="text-[0.85rem] text-amber-900">
-                        {c.full_name} — {formatDateTime(c.starts_at)}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-[0.82rem] italic text-amber-800">
-                    They have not been cancelled. Contact them if you need to move those.
-                  </p>
-                </div>
-              ) : null}
+                  {clashes?.length ? (
+                    <div
+                      role="alert"
+                      className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-4"
+                    >
+                      <p className="text-[0.88rem] font-semibold text-amber-900">
+                        That period already has {clashes.length} booked interview
+                        {clashes.length === 1 ? '' : 's'}.
+                      </p>
+                      <ul className="mt-2 grid gap-1">
+                        {clashes.map((c) => (
+                          <li key={c.id} className="text-[0.85rem] text-amber-900">
+                            {c.full_name} — {formatDateTime(c.starts_at)}
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-2 text-[0.82rem] italic text-amber-800">
+                        They have not been cancelled. Contact them if you need to move those.
+                      </p>
+                    </div>
+                  ) : null}
 
-              {data.blackouts?.length ? (
-                <ul className="mt-5 grid gap-2 border-t border-line pt-4">
-                  {data.blackouts.map((b) => (
-                    <li key={b.id} className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-[0.88rem] text-ink">
-                        {formatDateTime(b.starts_at)} → {formatDateTime(b.ends_at)}
-                        {b.reason ? <span className="text-muted"> · {b.reason}</span> : null}
-                      </span>
-                      <Button
-                        variant="quiet"
-                        size="sm"
-                        onClick={() => removeBlackout(b.id)}
-                        disabled={busy === `remove-${b.id}`}
-                      >
-                        Remove
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-5 border-t border-line pt-4 text-[0.85rem] text-muted">
-                  No time off recorded.
-                </p>
-              )}
-            </Card>
-
-            {/* ── Retention ───────────────────────────────────────────── */}
-            <Card>
-              <h2 className="text-[1.1rem] font-bold text-ink">Keeping CVs</h2>
-              <p className="mt-1 text-[0.86rem] leading-relaxed text-muted">
-                A CV is personal data belonging to someone who is not a client, so it should not be
-                kept indefinitely. Once a declined applicant passes this age, their CV file is
-                deleted automatically.
-              </p>
-              <p className="mt-2 text-[0.84rem] leading-relaxed text-muted">
-                The application itself is never deleted — the decision, the score and who made it
-                stay on record. Only the file goes.
-              </p>
-
-              <div className="mt-5 flex flex-wrap items-end gap-3">
-                <Field
-                  label="Delete after"
-                  hint="Months. 0 switches deletion off."
-                  required
-                  className="w-40"
-                >
-                  {(props) => (
-                    <TextInput
-                      {...props}
-                      type="number"
-                      min="0"
-                      max="120"
-                      value={months}
-                      onChange={(e) => setMonths(e.target.value)}
-                    />
+                  {data.blackouts?.length ? (
+                    <ul className="mt-5 grid gap-2 border-t border-line pt-4">
+                      {data.blackouts.map((b) => (
+                        <li
+                          key={b.id}
+                          className="flex flex-wrap items-center justify-between gap-2"
+                        >
+                          <span className="text-[0.88rem] text-ink">
+                            {formatDateTime(b.starts_at)} → {formatDateTime(b.ends_at)}
+                            {b.reason ? <span className="text-muted"> · {b.reason}</span> : null}
+                          </span>
+                          <Button
+                            variant="quiet"
+                            size="sm"
+                            onClick={() => removeBlackout(b.id)}
+                            disabled={busy === `remove-${b.id}`}
+                          >
+                            Remove
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-5 border-t border-line pt-4 text-[0.85rem] text-muted">
+                      No time off recorded.
+                    </p>
                   )}
-                </Field>
-                <Button variant="secondary" onClick={saveRetention} disabled={busy === 'retention'}>
-                  {busy === 'retention' ? 'Saving…' : 'Save'}
-                </Button>
-              </div>
+                </Card>
+              </>
+            ) : null}
 
-              {Number(data.retention?.months) === 0 ? (
-                <p className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-3.5 text-[0.85rem] leading-relaxed text-amber-900">
-                  Deletion is switched off, so CVs are kept indefinitely. That is a decision worth
-                  making deliberately rather than by leaving this at zero.
+            <PasswordPanel you={data.you} onError={setError} />
+
+            {isAdmin ? <TeamPanel you={data.you} onError={setError} /> : null}
+
+            {!isAdmin ? (
+              <Card>
+                <h2 className="text-[1.1rem] font-bold text-ink">Interview hours and the rest</h2>
+                <p className="mt-1 text-[0.88rem] leading-relaxed text-muted">
+                  Availability, time off, how long CVs are kept and what is switched on are changed
+                  by an administrator. Ask one of them if something here needs to move.
                 </p>
-              ) : data.retention?.dueCount > 0 ? (
-                <p className="mt-4 text-[0.85rem] text-muted">
-                  <b className="font-semibold text-ink">{data.retention.dueCount}</b> CV
-                  {data.retention.dueCount === 1 ? ' is' : 's are'} past that age and will be
-                  deleted at the next daily sweep.
-                </p>
-              ) : (
-                <p className="mt-4 text-[0.85rem] text-muted">
-                  Nothing is currently due for deletion.
-                </p>
-              )}
+              </Card>
+            ) : null}
 
-              <p className="mt-3 text-[0.78rem] leading-relaxed text-muted">
-                This covers declined applicants only. Nobody has set a policy for applications still
-                awaiting a decision, or for accepted candidates — worth deciding.
-              </p>
-            </Card>
+            {isAdmin ? (
+              <>
+                {/* ── Retention ───────────────────────────────────────────── */}
+                <Card>
+                  <h2 className="text-[1.1rem] font-bold text-ink">Keeping CVs</h2>
+                  <p className="mt-1 text-[0.86rem] leading-relaxed text-muted">
+                    A CV is personal data belonging to someone who is not a client, so it should not
+                    be kept indefinitely. Once a declined applicant passes this age, their CV file
+                    is deleted automatically.
+                  </p>
+                  <p className="mt-2 text-[0.84rem] leading-relaxed text-muted">
+                    The application itself is never deleted — the decision, the score and who made
+                    it stay on record. Only the file goes.
+                  </p>
 
-            {/* ── Flags ───────────────────────────────────────────────── */}
-            <Card>
-              <h2 className="text-[1.1rem] font-bold text-ink">What is switched on</h2>
-              <p className="mt-1 text-[0.86rem] leading-relaxed text-muted">
-                Everything starts off, so the portal can be set up and checked before anyone outside
-                the firm can reach it. Turn each on when you are ready.
-              </p>
+                  <div className="mt-5 flex flex-wrap items-end gap-3">
+                    <Field
+                      label="Delete after"
+                      hint="Months. 0 switches deletion off."
+                      required
+                      className="w-40"
+                    >
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="number"
+                          min="0"
+                          max="120"
+                          value={months}
+                          onChange={(e) => setMonths(e.target.value)}
+                        />
+                      )}
+                    </Field>
+                    <Button
+                      variant="secondary"
+                      onClick={saveRetention}
+                      disabled={busy === 'retention'}
+                    >
+                      {busy === 'retention' ? 'Saving…' : 'Save'}
+                    </Button>
+                  </div>
 
-              <div className="mt-4">
-                {Object.keys(FLAG_COPY).map((name) => (
-                  <FlagRow
-                    key={name}
-                    name={name}
-                    enabled={data.flags?.[name] === true}
-                    busy={busy === name}
-                    onChange={toggleFlag}
-                  />
-                ))}
-              </div>
+                  {Number(data.retention?.months) === 0 ? (
+                    <p className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-3.5 text-[0.85rem] leading-relaxed text-amber-900">
+                      Deletion is switched off, so CVs are kept indefinitely. That is a decision
+                      worth making deliberately rather than by leaving this at zero.
+                    </p>
+                  ) : data.retention?.dueCount > 0 ? (
+                    <p className="mt-4 text-[0.85rem] text-muted">
+                      <b className="font-semibold text-ink">{data.retention.dueCount}</b> CV
+                      {data.retention.dueCount === 1 ? ' is' : 's are'} past that age and will be
+                      deleted at the next daily sweep.
+                    </p>
+                  ) : (
+                    <p className="mt-4 text-[0.85rem] text-muted">
+                      Nothing is currently due for deletion.
+                    </p>
+                  )}
 
-              {data.flags?.recruitment_alerts && data.mailMode === 'file' ? (
-                <p className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-3.5 text-[0.85rem] leading-relaxed text-amber-900">
-                  Emails are switched on, but no mailbox is set up — they are being written to a
-                  file on the server rather than sent. Nothing is reaching candidates yet.
-                </p>
-              ) : null}
-            </Card>
+                  <p className="mt-3 text-[0.78rem] leading-relaxed text-muted">
+                    This covers declined applicants only. Nobody has set a policy for applications
+                    still awaiting a decision, or for accepted candidates — worth deciding.
+                  </p>
+                </Card>
+
+                {/* ── Flags ───────────────────────────────────────────────── */}
+                <Card>
+                  <h2 className="text-[1.1rem] font-bold text-ink">What is switched on</h2>
+                  <p className="mt-1 text-[0.86rem] leading-relaxed text-muted">
+                    Everything starts off, so the portal can be set up and checked before anyone
+                    outside the firm can reach it. Turn each on when you are ready.
+                  </p>
+
+                  <div className="mt-4">
+                    {Object.keys(FLAG_COPY).map((name) => (
+                      <FlagRow
+                        key={name}
+                        name={name}
+                        enabled={data.flags?.[name] === true}
+                        busy={busy === name}
+                        onChange={toggleFlag}
+                      />
+                    ))}
+                  </div>
+
+                  {data.flags?.recruitment_alerts && data.mailMode === 'file' ? (
+                    <p className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-3.5 text-[0.85rem] leading-relaxed text-amber-900">
+                      Emails are switched on, but no mailbox is set up — they are being written to a
+                      file on the server rather than sent. Nothing is reaching candidates yet.
+                    </p>
+                  ) : null}
+                </Card>
+              </>
+            ) : null}
           </div>
         )}
       </div>
