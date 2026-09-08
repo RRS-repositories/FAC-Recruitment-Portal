@@ -66,6 +66,7 @@ export const CLAIM_AREAS = [
 export const WHAT_YOU_DO = [
   'Manage active caseloads with real client files from day one',
   'Draft correspondence to lenders, clients and regulators',
+  'Keep case records accurate in our CRM',
   'Handle data extraction and evidence preparation',
   'Support UK claims handlers through every stage',
 ];

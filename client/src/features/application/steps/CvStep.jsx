@@ -56,10 +56,8 @@ export function CvStep({
   return (
     <>
       <StepHeader
-        eyebrow="Almost done"
         title="Upload your CV"
-        sub="One last thing, then your application is with us."
-        role={role}
+        sub="So our team can review your experience and qualifications. One last thing, then your application is with us."
       />
 
       <div

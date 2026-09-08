@@ -15,12 +15,20 @@ export function StepNav({ onBack, onNext, nextLabel = 'Continue', disabled, hint
           {hint}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Continue takes the rest of the row, as the prototype has it: on a
+          form the forward action is the one being looked for, and giving it
+          the width says so without needing a second colour. */}
+      <div className="flex flex-wrap items-center gap-3">
         <Button variant="secondary" onClick={onBack} disabled={busy}>
           <Icon name="arrowLeft" size={16} />
           Back
         </Button>
-        <Button onClick={onNext} disabled={disabled || busy} aria-busy={busy || undefined}>
+        <Button
+          onClick={onNext}
+          disabled={disabled || busy}
+          aria-busy={busy || undefined}
+          className="flex-1 justify-center"
+        >
           {busy ? 'Sending…' : nextLabel}
           {!busy ? <Icon name="arrowRight" size={16} /> : null}
         </Button>

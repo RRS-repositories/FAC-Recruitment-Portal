@@ -34,10 +34,8 @@ export function DetailsStep({ role, values, errors, onChange, onBack, onNext }) 
   return (
     <>
       <StepHeader
-        eyebrow="About you"
-        title="Let's start with your details"
+        title="Your details"
         sub="We'll use these to contact you about your application. Nothing is shared outside our recruitment team."
-        role={role}
       />
 
       <div

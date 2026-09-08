@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/Card';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { StepProgress } from '@/components/ui/StepProgress';
+import { Flag } from '@/components/ui/Flag';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { useTelemetry } from '@/hooks/useTelemetry';
@@ -11,6 +12,8 @@ import { AssessmentStep } from './steps/AssessmentStep';
 import { CvStep } from './steps/CvStep';
 
 const STEPS = ['details', 'written', 'assessment', 'cv'];
+/** What each step is called on the progress bar, in the prototype's words. */
+const STEP_LABELS = ['Your details', 'About you', 'Assessment', 'CV & submit'];
 const EMPTY_DETAILS = { fullName: '', email: '', phone: '', city: '' };
 const DETAIL_FIELDS = ['fullName', 'email', 'phone', 'city'];
 
@@ -205,7 +208,11 @@ export function ApplicationFlow({ role, onExit }) {
       {/* tabIndex -1 so focus can be moved here on each step change without
           adding it to the tab order for anyone using a mouse. */}
       <div ref={topRef} tabIndex={-1} className="outline-none">
-        <ProgressBar current={stepIndex + 1} total={STEPS.length} className="mb-7" />
+        <p className="mb-3 flex items-center gap-2 text-[0.75rem] font-bold text-violet-deep">
+          <Flag country={role.countryCode} className="h-3 w-[18px] flex-shrink-0 rounded-[2px]" />
+          {role.title} · {role.location}
+        </p>
+        <StepProgress steps={STEP_LABELS} current={stepIndex} className="mb-[26px]" />
       </div>
 
       {/* Keyed so React remounts on step change: the entrance animation

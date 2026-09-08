@@ -12,6 +12,9 @@ const VARIANTS = {
   primary: 'bg-cta text-white shadow-cta hover:brightness-110 disabled:hover:brightness-100',
   secondary: 'border-[1.5px] border-line bg-white text-ink hover:border-violet hover:text-violet-deep',
   ghost: 'border border-white/20 bg-white/10 text-white hover:bg-white/20',
+  // Solid white on the brand gradient - the prototype's closing call to
+  // action, where a violet button on violet would disappear.
+  white: 'bg-white text-violet-deep shadow-[0_14px_30px_-10px_rgba(0,0,0,0.5)] hover:brightness-95',
   quiet: 'text-violet-deep hover:bg-lav-soft',
   danger: 'border-[1.5px] border-line bg-white text-danger hover:border-danger',
 };

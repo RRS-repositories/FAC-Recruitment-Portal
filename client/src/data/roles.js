@@ -1,3 +1,6 @@
+import indiaPhoto from '@/assets/role-india.jpg';
+import southAfricaPhoto from '@/assets/role-south-africa.jpg';
+
 /**
  * Role marketing content — and nothing else.
  *
@@ -30,6 +33,11 @@ export const ROLES = {
     location: 'Remote from India',
     contractType: 'Paid internship → full-time contract',
     source: 'Internshala',
+    // From the prototype. `photoPosition` is the object-position it was
+    // cropped at there — the faces sit off-centre, and centring them instead
+    // cuts the head off at card height.
+    photo: indiaPhoto,
+    photoPosition: '60% 30%',
     pill: 'Now hiring · Paralegal Interns · Remote from India',
     headline: ['Come join', 'the team.'],
     sub: "We're one of the UK's fastest-growing law firms, with huge growth ahead. Build a real legal career with a team that recovers millions for people who've been treated unfairly.",
@@ -63,6 +71,8 @@ export const ROLES = {
     location: 'Remote from South Africa',
     contractType: 'Full-time permanent contract',
     source: 'Direct',
+    photo: southAfricaPhoto,
+    photoPosition: '50% 25%',
     pill: 'Now hiring · Paralegals · Remote from South Africa',
     headline: ['Real casework.', 'From day one.'],
     sub: "Join one of the UK's fastest-growing law firms as a full-time paralegal, working remotely from South Africa on live consumer claims that change people's finances.",

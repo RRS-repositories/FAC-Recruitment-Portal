@@ -26,10 +26,8 @@ export function WrittenStep({ role, answers, onChange, onBack, onNext, telemetry
   return (
     <>
       <StepHeader
-        eyebrow="In your own words"
-        title="Tell us about you"
-        sub="Three short answers. There are no right answers here — we're looking for how you think, not perfect prose."
-        role={role}
+        title="About you"
+        sub="Tell us in your own words. There are no right answers here — we're looking for how you think, not perfect prose."
       />
 
       <div className="grid gap-7">
