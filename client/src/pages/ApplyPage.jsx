@@ -1,8 +1,9 @@
-import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { ApplicationFlow } from '@/features/application/ApplicationFlow';
 import { getRole } from '@/data/roles';
 import usePageMeta from '@/hooks/usePageMeta';
+import NotFoundPage from '@/pages/NotFoundPage';
 
 export function ApplyPage() {
   const { roleKey } = useParams();
@@ -17,12 +18,14 @@ export function ApplyPage() {
     robots: 'noindex, nofollow',
   });
 
-  if (!role) return <Navigate to="/" replace />;
+  // A slug that is not a role is a wrong address, not a reason to show the
+  // home page.
+  if (!role) return <NotFoundPage />;
 
   return (
     <AppShell>
       <div className="px-5 py-10 sm:px-8">
-        <ApplicationFlow role={role} onExit={() => navigate(`/${role.key}`)} />
+        <ApplicationFlow role={role} onExit={() => navigate(`/recruitment/${role.key}`)} />
       </div>
     </AppShell>
   );

@@ -15,7 +15,8 @@ import { storeCv, deleteCv, UploadError, CV_LIMITS } from '../lib/storage.js';
 import { scoreApplication } from '../../shared/scoring.js';
 import { detectAiUse } from '../../shared/aiDetect.js';
 import { notifyApplicationReceived } from '../lib/notify.js';
-import { requireFlag } from '../lib/flags.js';
+import { isEnabled, requireFlag } from '../lib/flags.js';
+import { mailMode } from '../lib/mailer.js';
 
 /**
  * Application intake.
@@ -200,8 +201,20 @@ export function createApplicationsRouter({ ipSalt }) {
       await notifyApplicationReceived(client, applicant);
 
       await client.query('COMMIT');
+
+      /*
+       * Whether that acknowledgement will actually arrive.
+       *
+       * The success screen used to promise "we've sent a confirmation to your
+       * address" unconditionally. With no mailbox configured and notifications
+       * switched off, that was a plain untruth told to every applicant — and
+       * the sort that is only discovered by somebody waiting for an email that
+       * was never coming.
+       */
+      const acknowledged = (await isEnabled('recruitment_alerts')) && mailMode() === 'smtp';
+
       // Nothing about the score or the AI verdict goes back to the candidate.
-      return res.status(201).json({ ok: true, id: applicant.id });
+      return res.status(201).json({ ok: true, id: applicant.id, acknowledged });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       if (stored) await deleteCv(stored.key);

@@ -284,8 +284,11 @@ export function SettingsPage() {
             <Card>
               <h2 className="text-[1.1rem] font-bold text-ink">Interviewer</h2>
               <p className="mt-1 text-[0.9rem] text-muted">
-                <b className="font-semibold text-ink">{data.interviewer.full_name}</b> ·{' '}
-                {data.interviewer.email}
+                {/* The address is deliberately not shown. The seeded one is a
+                    placeholder that does not exist, and displaying it invites
+                    somebody to write to it. Nothing in the portal emails the
+                    interviewer, so it has no job here. */}
+                <b className="font-semibold text-ink">{data.interviewer.full_name}</b>
               </p>
               <p className="mt-2 text-[0.82rem] leading-relaxed text-muted">
                 Slots are worked out in{' '}
