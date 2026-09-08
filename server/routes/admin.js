@@ -51,6 +51,8 @@ const LIST = `
      AND ($3::text IS NULL
           OR a.full_name ILIKE '%' || $3 || '%'
           OR a.email::text ILIKE '%' || $3 || '%')
+     AND ($6::date IS NULL OR a.created_at >= $6::date)
+     AND ($7::date IS NULL OR a.created_at < ($7::date + 1))
    ORDER BY a.created_at DESC
    LIMIT $4 OFFSET $5
 `;
@@ -63,6 +65,30 @@ const COUNT = `
      AND ($3::text IS NULL
           OR a.full_name ILIKE '%' || $3 || '%'
           OR a.email::text ILIKE '%' || $3 || '%')
+     AND ($4::date IS NULL OR a.created_at >= $4::date)
+     AND ($5::date IS NULL OR a.created_at < ($5::date + 1))
+`;
+
+/**
+ * The counts beside the status filters.
+ *
+ * Scoped by role, search and dates but NOT by status -- the whole point of
+ * "Accepted 4" is to tell you what you would get if you clicked it, which a
+ * count that already had the status applied could never do.
+ */
+const TAB_COUNTS = `
+  SELECT
+    count(*)::int                                      AS total,
+    count(*) FILTER (WHERE a.status = 'pending')::int  AS pending,
+    count(*) FILTER (WHERE a.status = 'accepted')::int AS accepted,
+    count(*) FILTER (WHERE a.status = 'declined')::int AS declined
+  FROM recruit_applicants a
+  WHERE ($1::recruit_role IS NULL OR a.role = $1)
+    AND ($2::text IS NULL
+         OR a.full_name ILIKE '%' || $2 || '%'
+         OR a.email::text ILIKE '%' || $2 || '%')
+    AND ($3::date IS NULL OR a.created_at >= $3::date)
+    AND ($4::date IS NULL OR a.created_at < ($4::date + 1))
 `;
 
 // The summary counts every application, not just the filtered page: it is the
@@ -599,11 +625,20 @@ export function createAdminRouter() {
       typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim().slice(0, 100) : null;
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
 
+    // Dates arrive as yyyy-mm-dd from a native date input. Anything else is
+    // ignored rather than argued with: a half-typed date should narrow
+    // nothing, not empty the screen.
+    const asDate = (value) =>
+      typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+    const from = asDate(req.query.from);
+    const to = asDate(req.query.to);
+
     try {
-      const [list, count, summary] = await Promise.all([
-        pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE]),
-        pool.query(COUNT, [status, role, search]),
+      const [list, count, summary, tabs] = await Promise.all([
+        pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE, from, to]),
+        pool.query(COUNT, [status, role, search, from, to]),
         pool.query(SUMMARY),
+        pool.query(TAB_COUNTS, [role, search, from, to]),
       ]);
 
       return res.json({
@@ -613,6 +648,9 @@ export function createAdminRouter() {
         pageSize: PAGE_SIZE,
         total: count.rows[0].total,
         summary: summary.rows[0],
+        // Beside the status filters. Separate from `summary`, which stays the
+        // whole pipeline however the screen is filtered.
+        tabs: tabs.rows[0],
         // Whether a decision actually reaches the candidate. The confirmation
         // dialog says so in as many words, and it must not claim an email that
         // is only being written to a file — or none at all.

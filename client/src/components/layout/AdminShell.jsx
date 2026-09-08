@@ -378,7 +378,11 @@ export function AdminShell({
           </div>
         </header>
 
-        <main id="main" className="flex-1">
+        {/* `min-w-0` is load-bearing: a flex child defaults to
+            min-width:auto, so without it a wide table inside refuses to
+            shrink and pushes the whole page sideways instead of
+            scrolling inside its own container. */}
+        <main id="main" className="min-w-0 flex-1">
           <div className="mx-auto w-full max-w-wide px-4 py-6 sm:px-6 sm:py-8">
             {loading ? <Spinner centered label="Loading…" /> : children}
           </div>

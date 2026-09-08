@@ -3,6 +3,7 @@ import { AdminShell } from '@/components/layout/AdminShell';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/ui/Icon';
+import { Flag } from '@/components/ui/Flag';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ApplicantRow } from '@/features/dashboard/ApplicantRow';
@@ -23,11 +24,14 @@ import { normaliseApplicant, normaliseSummary } from '@/lib/normalise';
 import { cn } from '@/lib/cn';
 
 const STATUS_FILTERS = [
-  { key: 'all', label: 'All' },
-  { key: 'pending', label: 'Awaiting review' },
-  { key: 'accepted', label: 'Accepted' },
-  { key: 'declined', label: 'Declined' },
+  { key: 'all', label: 'All', countKey: 'total' },
+  { key: 'pending', label: 'Awaiting review', countKey: 'pending' },
+  { key: 'accepted', label: 'Accepted', countKey: 'accepted' },
+  { key: 'declined', label: 'Declined', countKey: 'declined' },
 ];
+
+/** The counts beside those buttons, before the server has answered. */
+const EMPTY_TABS = { total: 0, pending: 0, accepted: 0, declined: 0 };
 
 const EMPTY_SUMMARY = normaliseSummary();
 
@@ -96,6 +100,10 @@ export function DashboardPage() {
   // rather than assumed. The confirmation says so in as many words, and it
   // must not promise an email that is only being written to a file.
   const [emailLive, setEmailLive] = useState(false);
+  const [tabs, setTabs] = useState(EMPTY_TABS);
+  // Applied-between, as yyyy-mm-dd from the two date inputs.
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [pageSize, setPageSize] = useState(25);
 
   const [status, setStatus] = useState('all');
@@ -132,12 +140,15 @@ export function DashboardPage() {
         role: apiRole,
         q: search,
         page,
+        from,
+        to,
       });
       setApplicants(result.applications.map(normaliseApplicant));
       setSummary(normaliseSummary(result.summary));
       setTotal(result.total);
       setPageSize(result.pageSize);
       setEmailLive(Boolean(result.emailLive));
+      setTabs(result.tabs ?? EMPTY_TABS);
     } catch (failure) {
       // An expired or rejected token is not an error to show — it is a request
       // to sign in again.
@@ -146,7 +157,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, apiRole, search, page, signOut]);
+  }, [status, apiRole, search, page, from, to, signOut]);
 
   useEffect(() => {
     if (signedIn) load();
@@ -186,6 +197,8 @@ export function DashboardPage() {
   };
 
   const chooseStatus = applyFilter(setStatus);
+  const changeFrom = applyFilter(setFrom);
+  const changeTo = applyFilter(setTo);
   const chooseRole = applyFilter(setRole);
   const changeQuery = applyFilter(setQuery);
 
@@ -336,75 +349,115 @@ export function DashboardPage() {
       ) : null}
 
       <Card padded={false} className="overflow-hidden">
-        <div className="flex flex-wrap items-center gap-2 border-b border-line p-4 sm:p-5">
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by status">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.key}
-                type="button"
-                onClick={() => chooseStatus(f.key)}
-                aria-pressed={status === f.key}
-                className={cn(
-                  'rounded-control px-3 py-2 text-[0.83rem] font-semibold transition-colors',
-                  status === f.key
-                    ? 'bg-ink text-white'
-                    : 'border border-line bg-white text-ink hover:border-violet',
-                )}
-              >
-                {f.label}
-              </button>
-            ))}
+        <div className="border-b border-line p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* The count says what you would get if you clicked it, so it is
+                scoped by the role and dates already chosen but never by the
+                status the button itself applies. */}
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by status">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => chooseStatus(f.key)}
+                  aria-pressed={status === f.key}
+                  className={cn(
+                    'rounded-full px-4 py-2 text-[0.85rem] font-semibold transition-colors',
+                    status === f.key
+                      ? 'bg-ink text-white'
+                      : 'border border-line bg-white text-ink hover:border-violet',
+                  )}
+                >
+                  {f.label}{' '}
+                  <span className={cn('font-bold', status === f.key ? 'text-white/70' : 'text-muted')}>
+                    {tabs[f.countKey]}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <label className="sr-only" htmlFor="applied-from">
+                Applied from
+              </label>
+              <input
+                id="applied-from"
+                type="date"
+                value={from}
+                max={to || undefined}
+                onChange={(e) => changeFrom(e.target.value)}
+                className="rounded-control border-[1.5px] border-line bg-white px-3 py-2 text-[0.85rem] text-ink focus:border-violet focus:outline-none"
+              />
+              <span className="text-[0.85rem] text-muted">to</span>
+              <label className="sr-only" htmlFor="applied-to">
+                Applied to
+              </label>
+              <input
+                id="applied-to"
+                type="date"
+                value={to}
+                min={from || undefined}
+                onChange={(e) => changeTo(e.target.value)}
+                className="rounded-control border-[1.5px] border-line bg-white px-3 py-2 text-[0.85rem] text-ink focus:border-violet focus:outline-none"
+              />
+              <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
+                {loading ? 'Refreshing…' : 'Refresh'}
+              </Button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by role">
-            <button
-              type="button"
-              onClick={() => chooseRole('all')}
-              aria-pressed={role === 'all'}
-              className={cn(
-                'rounded-control px-3 py-2 text-[0.83rem] font-semibold transition-colors',
-                role === 'all'
-                  ? 'bg-violet text-white'
-                  : 'border border-line bg-white text-ink hover:border-violet',
-              )}
-            >
-              Both roles
-            </button>
-            {Object.values(ROLES).map((r) => (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by role">
               <button
-                key={r.key}
                 type="button"
-                onClick={() => chooseRole(r.key)}
-                aria-pressed={role === r.key}
+                onClick={() => chooseRole('all')}
+                aria-pressed={role === 'all'}
                 className={cn(
-                  'rounded-control px-3 py-2 text-[0.83rem] font-semibold transition-colors',
-                  role === r.key
-                    ? 'bg-violet text-white'
-                    : 'border border-line bg-white text-ink hover:border-violet',
+                  'rounded-control px-3.5 py-2 text-[0.85rem] font-semibold transition-colors',
+                  role === 'all'
+                    ? 'border-[1.5px] border-violet bg-white text-violet-deep'
+                    : 'border-[1.5px] border-line bg-white text-ink hover:border-violet',
                 )}
               >
-                {r.country}
+                All roles
               </button>
-            ))}
-          </div>
+              {Object.values(ROLES).map((r) => (
+                <button
+                  key={r.key}
+                  type="button"
+                  onClick={() => chooseRole(r.key)}
+                  aria-pressed={role === r.key}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-control px-3.5 py-2 text-[0.85rem] font-semibold transition-colors',
+                    role === r.key
+                      ? 'border-[1.5px] border-violet bg-white text-violet-deep'
+                      : 'border-[1.5px] border-line bg-white text-ink hover:border-violet',
+                  )}
+                >
+                  <Flag country={r.countryCode} className="h-2.5 w-[15px] flex-shrink-0 rounded-[1px]" />
+                  {r.short}
+                </button>
+              ))}
+            </div>
 
-          <div className="relative ml-auto w-full sm:w-64">
-            <label htmlFor="applicant-search" className="sr-only">
-              Search applicants by name or email
-            </label>
-            <Icon
-              name="search"
-              size={16}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
-            />
-            <input
-              id="applicant-search"
-              type="search"
-              value={query}
-              onChange={(e) => changeQuery(e.target.value)}
-              placeholder="Search name or email"
-              className="w-full rounded-control border-[1.5px] border-line bg-white py-2 pl-9 pr-3 text-[0.88rem] focus:border-violet focus:outline-none"
-            />
+            <div className="relative ml-auto w-full sm:w-64">
+              <label htmlFor="applicant-search" className="sr-only">
+                Search applicants by name or email
+              </label>
+              <Icon
+                name="search"
+                size={16}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+              />
+              <input
+                id="applicant-search"
+                type="search"
+                value={query}
+                onChange={(e) => changeQuery(e.target.value)}
+                placeholder="Search name or email"
+                className="w-full rounded-control border-[1.5px] border-line bg-white py-2 pl-9 pr-3 text-[0.88rem] focus:border-violet focus:outline-none"
+              />
+            </div>
           </div>
         </div>
 
@@ -421,20 +474,42 @@ export function DashboardPage() {
             }
           />
         ) : applicants.length > 0 ? (
-          <ul aria-busy={loading || undefined} className={cn(loading && 'opacity-60')}>
-            {applicants.map((applicant) => (
-              <ApplicantRow
-                key={applicant.id}
-                applicant={applicant}
-                onDecide={(id, decision) => {
-                  setDecideError('');
-                  setConfirming({ id, decision });
-                }}
-                onReissue={reissue}
-                onAttendance={markAttendance}
-              />
-            ))}
-          </ul>
+          <div className="overflow-x-auto">
+            <table
+              aria-busy={loading || undefined}
+              className={cn('w-full min-w-[960px] border-collapse text-left', loading && 'opacity-60')}
+            >
+              <thead>
+                <tr className="bg-lav-soft text-[0.78rem] font-semibold text-muted">
+                  <th scope="col" className="px-3 py-3 font-semibold">Name</th>
+                  <th scope="col" className="px-3 py-3 font-semibold">Email</th>
+                  <th scope="col" className="px-3 py-3 font-semibold">Score</th>
+                  <th scope="col" className="px-3 py-3 font-semibold">AI check</th>
+                  <th scope="col" className="whitespace-nowrap px-3 py-3 font-semibold">Time taken</th>
+                  <th scope="col" className="px-3 py-3 font-semibold">Status</th>
+                  <th scope="col" className="px-3 py-3 font-semibold">Interview</th>
+                  <th scope="col" className="px-3 py-3 font-semibold">Decision</th>
+                  <th scope="col" className="py-3 pr-3">
+                    <span className="sr-only">Show details</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {applicants.map((applicant) => (
+                  <ApplicantRow
+                    key={applicant.id}
+                    applicant={applicant}
+                    onDecide={(id, decision) => {
+                      setDecideError('');
+                      setConfirming({ id, decision });
+                    }}
+                    onReissue={reissue}
+                    onAttendance={markAttendance}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : filtered ? (
           <EmptyState
             title="No applicants match those filters"

@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { Flag } from '@/components/ui/Flag';
 import { ROLES } from '@/data/roles';
 import { WRITTEN_QUESTIONS } from '@/data/writtenQuestions';
 import { gradeFor } from '@shared/scoring';
 import { AI_LEVEL_LABEL } from '@shared/aiDetect';
 import { adminApplication, adminDownloadCv, adminSendMeetingLink } from '@/lib/api';
 import { normaliseApplicant } from '@/lib/normalise';
-import { formatDateTime, formatDuration, initials } from '@/lib/format';
+import { formatDate, formatDateTime, formatDuration } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
 const STATUS_TONE = { pending: 'warn', accepted: 'ok', declined: 'danger' };
@@ -198,55 +199,76 @@ export function ApplicantRow({
   };
 
   return (
-    <li className="border-b border-line last:border-0">
-      <div className="grid gap-3 px-4 py-4 sm:grid-cols-[1fr_auto] sm:items-start sm:gap-5 sm:px-5">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span
-              aria-hidden="true"
-              className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-full bg-lav text-[0.75rem] font-bold text-violet-deep"
-            >
-              {initials(applicant.fullName)}
-            </span>
-            <b className="text-[0.98rem] font-semibold text-ink">{applicant.fullName}</b>
-            <Badge tone="neutral">{role?.short ?? applicant.role}</Badge>
-            <Badge tone={STATUS_TONE[applicant.status]}>{applicant.status}</Badge>
-            {applicant.ai.level !== 'clean' ? (
-              <Badge tone={AI_TONE[applicant.ai.level]}>
-                <Icon name="sparkle" size={11} />
-                {AI_LEVEL_LABEL[applicant.ai.level]}
+    <>
+      <tr className="border-b border-line align-top last:border-0 hover:bg-lav-soft/40">
+        {/* Name, with the role underneath it rather than beside — the column
+            is the narrowest thing on the row and a chip would push it wider. */}
+        <td className="px-3 py-4">
+          <b className="block whitespace-nowrap text-[0.95rem] font-bold leading-tight text-ink">
+            {applicant.fullName}
+          </b>
+          <span className="mt-0.5 flex items-center gap-1.5 whitespace-nowrap text-[0.76rem] text-muted">
+            <Flag country={role?.countryCode} className="h-2.5 w-[15px] flex-shrink-0 rounded-[1px]" />
+            {role?.short ?? applicant.role}
+          </span>
+        </td>
+
+        <td className="max-w-[190px] px-3 py-4">
+          <a
+            href={`mailto:${applicant.email}`}
+            title={applicant.email}
+            className="block truncate text-[0.86rem] text-muted underline-offset-2 hover:text-violet-deep hover:underline"
+          >
+            {applicant.email}
+          </a>
+        </td>
+
+        <td className="px-3 py-4">
+          <b className={cn('block text-[0.95rem] font-bold leading-none tabular', GRADE_TEXT[grade.tone])}>
+            {applicant.score}%
+          </b>
+          <span className="mt-1 block whitespace-nowrap text-[0.72rem] text-muted tabular">
+            {formatDate(applicant.createdAt)}
+          </span>
+        </td>
+
+        <td className="px-3 py-4">
+          <Badge tone={AI_TONE[applicant.ai.level]}>{AI_LEVEL_LABEL[applicant.ai.level]}</Badge>
+        </td>
+
+        <td className="px-3 py-4">
+          <span
+            className={cn(
+              'whitespace-nowrap text-[0.86rem] tabular',
+              fast && 'font-semibold text-warn',
+            )}
+          >
+            {formatDuration(applicant.durationSec)}
+          </span>
+        </td>
+
+        <td className="px-3 py-4">
+          <Badge tone={STATUS_TONE[applicant.status]}>{applicant.status}</Badge>
+        </td>
+
+        <td className="px-3 py-4">
+          {applicant.interviewStatus === 'not_invited' ? (
+            <span className="text-[0.86rem] text-muted">—</span>
+          ) : (
+            <>
+              <Badge tone={INTERVIEW_TONE[applicant.interviewStatus]}>
+                {INTERVIEW_LABEL[applicant.interviewStatus]}
               </Badge>
-            ) : null}
-          </div>
+              {applicant.interviewAt ? (
+                <span className="mt-1 block whitespace-nowrap text-[0.72rem] text-muted">
+                  {formatDateTime(applicant.interviewAt)}
+                </span>
+              ) : null}
+            </>
+          )}
+        </td>
 
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 pl-11 text-[0.84rem] text-muted">
-            <a
-              href={`mailto:${applicant.email}`}
-              className="text-violet-deep underline underline-offset-2"
-            >
-              {applicant.email}
-            </a>
-            <span>{formatDateTime(applicant.createdAt)}</span>
-            <span className={cn('tabular', fast && 'font-semibold text-warn')}>
-              {formatDuration(applicant.durationSec)}
-              {fast ? ' · fast' : ''}
-            </span>
-            <Badge tone={INTERVIEW_TONE[applicant.interviewStatus]}>
-              {INTERVIEW_LABEL[applicant.interviewStatus]}
-            </Badge>
-          </div>
-        </div>
-
-        <div className="flex flex-shrink-0 items-center gap-3 pl-11 sm:pl-0">
-          <div className="text-right">
-            <b className="block text-[1.35rem] font-black leading-none text-ink tabular">
-              {applicant.score}
-            </b>
-            <span className={cn('text-[0.72rem] font-semibold', GRADE_TEXT[grade.tone])}>
-              {grade.label}
-            </span>
-          </div>
-
+        <td className="px-3 py-4">
           {applicant.status === 'pending' ? (
             <div className="flex gap-1.5">
               <button
@@ -261,13 +283,17 @@ export function ApplicantRow({
                 type="button"
                 onClick={() => onDecide(applicant.id, 'declined')}
                 aria-label={`Decline ${applicant.fullName}`}
-                className="grid h-9 w-9 place-items-center rounded-control bg-white text-danger ring-1 ring-line transition-transform hover:scale-105 motion-reduce:hover:scale-100"
+                className="grid h-9 w-9 place-items-center rounded-control bg-danger text-white transition-transform hover:scale-105 motion-reduce:hover:scale-100"
               >
                 <Icon name="close" size={16} strokeWidth={2.6} />
               </button>
             </div>
-          ) : null}
+          ) : (
+            <span className="text-[0.86rem] text-muted">Done</span>
+          )}
+        </td>
 
+        <td className="py-4 pr-3">
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -285,11 +311,17 @@ export function ApplicantRow({
               className={cn('transition-transform duration-200', open && 'rotate-180')}
             />
           </button>
-        </div>
-      </div>
+        </td>
+      </tr>
 
       {open ? (
-        <div className="animate-fade-in border-t border-line bg-lav-soft/60 px-5 py-5 motion-reduce:animate-none">
+        <tr className="border-b border-line last:border-0">
+          <td colSpan={9} className="p-0">
+        <div
+              role="region"
+              aria-label={`Details for ${applicant.fullName}`}
+              className="animate-fade-in border-t border-line bg-lav-soft/60 px-5 py-5 motion-reduce:animate-none"
+            >
           <dl className="grid gap-4 sm:grid-cols-3">
             <Detail label="Phone">{full.phone}</Detail>
             <Detail label="Applied">{formatDateTime(applicant.createdAt)}</Detail>
@@ -603,8 +635,10 @@ export function ApplicantRow({
             </div>
           ) : null}
         </div>
+          </td>
+        </tr>
       ) : null}
-    </li>
+    </>
   );
 }
 
