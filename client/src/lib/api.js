@@ -155,11 +155,15 @@ export const adminSignOut = () => setAdminToken(null);
 /** Who the held token belongs to. Also the cheapest way to test it is still valid. */
 export const adminMe = () => request('/recruit/admin/me', { headers: withAuth() });
 
-export function adminApplications({ status, role, q, page = 1 } = {}) {
+export function adminApplications({ status, role, q, page = 1, from, to } = {}) {
   const params = new URLSearchParams();
   if (status && status !== 'all') params.set('status', status);
   if (role && role !== 'all') params.set('role', role);
   if (q) params.set('q', q);
+  // Half-typed dates are left off rather than sent: the server ignores them
+  // anyway, and not sending them keeps the request honest about what it asked.
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
   params.set('page', String(page));
   return request(`/recruit/admin/applications?${params}`, { headers: withAuth() });
 }
