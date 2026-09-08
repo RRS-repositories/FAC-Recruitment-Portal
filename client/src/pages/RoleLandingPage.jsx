@@ -1,4 +1,4 @@
-import { Navigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { Button } from '@/components/ui/Button';
 import { StatCard } from '@/components/ui/StatCard';
@@ -6,6 +6,7 @@ import { Reveal } from '@/components/ui/Reveal';
 import { Icon } from '@/components/ui/Icon';
 import { getRole } from '@/data/roles';
 import usePageMeta from '@/hooks/usePageMeta';
+import NotFoundPage from '@/pages/NotFoundPage';
 
 /**
  * The public role page — the thesis of the whole portal: this is a real legal
@@ -21,12 +22,15 @@ export function RoleLandingPage() {
     description: role?.sub,
   });
 
-  if (!role) return <Navigate to="/" replace />;
+  // A slug that is not a role is a wrong address, not a reason to show the
+  // home page. Sending it there was how /nope and the privacy link both ended
+  // up quietly rendering a job advert.
+  if (!role) return <NotFoundPage />;
 
   return (
     <AppShell
       navRight={
-        <Button to={`/apply/${role.key}`} size="sm">
+        <Button to={`/recruitment/apply/${role.key}`} size="sm">
           Apply now
         </Button>
       }
@@ -51,7 +55,7 @@ export function RoleLandingPage() {
             <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-white/80">{role.sub}</p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button to={`/apply/${role.key}`} size="lg">
+              <Button to={`/recruitment/apply/${role.key}`} size="lg">
                 Start your application
                 <Icon name="arrowRight" size={18} />
               </Button>
@@ -146,7 +150,7 @@ export function RoleLandingPage() {
                 ))}
               </ul>
               <div className="mt-6 border-t border-line pt-5">
-                <Button to={`/apply/${role.key}`} className="w-full">
+                <Button to={`/recruitment/apply/${role.key}`} className="w-full">
                   Apply for this role
                 </Button>
                 <p className="mt-3 text-center text-[0.78rem] text-muted">
@@ -167,7 +171,7 @@ export function RoleLandingPage() {
             — no back-and-forth over email.
           </p>
           <div className="mt-7 flex justify-center">
-            <Button to={`/apply/${role.key}`} size="lg">
+            <Button to={`/recruitment/apply/${role.key}`} size="lg">
               Start your application
               <Icon name="arrowRight" size={18} />
             </Button>

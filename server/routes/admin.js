@@ -223,6 +223,27 @@ export function createAdminRouter() {
     }
 
     try {
+      /*
+       * The first account has to be an administrator.
+       *
+       * Creating a reviewer first closes the bootstrap — an account exists, so
+       * ADMIN_USERS stops being accepted — while leaving nobody who can reach
+       * this screen. The portal ends up with no way to administer it short of
+       * editing the database by hand. The last-administrator guard below does
+       * not catch this, because there was never an administrator to be the
+       * last one.
+       */
+      if (await usingBootstrap()) {
+        if (role !== 'administrator') {
+          return res.status(400).json({
+            ok: false,
+            error:
+              'The first account has to be an administrator, so somebody can add everybody else. ' +
+              'You can add reviewers straight after.',
+          });
+        }
+      }
+
       const { rows } = await pool.query(
         `INSERT INTO recruit_admins (username, email, full_name, password_hash, role, created_by_email)
          VALUES ($1, $2, $3, $4, $5, $6)

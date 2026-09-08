@@ -10,24 +10,31 @@ import { publicQuestionsFor, questionsFor, WRITTEN_QUESTIONS } from './questions
 const ROLES = {
   india_intern: {
     apiKey: 'india_intern',
-    slug: 'india',
+    slug: 'intern',
     title: 'Paralegal Internship',
     country: 'India',
     timezone: 'Asia/Kolkata',
   },
   sa_paralegal: {
     apiKey: 'sa_paralegal',
-    slug: 'south-africa',
+    slug: 'paralegal',
     title: 'Paralegal — Full-time',
     country: 'South Africa',
     timezone: 'Africa/Johannesburg',
   },
 };
 
-/** URL slug ("india") to the enum value the database stores. */
+/**
+  * URL slug to the enum value the database stores.
+  *
+  * Two names for one role on purpose. The slug is public and answers to
+  * marketing — it changed once already, from `india` to `intern`. The enum is
+  * in a column on every application ever submitted and must not move because
+  * somebody preferred a different link.
+  */
 export const SLUG_TO_API_KEY = {
-  india: 'india_intern',
-  'south-africa': 'sa_paralegal',
+  intern: 'india_intern',
+  paralegal: 'sa_paralegal',
 };
 
 export const ROLE_BY_API_KEY = ROLES;

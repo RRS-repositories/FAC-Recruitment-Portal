@@ -98,7 +98,7 @@ export function HomePage() {
                 {Object.values(ROLES).map((role) => (
                   <Link
                     key={role.key}
-                    to={`/apply/${role.key}`}
+                    to={`/recruitment/apply/${role.key}`}
                     className="group flex items-center gap-3.5 rounded-panel bg-white/10 p-4 transition-colors duration-200 hover:bg-white/20"
                   >
                     <span
@@ -211,11 +211,11 @@ export function HomePage() {
                   </ul>
 
                   <div className="mt-6 flex flex-wrap gap-2.5 border-t border-line pt-5">
-                    <Button to={`/apply/${role.key}`} className="flex-1">
+                    <Button to={`/recruitment/apply/${role.key}`} className="flex-1">
                       Apply now
                       <Icon name="arrowRight" size={16} />
                     </Button>
-                    <Button to={`/${role.key}`} variant="secondary">
+                    <Button to={`/recruitment/${role.key}`} variant="secondary">
                       Read more
                     </Button>
                   </div>
@@ -331,7 +331,7 @@ export function HomePage() {
 
           <div className="mt-9 flex flex-wrap justify-center gap-3">
             {Object.values(ROLES).map((role) => (
-              <Button key={role.key} to={`/apply/${role.key}`} size="lg">
+              <Button key={role.key} to={`/recruitment/apply/${role.key}`} size="lg">
                 Apply — {role.country}
                 <Icon name="arrowRight" size={17} />
               </Button>

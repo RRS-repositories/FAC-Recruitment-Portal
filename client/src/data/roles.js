@@ -15,8 +15,11 @@
  */
 
 export const ROLES = {
-  india: {
-    key: 'india',
+  // Keyed by the URL slug. `apiKey` is what the database stores and does
+  // NOT change with the URL — the two are deliberately separate, so a
+  // marketing decision about a link cannot reach the enum in a column.
+  intern: {
+    key: 'intern',
     apiKey: 'india_intern',
     country: 'India',
     countryCode: 'IN',
@@ -48,8 +51,8 @@ export const ROLES = {
     ],
   },
 
-  'south-africa': {
-    key: 'south-africa',
+  paralegal: {
+    key: 'paralegal',
     apiKey: 'sa_paralegal',
     country: 'South Africa',
     countryCode: 'ZA',
