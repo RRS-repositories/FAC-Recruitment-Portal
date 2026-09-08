@@ -230,6 +230,19 @@ export const adminSettings = () => request('/recruit/admin/settings', { headers:
 export const adminSaveAvailability = (body) =>
   request('/recruit/admin/settings/availability', { method: 'PUT', body, headers: withAuth() });
 
+/**
+ * Sends the candidate their video link, and saves it on the interview.
+ *
+ * Saving is the half that keeps working: both reminders resolve their merge
+ * fields when they send, so they carry the link from here on.
+ */
+export const adminSendMeetingLink = (id, link) =>
+  request(`/recruit/admin/applications/${id}/meeting-link`, {
+    method: 'POST',
+    body: { link },
+    headers: withAuth(),
+  });
+
 /** The address the interviewer is told about bookings at. */
 export const adminSaveInterviewer = (email) =>
   request('/recruit/admin/settings/interviewer', {

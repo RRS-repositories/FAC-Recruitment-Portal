@@ -50,6 +50,7 @@ export function normaliseApplicant(row) {
     score: row.final_score ?? row.rule_score ?? 0,
 
     status: row.status,
+    meetLink: row.meet_link ?? null,
     // No interview row at all is the commonest case, and it is not a null
     // state — it is "not invited", which the badge already knows how to draw.
     interviewStatus: row.interview_status ?? 'not_invited',

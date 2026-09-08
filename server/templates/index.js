@@ -299,6 +299,44 @@ registerTemplate({
   }),
 });
 
+// ── The joining link, sent by hand ──────────────────────────────────────────
+
+/**
+ * Sent when somebody pastes the video link into the dashboard.
+ *
+ * Until the calendar integration creates meetings itself, this is how a
+ * candidate gets a link at all. The link is SAVED on the interview as well as
+ * emailed, which is the part that matters: every later email resolves its
+ * merge fields at send time, so both reminders start carrying it too without
+ * anybody sending a second thing.
+ */
+registerTemplate({
+  key: 'recruit.meet.link',
+  title: 'Your joining link',
+  when: 'When a manager sends the video link from the dashboard.',
+  description:
+    'The link to join the interview, sent on its own. Saving it also means the 24-hour and 10-minute reminders carry it from then on, so this is normally sent once and never repeated.',
+  mergeFields: ['firstName', 'localDay', 'localTime', 'ukTime', 'meetLink'],
+  sample: { ...SAMPLE, meetLink: 'https://teams.microsoft.com/l/meetup-join/EXAMPLE' },
+  load,
+  render: (data) => ({
+    subject: `Your interview link — ${data.localDay} at ${data.localTime}`,
+    text: [
+      `Hi ${data.firstName},`,
+      '',
+      `Here is the link for your interview with ${data.interviewerName}, ${whenLine(data)}.`,
+      '',
+      `Join here: ${data.meetLink}`,
+      '',
+      'It is worth opening the link a few minutes early the first time, in case your browser asks permission for the camera and microphone.',
+      '',
+      'If the link does not work on the day, reply to this email straight away.',
+      '',
+      SIGN_OFF,
+    ].join('\n'),
+  }),
+});
+
 registerTemplate({
   key: 'recruit.cancelled',
   title: 'Interview cancelled',
