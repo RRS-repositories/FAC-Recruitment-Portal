@@ -192,6 +192,16 @@ export const adminReissueLink = (id) =>
  */
 export const adminTemplates = () => request('/recruit/admin/templates', { headers: withAuth() });
 
+/**
+ * The manager's calendar for a date range, as YYYY-MM-DD.
+ *
+ * The grid comes from the server already worked out — which instants make up
+ * a working day across a clock change is arithmetic that should exist once,
+ * and it already exists there.
+ */
+export const adminCalendar = (from, to) =>
+  request(`/recruit/admin/calendar?from=${from}&to=${to}`, { headers: withAuth() });
+
 /* ── Settings (spec §8.3 and §2) ────────────────────────────────────────── */
 
 /** The interviewer, their availability rules, their time off, and the flags. */

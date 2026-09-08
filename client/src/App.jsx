@@ -11,6 +11,7 @@ const ApplyPage = lazy(() => import('@/pages/ApplyPage'));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const TemplatesPage = lazy(() => import('@/pages/TemplatesPage'));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
+const CalendarPage = lazy(() => import('@/pages/CalendarPage'));
 const BookingPage = lazy(() => import('@/pages/BookingPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="/book/:token" element={split(BookingPage)} />
         <Route path="/admin" element={split(DashboardPage)} />
         <Route path="/admin/templates" element={split(TemplatesPage)} />
+        <Route path="/admin/calendar" element={split(CalendarPage)} />
         <Route path="/admin/settings" element={split(SettingsPage)} />
 
         {/* Legacy shape kept working rather than 404ing anyone who saved it. */}

@@ -21,6 +21,7 @@ import { cn } from '@/lib/cn';
 
 const NAV = [
   { key: 'applicants', to: '/admin', label: 'Applicants', icon: 'users' },
+  { key: 'calendar', to: '/admin/calendar', label: 'Calendar', icon: 'calendar' },
   { key: 'templates', to: '/admin/templates', label: 'Emails', icon: 'mail' },
   { key: 'settings', to: '/admin/settings', label: 'Settings', icon: 'settings' },
 ];
