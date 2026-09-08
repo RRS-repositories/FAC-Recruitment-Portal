@@ -36,10 +36,8 @@ export function AssessmentStep({ role, questions, answers, onChange, onBack, onN
   return (
     <>
       <StepHeader
-        eyebrow="Assessment"
-        title="A few questions about how you work"
+        title="Assessment"
         sub="Answer honestly — we're checking fit, not testing legal knowledge."
-        role={role}
       />
 
       <div className="grid gap-8">

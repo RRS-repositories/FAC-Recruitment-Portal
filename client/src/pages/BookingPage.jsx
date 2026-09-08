@@ -8,8 +8,18 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { cancelBooking, confirmBooking, fetchBooking, rescheduleBooking } from '@/lib/api';
 import { roleFromApiKey } from '@/lib/normalise';
+import { COMPANY } from '@/data/company';
 import usePageMeta from '@/hooks/usePageMeta';
 import { cn } from '@/lib/cn';
+
+/** "Priyanshu Srivastava" -> "PS". Two letters at most; an avatar is not a name. */
+const initialsOf = (name) =>
+  String(name ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
 
 /**
  * Candidate self-service interview booking.
@@ -372,151 +382,219 @@ export function BookingPage() {
 
   const day = days[Math.min(dayIndex, days.length - 1)];
 
+  // "Thu 10 Sept" -> weekday and date number, for the day tiles. Parsed from
+  // the label the server already formatted in the CANDIDATE's timezone rather
+  // than from `date`, which is the interviewer's day and can be a day out.
+  const splitLabel = (label) => {
+    const [weekday = '', number = ''] = String(label ?? '').split(' ');
+    return { weekday, number };
+  };
+
   return (
-    <AppShell>
-      <Card className="mx-auto my-10 max-w-2xl">
-        <h1 className="text-display-md font-extrabold text-ink">
-          {moving ? 'Pick a new time' : `Book your interview${interview?.firstName ? `, ${interview.firstName}` : ''}`}
-        </h1>
-        <p className="mt-2 text-[0.95rem] leading-relaxed text-muted">
-          Choose a time for your 30-minute video interview. Times are shown in your local time (
-          {tzLabel}), with UK time underneath.
-        </p>
-
-        {submitError ? (
-          <p
-            ref={errorRef}
-            tabIndex={-1}
-            role="alert"
-            className="mt-4 rounded-panel border border-danger/30 bg-red-50 px-4 py-3 text-[0.88rem] font-medium text-danger"
-          >
-            {submitError}
+    <AppShell navSubtitle={COMPANY.parentEntity}>
+      {/* Band and card, as the prototype has it: the card lifts out of the
+          gradient rather than sitting below it. */}
+      <section className="bg-brand px-6 pb-16 pt-7 text-white">
+        <div className="mx-auto max-w-[820px]">
+          <p className="text-[0.8rem] font-semibold text-white/65">Interview booking</p>
+          <h1 className="mt-1.5 text-[1.55rem] font-black leading-tight tracking-[-0.03em] sm:text-[1.875rem]">
+            {moving ? 'Pick a new time' : 'Choose a time that suits you'}
+          </h1>
+          <p className="mt-3 max-w-[560px] text-[0.95rem] leading-relaxed text-white/80">
+            {/* Their own name, because it is how somebody knows at a glance
+                that they opened their link and not somebody else's. */}
+            {interview?.firstName ? <>Hi {interview.firstName} — p</> : <>P</>}ick any slot below.
+            Times are shown in your own timezone ({tzLabel}) with UK time underneath, so there is
+            nothing to work out.
           </p>
-        ) : null}
-
-        <div className="mt-5 flex items-center gap-3 rounded-panel border border-lav bg-lav-soft p-3.5">
-          <span
-            aria-hidden="true"
-            className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-cta text-[0.8rem] font-bold text-white"
-          >
-            {(interview?.interviewerName ?? '')
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((part) => part[0]?.toUpperCase() ?? '')
-              .join('')}
-          </span>
-          <span>
-            <b className="block text-[0.92rem] font-semibold text-ink">{interview?.interviewerName}</b>
-            <span className="text-[0.82rem] text-muted">{role?.title ?? 'Interview'}</span>
-          </span>
         </div>
+      </section>
 
-        {/* Day picker */}
-        <h2 className="mb-2.5 mt-7 text-[0.8rem] font-bold uppercase tracking-wide text-muted">
-          Pick a day
-        </h2>
-        <div className="flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Choose a day">
-          {days.map((d, i) => (
-            <button
-              key={d.date}
-              type="button"
-              onClick={() => {
-                setDayIndex(i);
-                setSelected(null);
-              }}
-              aria-pressed={i === dayIndex}
-              className={cn(
-                'flex-shrink-0 rounded-control border px-4 py-2.5 text-[0.85rem] font-semibold transition-colors',
-                i === dayIndex
-                  ? 'border-ink bg-ink text-white'
-                  : 'border-line bg-white text-ink hover:border-violet',
-              )}
+      <div className="mx-auto -mt-10 mb-8 max-w-[820px] px-4">
+        <Card className="px-6 py-[26px]">
+          {submitError ? (
+            <p
+              ref={errorRef}
+              tabIndex={-1}
+              role="alert"
+              className="mb-4 rounded-panel border border-danger/30 bg-red-50 px-4 py-3 text-[0.88rem] font-medium text-danger"
             >
-              {d.localLabel}
-            </button>
-          ))}
-        </div>
+              {submitError}
+            </p>
+          ) : null}
 
-        {/* Slots. The server sends only what is actually bookable, so there is
-            nothing here to grey out — a slot someone else has taken simply is
-            not in the list. */}
-        <h2 className="mb-2.5 mt-6 text-[0.8rem] font-bold uppercase tracking-wide text-muted">
-          Pick a time
-        </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="group" aria-label="Choose a time">
-          {day.slots.map((slot) => {
-            const isSelected = selected?.startsAt === slot.startsAt;
-            return (
-              <button
-                key={slot.startsAt}
-                type="button"
-                onClick={() => setSelected(slot)}
-                aria-pressed={isSelected}
-                aria-label={`${slot.localTime} your time, ${slot.ukTime} UK time`}
-                className={cn(
-                  'rounded-control border px-2 py-2.5 text-center transition-colors',
-                  isSelected
-                    ? 'border-violet bg-violet text-white'
-                    : 'border-line bg-white text-ink hover:border-violet',
-                )}
-              >
-                <span className="block text-[0.92rem] font-semibold tabular">{slot.localTime}</span>
-                <span
+          {/* Who they are meeting */}
+          <div className="mb-[22px] flex items-center gap-3.5 border-b border-line pb-5">
+            <span
+              aria-hidden="true"
+              className="grid h-12 w-12 flex-shrink-0 place-items-center rounded-[14px] bg-lav text-[1rem] font-extrabold text-violet-deep"
+            >
+              {initialsOf(interview?.interviewerName)}
+            </span>
+            <div className="min-w-0">
+              <b className="block text-[1rem] font-bold tracking-tight text-ink">
+                {interview?.interviewerName}
+              </b>
+              <span className="block text-[0.84rem] text-muted">
+                {role?.title ?? 'Interview'} · {COMPANY.name}
+              </span>
+              <div className="mt-2.5 flex flex-wrap gap-2">
+                {['30 minutes', 'Video call', `Times shown in ${tzLabel}`].map((chip) => (
+                  <span
+                    key={chip}
+                    className="inline-flex items-center rounded-full border border-lav bg-lav-soft px-2.5 py-[5px] text-[0.78rem] font-semibold text-ink"
+                  >
+                    {chip}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Pick a day */}
+          <h2 className="text-[1.06rem] font-extrabold tracking-tight text-ink">Pick a day</h2>
+          <p className="mb-4 mt-1 text-[0.84rem] text-muted">Interviews run Monday to Friday.</p>
+
+          <div
+            className="mb-[22px] grid grid-cols-3 gap-2 sm:grid-cols-5"
+            role="group"
+            aria-label="Choose a day"
+          >
+            {days.map((d, i) => {
+              const { weekday, number } = splitLabel(d.localLabel);
+              const chosen = i === dayIndex;
+              return (
+                <button
+                  key={d.date}
+                  type="button"
+                  onClick={() => {
+                    setDayIndex(i);
+                    setSelected(null);
+                  }}
+                  aria-pressed={chosen}
+                  aria-label={`${d.localLabel}, ${d.slots.length} times free`}
                   className={cn(
-                    'block text-[0.7rem] tabular',
-                    isSelected ? 'text-white/75' : 'text-muted',
+                    'rounded-[12px] border-[1.5px] px-1.5 py-3 text-center transition-colors',
+                    chosen
+                      ? 'border-violet bg-violet text-white'
+                      : 'border-line bg-white hover:border-violet',
                   )}
                 >
-                  {slot.ukTime} UK
-                </span>
-              </button>
-            );
-          })}
-        </div>
+                  <small
+                    className={cn(
+                      'block text-[0.72rem] font-semibold',
+                      chosen ? 'text-white/80' : 'text-muted',
+                    )}
+                  >
+                    {weekday}
+                  </small>
+                  <b
+                    className={cn(
+                      'my-[3px] block text-[1.19rem] font-extrabold',
+                      chosen ? 'text-white' : 'text-ink',
+                    )}
+                  >
+                    {number}
+                  </b>
+                  <i
+                    className={cn(
+                      'block text-[0.69rem] font-semibold not-italic',
+                      chosen ? 'text-white/80' : 'text-ok',
+                    )}
+                  >
+                    {d.slots.length} free
+                  </i>
+                </button>
+              );
+            })}
+          </div>
 
-        <p className="mt-4 text-[0.76rem] text-muted">
-          Lunch (11:30–12:30 UK) and evenings are not offered. Only free times are shown.
+          {/* Pick a time */}
+          <h2 className="text-[1.06rem] font-extrabold tracking-tight text-ink">Pick a time</h2>
+          <p className="mb-4 mt-1 text-[0.84rem] text-muted">
+            Only free times are shown — lunch (11:30–12:30 UK) and evenings are not offered.
+          </p>
+
+          <div
+            className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(132px,1fr))]"
+            role="group"
+            aria-label="Choose a time"
+          >
+            {day.slots.map((slot) => {
+              const isSelected = selected?.startsAt === slot.startsAt;
+              return (
+                <button
+                  key={slot.startsAt}
+                  type="button"
+                  onClick={() => setSelected(slot)}
+                  aria-pressed={isSelected}
+                  aria-label={`${slot.localTime} your time, ${slot.ukTime} UK time`}
+                  className={cn(
+                    'rounded-control border-[1.5px] px-2 py-[11px] text-center leading-[1.35] transition-colors',
+                    isSelected
+                      ? 'border-violet bg-violet text-white'
+                      : 'border-line bg-white text-ink hover:border-violet',
+                  )}
+                >
+                  <span className="block text-[0.875rem] font-semibold tabular">
+                    {slot.localTime}
+                  </span>
+                  <span
+                    className={cn(
+                      'mt-0.5 block text-[0.69rem] tabular',
+                      isSelected ? 'text-white/75' : 'text-muted',
+                    )}
+                  >
+                    {slot.ukTime} UK
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+
+      {/* The prototype's sticky confirm bar. It follows the page, so the
+          action stays reachable without scrolling back up a long list. */}
+      <div className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3.5 border-t border-line bg-white px-6 py-4 shadow-[0_-8px_24px_-14px_rgba(46,16,101,0.3)]">
+        <p className="text-[0.9rem] text-muted" role="status">
+          {selected ? (
+            <>
+              <b className="font-semibold text-ink">{day.localLabel}</b> at{' '}
+              <b className="font-semibold text-ink">{selected.localTime}</b> {tzLabel}
+              <span> · {selected.ukTime} UK</span>
+            </>
+          ) : (
+            'No time selected yet'
+          )}
         </p>
-
-        <div className="mt-7 border-t border-line pt-6">
+        <div className="flex flex-wrap items-center gap-2">
+          {moving ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setMoving(false);
+                setSubmitError('');
+              }}
+            >
+              Keep my current time
+            </Button>
+          ) : null}
           <Button
-            className="w-full"
             size="lg"
             disabled={!selected || submitting}
             aria-busy={submitting || undefined}
             onClick={submit}
           >
-            {submitting
-              ? moving
-                ? 'Moving…'
-                : 'Booking…'
-              : selected
-                ? `Confirm ${selected.localTime} ${tzLabel}`
-                : 'Select a time to continue'}
+            {submitting ? (moving ? 'Moving…' : 'Booking…') : 'Confirm interview'}
           </Button>
-
-          {moving ? (
-            <p className="mt-3 text-center">
-              <Button
-                variant="quiet"
-                size="sm"
-                onClick={() => {
-                  setMoving(false);
-                  setSubmitError('');
-                }}
-              >
-                Keep my current time
-              </Button>
-            </p>
-          ) : selected ? (
-            <p className="mt-3 text-center text-[0.8rem] text-muted">
-              <Badge tone="neutral">30 minutes</Badge>{' '}
-              <span className="ml-1">Video interview · link sent by email</span>
-            </p>
-          ) : null}
         </div>
-      </Card>
+      </div>
+
+      <p className="mx-auto max-w-[820px] px-6 pb-10 pt-5 text-center text-[0.8rem] leading-relaxed text-muted">
+        Need a different time, or something come up? Reply to your invitation email and we will
+        rearrange.
+      </p>
     </AppShell>
   );
 }

@@ -7,12 +7,12 @@ import { cn } from '@/lib/cn';
  * application has one job, and a full navigation invites them to wander off
  * before finishing.
  */
-export function PortalNav({ right, className }) {
+export function PortalNav({ right, subtitle, className }) {
   return (
     <header className={cn('bg-ink px-5 py-3.5 text-white sm:px-8', className)}>
       <div className="mx-auto flex max-w-shell items-center justify-between gap-4">
         <Link to="/" className="rounded focus-visible:ring-offset-ink">
-          <Logo light />
+          <Logo light subtitle={subtitle} />
         </Link>
         {right ? <div className="flex items-center gap-2">{right}</div> : null}
       </div>

@@ -1,17 +1,15 @@
-import { Badge } from '@/components/ui/Badge';
-
-/** Consistent heading for every step, so the flow feels like one thing. */
-export function StepHeader({ eyebrow, title, sub, role }) {
+/**
+ * Consistent heading for every step, so the flow feels like one thing.
+ *
+ * The role used to be repeated here as an eyebrow and a chip. It is now named
+ * once, above the progress bar, which is where the prototype puts it — saying
+ * it three times on one screen was noise.
+ */
+export function StepHeader({ title, sub }) {
   return (
-    <header className="mb-6">
-      <div className="mb-2.5 flex flex-wrap items-center gap-2">
-        <span className="text-[0.75rem] font-bold uppercase tracking-[0.12em] text-violet-deep">
-          {eyebrow}
-        </span>
-        {role ? <Badge tone="neutral">{role.short}</Badge> : null}
-      </div>
-      <h1 className="text-display-md font-extrabold text-ink">{title}</h1>
-      {sub ? <p className="mt-2 text-[0.95rem] leading-relaxed text-muted">{sub}</p> : null}
+    <header className="mb-4">
+      <h1 className="text-[1.3rem] font-bold tracking-tight text-ink">{title}</h1>
+      {sub ? <p className="mt-2 text-[0.97rem] leading-[1.7] text-body">{sub}</p> : null}
     </header>
   );
 }

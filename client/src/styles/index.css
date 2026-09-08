@@ -48,6 +48,44 @@
   }
 
   /* The hero's depth: two soft radial glows over the brand gradient. */
+  /* The hero photograph, exactly as the prototype masked it: dissolved from
+     the left so it meets the headline without a seam, and faded at the bottom
+     so the stat cards have something to sit against. Two mask layers
+     intersected -- `mask-composite` is the only way to combine them, and the
+     -webkit- pair is still required by Safari. */
+  .hero-photo {
+    -webkit-mask-image:
+      linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.6) 22%, #000 55%),
+      linear-gradient(180deg, #000 70%, transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(90deg, transparent 0%, rgba(0, 0, 0, 0.6) 22%, #000 55%),
+      linear-gradient(180deg, #000 70%, transparent 100%);
+    mask-composite: intersect;
+  }
+
+  /* Multiplied over the photograph so it takes the brand violet rather than
+     sitting on top of it as a separate colour. */
+  .hero-photo-wash {
+    background:
+      linear-gradient(90deg, #2e1065 0%, rgba(46, 16, 101, 0.55) 18%, transparent 50%),
+      linear-gradient(0deg, #6d28d9 0%, transparent 45%);
+    mix-blend-mode: multiply;
+    opacity: 0.9;
+    pointer-events: none;
+  }
+
+  /* On a narrow screen the photograph stacks above the text, so the mask has
+     to fade from the top instead of the left. */
+  @media (max-width: 1023px) {
+    .hero-photo {
+      -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 30%);
+      -webkit-mask-composite: source-over;
+      mask-image: linear-gradient(180deg, transparent 0%, #000 30%);
+      mask-composite: add;
+    }
+  }
+
   .hero-glow::before {
     content: '';
     position: absolute;

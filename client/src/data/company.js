@@ -10,6 +10,9 @@
 export const COMPANY = {
   name: 'Fast Action Claims',
   legalEntity: 'Fast Action Claims is a trading style of Rowan Rose Ltd',
+  // Named on its own for the booking page, which shows the legal entity
+  // under the wordmark rather than the careers subtitle.
+  parentEntity: 'Rowan Rose Ltd',
   regulator: 'Regulated by the Solicitors Regulation Authority',
   website: 'fastactionclaims.co.uk',
   websiteUrl: 'https://fastactionclaims.co.uk',
@@ -66,6 +69,7 @@ export const CLAIM_AREAS = [
 export const WHAT_YOU_DO = [
   'Manage active caseloads with real client files from day one',
   'Draft correspondence to lenders, clients and regulators',
+  'Keep case records accurate in our CRM',
   'Handle data extraction and evidence preparation',
   'Support UK claims handlers through every stage',
 ];
