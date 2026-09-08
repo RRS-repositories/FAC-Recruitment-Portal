@@ -10,6 +10,9 @@
 export const COMPANY = {
   name: 'Fast Action Claims',
   legalEntity: 'Fast Action Claims is a trading style of Rowan Rose Ltd',
+  // Named on its own for the booking page, which shows the legal entity
+  // under the wordmark rather than the careers subtitle.
+  parentEntity: 'Rowan Rose Ltd',
   regulator: 'Regulated by the Solicitors Regulation Authority',
   website: 'fastactionclaims.co.uk',
   websiteUrl: 'https://fastactionclaims.co.uk',

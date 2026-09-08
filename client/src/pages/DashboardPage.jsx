@@ -36,19 +36,21 @@ const EMPTY_SUMMARY = normaliseSummary();
  * for every number turns the row into decoration and hides the one that
  * matters.
  */
-function Stat({ label, value, tone = 'default', icon }) {
+const STAT_TONES = {
+  default: 'text-ink',
+  ok: 'text-ok',
+  warn: 'text-warn',
+  danger: 'text-danger',
+  brand: 'text-violet-deep',
+};
+
+function Stat({ label, value, tone = 'default' }) {
   return (
-    <div
-      className={cn(
-        'rounded-panel border bg-white p-4',
-        tone === 'alert' && value > 0 ? 'border-amber-300 bg-amber-50' : 'border-line',
-      )}
-    >
-      <div className="flex items-center gap-2 text-muted">
-        {icon ? <Icon name={icon} size={15} /> : null}
-        <span className="text-[0.74rem] font-semibold uppercase tracking-wide">{label}</span>
-      </div>
-      <b className="mt-1.5 block text-[1.6rem] font-black leading-none text-ink tabular">{value}</b>
+    <div className="rounded-[14px] bg-white px-5 py-[22px] shadow-stat">
+      <span className="block text-[0.8rem] font-medium text-muted">{label}</span>
+      <b className={cn('mt-2 block text-[1.7rem] font-black leading-none tabular', STAT_TONES[tone])}>
+        {value}
+      </b>
     </div>
   );
 }
@@ -288,16 +290,40 @@ export function DashboardPage() {
         </Button>
       }
     >
+      {/* The prototype's header band, with the counts lifting out of its
+          bottom edge. Inside the admin shell it is a rounded block rather than
+          full-bleed, so it sits with the rail instead of fighting it. */}
+      <section className="hero-glow relative overflow-hidden rounded-card bg-brand px-6 pb-16 pt-7 text-white">
+        <div className="relative z-10">
+          <p className="text-[0.8rem] font-semibold text-white/65">Recruitment</p>
+          {/* Not a heading: the top bar already announces this page as
+              "Applicants", and a second heading saying the same thing gives a
+              screen reader two names for one screen. */}
+          <p className="mt-1 text-[1.4rem] font-black leading-tight tracking-[-0.03em] sm:text-[1.6rem]">
+            Paralegal applicants — India &amp; South Africa
+          </p>
+          {summary.pending > 0 ? (
+            <p className="mt-3 inline-flex items-center rounded-full border border-white/[0.22] bg-white/10 px-3.5 py-1.5 text-[0.82rem] font-semibold backdrop-blur">
+              {summary.pending} application{summary.pending === 1 ? '' : 's'} awaiting your decision
+            </p>
+          ) : (
+            <p className="mt-3 inline-flex items-center rounded-full border border-white/[0.22] bg-white/10 px-3.5 py-1.5 text-[0.82rem] font-semibold backdrop-blur">
+              Nothing is waiting on you
+            </p>
+          )}
+        </div>
+      </section>
+
       <section
         aria-label="Summary"
-        className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-6"
+        className="relative z-10 mb-6 -mt-10 grid grid-cols-2 gap-3.5 px-1 md:grid-cols-3 lg:grid-cols-6"
       >
-        <Stat label="Total" value={summary.total} icon="user" />
-        <Stat label="Awaiting" value={summary.pending} icon="clock" />
-        <Stat label="Accepted" value={summary.accepted} icon="check" />
-        <Stat label="Booked" value={summary.booked} icon="calendar" />
-        <Stat label="No-shows" value={summary.noShows} icon="alert" tone="alert" />
-        <Stat label="AI flagged" value={summary.aiFlagged} icon="sparkle" tone="alert" />
+        <Stat label="Total" value={summary.total} />
+        <Stat label="Awaiting review" value={summary.pending} tone="warn" />
+        <Stat label="Accepted" value={summary.accepted} tone="ok" />
+        <Stat label="Declined" value={summary.declined} tone="danger" />
+        <Stat label="Interviews booked" value={summary.booked} tone="brand" />
+        <Stat label="AI detected" value={summary.aiFlagged} tone="danger" />
       </section>
 
       {actionError ? (

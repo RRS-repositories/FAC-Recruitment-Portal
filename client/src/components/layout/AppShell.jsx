@@ -5,7 +5,7 @@ import { PortalFooter } from './PortalFooter';
  * Page frame: nav, content, footer, with a skip link ahead of everything so a
  * keyboard user is not made to tab through the header on every page.
  */
-export function AppShell({ navRight, children }) {
+export function AppShell({ navRight, navSubtitle, children }) {
   return (
     <div className="flex min-h-screen flex-col">
       <a
@@ -14,7 +14,7 @@ export function AppShell({ navRight, children }) {
       >
         Skip to content
       </a>
-      <PortalNav right={navRight} />
+      <PortalNav right={navRight} subtitle={navSubtitle} />
       <main id="main" className="flex-1">
         {children}
       </main>
