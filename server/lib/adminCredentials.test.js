@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   ROLES,
+  findInBootstrap,
   hashPassword,
   issueToken,
   parseAdminUsers,
@@ -122,4 +123,35 @@ test('there are exactly two roles', () => {
   // Each extra role is a question somebody has to answer for every new
   // colleague. Two answers the real one: can they change how the portal runs.
   assert.deepEqual(ROLES, ['reviewer', 'administrator']);
+});
+
+// ── Signing in with either ──────────────────────────────────────────────────
+
+test('the bootstrap list can be searched by username or by email', () => {
+  const users = parseAdminUsers(`brad:brad@example.com:${HASH}`);
+  assert.equal(findInBootstrap(users, 'brad')?.email, 'brad@example.com');
+  assert.equal(findInBootstrap(users, 'brad@example.com')?.username, 'brad');
+});
+
+test('and neither is case-sensitive', () => {
+  const users = parseAdminUsers(`Brad:Brad@Example.com:${HASH}`);
+  assert.equal(findInBootstrap(users, 'brad')?.username, 'Brad');
+  assert.equal(findInBootstrap(users, 'BRAD@EXAMPLE.COM')?.username, 'Brad');
+});
+
+test('a username match beats another person’s email', () => {
+  // Usernames cannot contain "@" so this cannot arise from the add form, but
+  // the bootstrap list is hand-written and the ordering should not depend on
+  // luck: the person whose USERNAME it is wins.
+  const users = parseAdminUsers(
+    `alice:alice@example.com:${HASH},bob:alice:${HASH}`,
+  );
+  assert.equal(findInBootstrap(users, 'alice')?.username, 'alice');
+});
+
+test('an identifier nobody has finds nobody', () => {
+  const users = parseAdminUsers(`brad:brad@example.com:${HASH}`);
+  for (const nothing of ['', null, undefined, 'nobody', 'nobody@example.com']) {
+    assert.equal(findInBootstrap(users, nothing), null, `should not have found: ${nothing}`);
+  }
 });

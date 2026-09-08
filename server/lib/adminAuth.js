@@ -2,6 +2,7 @@ import { pool } from './db.js';
 import {
   ROLES,
   decoyHash,
+  findInBootstrap,
   hashPassword,
   issueToken,
   parseAdminUsers,
@@ -55,27 +56,36 @@ export async function usingBootstrap() {
 }
 
 /**
- * One account by username, active or not.
+ * One account by username OR email address, active or not.
  *
- * The caller decides what an inactive row means, and that distinction matters:
+ * Both columns are citext and unique, so either identifies one person and case
+ * does not matter. A username cannot contain "@" and an email must, so in
+ * practice the two can never name different people — but the ordering makes
+ * that guarantee rather than assuming it: an exact username match wins, so
+ * even a legacy row with an odd username cannot be shadowed by somebody
+ * else's email address.
+ *
+ * The caller decides what an inactive row means. That distinction matters:
  * "no such account" and "an account that has been switched off" lead to
  * different answers below.
  */
-export async function findAdminRow(username) {
-  if (!username) return null;
+export async function findAdminRow(identifier) {
+  if (!identifier) return null;
 
   const { rows } = await pool.query(
     `SELECT id, username, email, full_name, password_hash, role, active
        FROM recruit_admins
-      WHERE username = $1`,
-    [String(username)],
+      WHERE username = $1 OR email = $1
+      ORDER BY (username = $1) DESC
+      LIMIT 1`,
+    [String(identifier)],
   );
   return rows[0] ?? null;
 }
 
 /** One account that may actually sign in. */
-export async function findAdmin(username) {
-  const row = await findAdminRow(username);
+export async function findAdmin(identifier) {
+  const row = await findAdminRow(identifier);
   return row?.active ? row : null;
 }
 
@@ -93,9 +103,9 @@ const shape = (admin) => ({
  * Verifies a username and password against the accounts table, falling back to
  * the bootstrap list only while there are no accounts.
  */
-export async function authenticate(username, password) {
+export async function authenticate(identifier, password) {
   if (await usingBootstrap()) {
-    const user = parseAdminUsers().get(username);
+    const user = findInBootstrap(parseAdminUsers(), identifier);
     if (!user) {
       decoyHash(password);
       return null;
@@ -105,7 +115,7 @@ export async function authenticate(username, password) {
       : null;
   }
 
-  const admin = await findAdmin(username);
+  const admin = await findAdmin(identifier);
   if (!admin) {
     decoyHash(password);
     return null;
@@ -163,7 +173,7 @@ export function requireAdmin() {
        * expires within a working day. Emptying ADMIN_USERS ends it sooner,
        * which is what the team screen asks for.
        */
-      const envUser = parseAdminUsers().get(claims.username);
+      const envUser = findInBootstrap(parseAdminUsers(), claims.username);
       if (envUser) {
         req.admin = {
           username: envUser.username,
