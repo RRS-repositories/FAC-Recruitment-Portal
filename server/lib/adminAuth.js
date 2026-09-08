@@ -1,142 +1,200 @@
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { pool } from './db.js';
+import {
+  ROLES,
+  decoyHash,
+  hashPassword,
+  issueToken,
+  parseAdminUsers,
+  verifyPassword,
+  verifyToken,
+} from './adminCredentials.js';
 
 /**
- * Admin authentication — the interim.
+ * Who can sign in, and what they may do.
  *
- * Cloudflare Access is the intended answer and this is deliberately shaped to
- * be replaced by it: the routes only ever ask `req.admin` who they are talking
- * to, so switching means rewriting this file and nothing else.
+ * The accounts live in `recruit_admins`. Adding a colleague is a row, not a
+ * deploy: no server access, no restart, and removing someone takes effect on
+ * their next click rather than whenever their token happens to expire.
  *
- * How it works, and why this shape:
+ * Two rules the rest of the code depends on:
  *
- *   · Credentials are per-manager, not a shared login. A single account would
- *     make `decided_by_email` meaningless, and the audit trail is the reason
- *     that column exists.
- *   · Passwords are stored as scrypt hashes in the environment, never
- *     plaintext. scrypt is in Node's standard library, so no dependency.
- *   · Verifying a password mints a short-lived signed token. The browser then
- *     holds that rather than the password, so a leaked value expires by
- *     itself and is scoped to this service.
- *   · Everything compares in constant time, so timing cannot reveal which
- *     half of a guess was right.
+ *   1. The token proves WHO. It carries nothing about what they may do — that
+ *      is read from their row on every request, so a change of role or a
+ *      deactivation lands immediately instead of up to eight hours later.
  *
- * WHAT THIS IS NOT: it has no SSO, no MFA, and no central revocation —
- * removing someone means editing the environment and restarting. It is safe
- * only over HTTPS, which the Cloudflare tunnel provides. It is a bridge to
- * Access, not a destination.
+ *   2. ADMIN_USERS is the bootstrap and only that. A NEW session can begin
+ *      that way only while the accounts table is empty; once anybody has a
+ *      real account, signing in with it is refused. A session already open
+ *      finishes its eight hours, so adding your first colleague does not sign
+ *      you out mid-task. So: applying the migration locks nobody out, and the
+ *      door closes on its own without anyone remembering to shut it.
+ *
+ * WHAT THIS IS NOT: it has no SSO and no MFA. Cloudflare Access in front of
+ * /admin would give both and remove password handling entirely — the routes
+ * only ever ask `req.admin` who they are talking to, so that swap would be
+ * this file and nothing else. A possibility, not a plan; the spec never asked
+ * for it.
+ *
+ * The cryptography lives in `adminCredentials.js`, which needs no database and
+ * is where the hardest tests point.
  */
 
-const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
-const TOKEN_TTL_MS = 8 * 3_600_000; // one working day
+export { ROLES, hashPassword, issueToken, parseAdminUsers, verifyToken };
 
-/** `scrypt$<salt-hex>$<key-hex>` — self-describing, so the format can change. */
-export function hashPassword(password) {
-  const salt = randomBytes(16);
-  const key = scryptSync(password, salt, SCRYPT.keylen, SCRYPT);
-  return `scrypt$${salt.toString('hex')}$${key.toString('hex')}`;
-}
-
-function verifyPassword(password, stored) {
-  const [scheme, saltHex, keyHex] = String(stored).split('$');
-  if (scheme !== 'scrypt' || !saltHex || !keyHex) return false;
-
-  const expected = Buffer.from(keyHex, 'hex');
-  const actual = scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length, SCRYPT);
-  return timingSafeEqual(expected, actual);
-}
-
-/**
- * ADMIN_USERS is `username:email:hash` entries separated by commas.
- * A malformed entry is dropped with a warning rather than crashing the
- * process — one bad line should not take the whole admin surface down.
- */
-export function parseAdminUsers(raw = process.env.ADMIN_USERS) {
-  const users = new Map();
-  if (!raw) return users;
-
-  for (const entry of raw.split(',').map((e) => e.trim()).filter(Boolean)) {
-    const [username, email, ...hashParts] = entry.split(':');
-    const hash = hashParts.join(':');
-    if (!username || !email || !hash) {
-      console.warn('[fac-recruit] ignoring malformed ADMIN_USERS entry');
-      continue;
-    }
-    users.set(username, { username, email, hash });
-  }
-  return users;
-}
-
-function secret() {
-  const value = process.env.ADMIN_TOKEN_SECRET;
-  if (!value) throw new Error('[fac-recruit] ADMIN_TOKEN_SECRET is not set.');
-  return value;
-}
-
-/** A signed, expiring bearer token. Stateless — nothing to store or clean up. */
-export function issueToken({ username, email }, now = Date.now()) {
-  const payload = Buffer.from(
-    JSON.stringify({ u: username, e: email, exp: now + TOKEN_TTL_MS }),
-  ).toString('base64url');
-  const signature = createHmac('sha256', secret()).update(payload).digest('base64url');
-  return `${payload}.${signature}`;
-}
-
-export function verifyToken(token) {
-  if (typeof token !== 'string' || !token.includes('.')) return null;
-  const [payload, signature] = token.split('.');
-
-  const expected = createHmac('sha256', secret()).update(payload).digest('base64url');
-  const a = Buffer.from(signature);
-  const b = Buffer.from(expected);
-  // Length check first: timingSafeEqual throws on a mismatch, and a thrown
-  // error would itself be a timing signal.
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-
+/** True while nobody has a real account yet. */
+export async function usingBootstrap() {
   try {
-    const claims = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (typeof claims.exp !== 'number' || claims.exp < Date.now()) return null;
-    return { username: claims.u, email: claims.e };
-  } catch {
-    return null;
+    const { rows } = await pool.query('SELECT 1 FROM recruit_admins WHERE active LIMIT 1');
+    return rows.length === 0;
+  } catch (error) {
+    // A database we cannot read is not a reason to fall back to the
+    // environment and let somebody in. Say so, and refuse.
+    console.error('[fac-recruit] could not read the accounts table:', error.message);
+    return false;
   }
-}
-
-/** Verifies a username and password. Returns the user, or null. */
-export function authenticate(username, password, users = parseAdminUsers()) {
-  const user = users.get(username);
-  if (!user) {
-    // Hash anyway, against a throwaway value, so a missing username takes the
-    // same time as a wrong password and cannot be distinguished.
-    scryptSync(password ?? '', 'decoy-salt', SCRYPT.keylen, SCRYPT);
-    return null;
-  }
-  return verifyPassword(password ?? '', user.hash) ? { username: user.username, email: user.email } : null;
 }
 
 /**
- * Express middleware. Fails closed in every direction: unconfigured returns
- * 503 and serves nothing, a missing or invalid token returns 401.
+ * One account by username, active or not.
+ *
+ * The caller decides what an inactive row means, and that distinction matters:
+ * "no such account" and "an account that has been switched off" lead to
+ * different answers below.
+ */
+export async function findAdminRow(username) {
+  if (!username) return null;
+
+  const { rows } = await pool.query(
+    `SELECT id, username, email, full_name, password_hash, role, active
+       FROM recruit_admins
+      WHERE username = $1`,
+    [String(username)],
+  );
+  return rows[0] ?? null;
+}
+
+/** One account that may actually sign in. */
+export async function findAdmin(username) {
+  const row = await findAdminRow(username);
+  return row?.active ? row : null;
+}
+
+/** The shape every route sees as `req.admin`. */
+const shape = (admin) => ({
+  id: admin.id,
+  username: admin.username,
+  email: admin.email,
+  fullName: admin.full_name,
+  role: admin.role,
+  source: 'database',
+});
+
+/**
+ * Verifies a username and password against the accounts table, falling back to
+ * the bootstrap list only while there are no accounts.
+ */
+export async function authenticate(username, password) {
+  if (await usingBootstrap()) {
+    const user = parseAdminUsers().get(username);
+    if (!user) {
+      decoyHash(password);
+      return null;
+    }
+    return verifyPassword(password ?? '', user.hash)
+      ? { username: user.username, email: user.email, role: 'administrator', source: 'env' }
+      : null;
+  }
+
+  const admin = await findAdmin(username);
+  if (!admin) {
+    decoyHash(password);
+    return null;
+  }
+  if (!verifyPassword(password ?? '', admin.password_hash)) return null;
+
+  // Best effort — failing to record the visit is not a reason to refuse it.
+  pool
+    .query('UPDATE recruit_admins SET last_seen_at = now() WHERE id = $1', [admin.id])
+    .catch(() => {});
+
+  return shape(admin);
+}
+
+/**
+ * Express middleware. Fails closed in every direction: no token or a bad one
+ * is 401, an account deactivated since signing in is 401, and a database that
+ * cannot answer is 503 rather than a guess.
+ *
+ * The row is read on every request rather than trusted from the token, which
+ * is what makes "remove someone now" mean now.
  */
 export function requireAdmin() {
-  const users = parseAdminUsers();
-  const configured = users.size > 0 && Boolean(process.env.ADMIN_TOKEN_SECRET);
-
-  if (!configured) {
-    console.warn('[fac-recruit] admin API disabled — ADMIN_USERS / ADMIN_TOKEN_SECRET not set');
-  }
-
-  return (req, res, next) => {
-    if (!configured) {
-      return res.status(503).json({ ok: false, error: 'Admin access is not configured.' });
-    }
-
+  return async (req, res, next) => {
     const header = req.get('authorization') ?? '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-    const admin = token ? verifyToken(token) : null;
+    const claims = token ? verifyToken(token) : null;
 
-    if (!admin) return res.status(401).json({ ok: false, error: 'Sign in to continue.' });
+    if (!claims) return res.status(401).json({ ok: false, error: 'Sign in to continue.' });
 
-    req.admin = admin;
-    return next();
+    try {
+      const row = await findAdminRow(claims.username);
+
+      if (row) {
+        // Deactivated between signing in and now. Their token is still valid;
+        // their account is not, and that is the answer that matters.
+        if (!row.active) {
+          return res.status(401).json({ ok: false, error: 'Your access has been removed.' });
+        }
+        req.admin = shape(row);
+        return next();
+      }
+
+      /*
+       * No account of that name, so this is a session that began under the
+       * bootstrap. It keeps working for the rest of its eight hours.
+       *
+       * The first version closed the door the moment one account existed,
+       * which meant adding your first colleague signed you out mid-task,
+       * before you had added yourself. Correct, and useless.
+       *
+       * The door still closes — just at sign-in rather than mid-session.
+       * `authenticate` refuses the environment list once any account exists,
+       * so no NEW session can begin this way; this can only finish one, and it
+       * expires within a working day. Emptying ADMIN_USERS ends it sooner,
+       * which is what the team screen asks for.
+       */
+      const envUser = parseAdminUsers().get(claims.username);
+      if (envUser) {
+        req.admin = {
+          username: envUser.username,
+          email: envUser.email,
+          role: 'administrator',
+          source: 'env',
+        };
+        return next();
+      }
+
+      return res.status(401).json({ ok: false, error: 'Your access has been removed.' });
+    } catch (error) {
+      console.error('[fac-recruit] could not check that sign-in:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not verify your sign-in.' });
+    }
+  };
+}
+
+/**
+ * Gates the routes that change how the portal behaves rather than what it
+ * holds — availability, feature flags, retention, and the accounts themselves.
+ *
+ * 403 rather than 404: they are signed in and this exists, they simply may
+ * not. Pretending it is missing would send somebody hunting for a bug.
+ */
+export function requireRole(role) {
+  return (req, res, next) => {
+    if (req.admin?.role === role) return next();
+    return res.status(403).json({
+      ok: false,
+      error: 'That is only available to an administrator.',
+    });
   };
 }

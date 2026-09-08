@@ -2,7 +2,15 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { createReadStream } from 'node:fs';
 import { pool } from '../lib/db.js';
-import { authenticate, issueToken, parseAdminUsers, requireAdmin } from '../lib/adminAuth.js';
+import {
+  ROLES,
+  authenticate,
+  hashPassword,
+  issueToken,
+  requireAdmin,
+  requireRole,
+  usingBootstrap,
+} from '../lib/adminAuth.js';
 import { resolveCv, cvExists } from '../lib/storage.js';
 import { generateBookingToken, tokenExpiry } from '../lib/bookingToken.js';
 import { notifyDecision, notifyNoShow } from '../lib/notify.js';
@@ -94,27 +102,217 @@ export function createAdminRouter() {
   });
 
   /** Exchange a username and password for a short-lived token. */
-  router.post('/session', loginLimiter, (req, res) => {
-    const users = parseAdminUsers();
-    if (users.size === 0 || !process.env.ADMIN_TOKEN_SECRET) {
+  router.post('/session', loginLimiter, async (req, res) => {
+    if (!process.env.ADMIN_TOKEN_SECRET) {
       return res.status(503).json({ ok: false, error: 'Admin access is not configured.' });
     }
 
-    const admin = authenticate(req.body?.username, req.body?.password, users);
-    if (!admin) {
-      // One message for both wrong-username and wrong-password: telling them
-      // apart is a free hint about which half to keep guessing.
-      console.warn(`[fac-recruit] failed admin sign-in for "${req.body?.username ?? ''}"`);
-      return res.status(401).json({ ok: false, error: 'Those details were not recognised.' });
-    }
+    try {
+      const admin = await authenticate(req.body?.username, req.body?.password);
+      if (!admin) {
+        // One message for both wrong-username and wrong-password: telling them
+        // apart is a free hint about which half to keep guessing.
+        console.warn(`[fac-recruit] failed admin sign-in for "${req.body?.username ?? ''}"`);
+        return res.status(401).json({ ok: false, error: 'Those details were not recognised.' });
+      }
 
-    return res.json({ ok: true, token: issueToken(admin), email: admin.email });
+      return res.json({
+        ok: true,
+        token: issueToken(admin),
+        email: admin.email,
+        role: admin.role,
+      });
+    } catch (error) {
+      console.error('[fac-recruit] sign-in failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not check those details.' });
+    }
   });
 
   // Everything past here needs a valid token.
   router.use(requireAdmin());
 
   router.get('/me', (req, res) => res.json({ ok: true, admin: req.admin }));
+
+  /**
+   * Changing your own password.
+   *
+   * Not an administrator's job — everyone should be able to change their own,
+   * and until now nobody could change theirs at all. The current one is asked
+   * for because a borrowed, still-signed-in browser should not be enough to
+   * lock the real owner out.
+   */
+  router.put('/me/password', async (req, res) => {
+    const { currentPassword, newPassword } = req.body ?? {};
+
+    if (typeof newPassword !== 'string' || newPassword.length < 12) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Use at least 12 characters. This guards real candidates\' personal data.',
+      });
+    }
+    if (req.admin.source !== 'database') {
+      return res.status(409).json({
+        ok: false,
+        error: 'This sign-in comes from the server configuration. Create a proper account first.',
+      });
+    }
+
+    try {
+      const proven = await authenticate(req.admin.username, currentPassword);
+      if (!proven) {
+        return res.status(401).json({ ok: false, error: 'That current password is not right.' });
+      }
+
+      await pool.query(
+        'UPDATE recruit_admins SET password_hash = $2, updated_at = now() WHERE id = $1',
+        [req.admin.id, hashPassword(newPassword)],
+      );
+      console.log(`[fac-recruit] ${req.admin.email} changed their own password`);
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('[fac-recruit] password change failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not change your password.' });
+    }
+  });
+
+  /* ── The team. Administrators only. ─────────────────────────────────────
+   *
+   * Spec §8.1 asks for a permission around the recruitment feature. This is
+   * the half of it that decides who gets one at all — and it is separated
+   * from reviewing candidates on purpose: someone hired to screen CVs should
+   * not also be able to hand out logins.
+   */
+  const admins = Router();
+  admins.use(requireRole('administrator'));
+
+  admins.get('/', async (_req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, username, email, full_name, role, active, created_by_email,
+                created_at, last_seen_at
+           FROM recruit_admins
+          ORDER BY active DESC, username`,
+      );
+      return res.json({ ok: true, admins: rows, bootstrap: await usingBootstrap() });
+    } catch (error) {
+      console.error('[fac-recruit] team list failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not load the team.' });
+    }
+  });
+
+  admins.post('/', async (req, res) => {
+    const { username, email, fullName, password, role } = req.body ?? {};
+
+    if (!/^[a-zA-Z0-9._-]{2,40}$/.test(username ?? '')) {
+      return res.status(400).json({
+        ok: false,
+        error: 'A username is 2 to 40 letters, numbers, dots, dashes or underscores.',
+      });
+    }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email ?? '')) {
+      return res.status(400).json({ ok: false, error: 'That does not look like an email address.' });
+    }
+    if (typeof password !== 'string' || password.length < 12) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Use at least 12 characters. This guards real candidates\' personal data.',
+      });
+    }
+    if (!ROLES.includes(role)) {
+      return res.status(400).json({ ok: false, error: 'Pick a reviewer or an administrator.' });
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `INSERT INTO recruit_admins (username, email, full_name, password_hash, role, created_by_email)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, username, email, full_name, role, active, created_at`,
+        [username, email, fullName?.trim() || null, hashPassword(password), role, req.admin.email],
+      );
+
+      console.log(`[fac-recruit] ${req.admin.email} added ${username} as ${role}`);
+      return res.status(201).json({ ok: true, admin: rows[0] });
+    } catch (error) {
+      // 23505 = unique_violation, which here is the username or the email.
+      if (error.code === '23505') {
+        return res.status(409).json({
+          ok: false,
+          error: 'Somebody already has that username or email address.',
+        });
+      }
+      console.error('[fac-recruit] adding a colleague failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not add them.' });
+    }
+  });
+
+  /** Change a role, deactivate, reactivate, or set a new password for someone. */
+  admins.patch('/:id', async (req, res) => {
+    const { role, active, password } = req.body ?? {};
+    const id = Number(req.params.id);
+
+    if (role !== undefined && !ROLES.includes(role)) {
+      return res.status(400).json({ ok: false, error: 'Pick a reviewer or an administrator.' });
+    }
+    if (password !== undefined && (typeof password !== 'string' || password.length < 12)) {
+      return res.status(400).json({ ok: false, error: 'Use at least 12 characters.' });
+    }
+
+    /*
+     * The two ways to lock everybody out, refused.
+     *
+     * Removing your own access, or demoting yourself, are both things that
+     * would leave the portal with one fewer administrator — and if you are the
+     * last one, with none at all and no way back in except editing the server.
+     * Someone else can do either of these to you; you cannot do them to
+     * yourself.
+     */
+    if (id === req.admin.id && (active === false || role === 'reviewer')) {
+      return res.status(409).json({
+        ok: false,
+        error: 'You cannot remove your own administrator access. Ask a colleague to do it.',
+      });
+    }
+
+    try {
+      if (role === 'reviewer' || active === false) {
+        const { rows: others } = await pool.query(
+          `SELECT count(*)::int AS n FROM recruit_admins
+            WHERE role = 'administrator' AND active AND id <> $1`,
+          [id],
+        );
+        if (others[0].n === 0) {
+          return res.status(409).json({
+            ok: false,
+            error: 'That is the last administrator. Make somebody else one first.',
+          });
+        }
+      }
+
+      const { rows } = await pool.query(
+        `UPDATE recruit_admins
+            SET role          = COALESCE($2, role),
+                active        = COALESCE($3, active),
+                password_hash = COALESCE($4, password_hash),
+                updated_at    = now()
+          WHERE id = $1
+          RETURNING id, username, email, full_name, role, active`,
+        [id, role ?? null, active ?? null, password ? hashPassword(password) : null],
+      );
+      if (!rows[0]) return res.status(404).json({ ok: false, error: 'No such person.' });
+
+      console.log(
+        `[fac-recruit] ${req.admin.email} updated ${rows[0].username}` +
+          `${role ? ` role=${role}` : ''}${active !== undefined ? ` active=${active}` : ''}` +
+          `${password ? ' (new password)' : ''}`,
+      );
+      return res.json({ ok: true, admin: rows[0] });
+    } catch (error) {
+      console.error('[fac-recruit] updating a colleague failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not save that.' });
+    }
+  });
+
+  router.use('/team', admins);
 
   /**
    * Every email the portal can send, rendered from invented sample data.
@@ -139,7 +337,7 @@ export function createAdminRouter() {
    * against production, which is not a thing anyone should have to do to move
    * lunch by half an hour.
    */
-  router.get('/settings', async (_req, res) => {
+  router.get('/settings', async (req, res) => {
     try {
       const { rows: interviewers } = await pool.query(
         `SELECT i.id, i.full_name, i.email, i.personal_timezone, i.active,
@@ -160,6 +358,7 @@ export function createAdminRouter() {
 
       return res.json({
         ok: true,
+        you: req.admin,
         interviewer: interviewers[0],
         blackouts: await listBlackouts(interviewers[0].id),
         flags: await allFlags(),
@@ -173,7 +372,7 @@ export function createAdminRouter() {
   });
 
   /** Changes the availability rules. */
-  router.put('/settings/availability', async (req, res) => {
+  router.put('/settings/availability', requireRole('administrator'), async (req, res) => {
     const { interviewerId, dayStart, dayEnd, weekdays, slotMinutes, minNoticeHours, maxDaysAhead, blocks } =
       req.body ?? {};
 
@@ -224,7 +423,7 @@ export function createAdminRouter() {
   });
 
   /** Marks a period unavailable. */
-  router.post('/settings/blackouts', async (req, res) => {
+  router.post('/settings/blackouts', requireRole('administrator'), async (req, res) => {
     try {
       const { blackout, clashes } = await addBlackout({
         interviewerId: req.body?.interviewerId,
@@ -243,7 +442,7 @@ export function createAdminRouter() {
     }
   });
 
-  router.delete('/settings/blackouts/:id', async (req, res) => {
+  router.delete('/settings/blackouts/:id', requireRole('administrator'), async (req, res) => {
     try {
       const removed = await removeBlackout(req.params.id, Number(req.query.interviewerId));
       if (!removed) return res.status(404).json({ ok: false, error: 'No such entry.' });
@@ -292,7 +491,7 @@ export function createAdminRouter() {
    * someone works out what the period should be — and far better than the
    * alternative of a wrong number quietly deleting things.
    */
-  router.put('/settings/retention', async (req, res) => {
+  router.put('/settings/retention', requireRole('administrator'), async (req, res) => {
     const months = Number(req.body?.months);
     if (!Number.isFinite(months) || months < 0 || months > 120) {
       return res.status(400).json({ ok: false, error: 'That has to be a number of months, 0 to 120.' });
@@ -312,7 +511,7 @@ export function createAdminRouter() {
   });
 
   /** Flips a feature flag. Spec §2. */
-  router.put('/settings/flags/:name', async (req, res) => {
+  router.put('/settings/flags/:name', requireRole('administrator'), async (req, res) => {
     if (!FLAGS.includes(req.params.name)) {
       return res.status(404).json({ ok: false, error: 'No such setting.' });
     }
