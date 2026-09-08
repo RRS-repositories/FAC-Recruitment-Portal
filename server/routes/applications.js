@@ -17,6 +17,7 @@ import { detectAiUse } from '../../shared/aiDetect.js';
 import { notifyApplicationReceived } from '../lib/notify.js';
 import { isEnabled, requireFlag } from '../lib/flags.js';
 import { mailMode } from '../lib/mailer.js';
+import { verifyCaptcha } from '../lib/captcha.js';
 
 /**
  * Application intake.
@@ -98,6 +99,23 @@ export function createApplicationsRouter({ ipSalt }) {
   router.post('/', limiter, upload.single('cv'), async (req, res) => {
     const role = roleBySlug(req.body?.role);
     if (!role) return res.status(400).json({ ok: false, error: 'Unknown role.' });
+
+    // Checked before anything is parsed, scored or written to disk: the point
+    // of a captcha is that the work never starts. Skipped entirely when no
+    // secret is configured -- see lib/captcha.js for why that is said out loud
+    // rather than left to look like protection.
+    const captcha = await verifyCaptcha(req.body?.captchaToken, req.ip);
+    if (!captcha.ok) {
+      console.warn(`[fac-recruit] application refused by captcha: ${captcha.reason}`);
+      return res.status(400).json({
+        ok: false,
+        // Deliberately the same message whether the token was missing, stale
+        // or forged. It is also honest about being recoverable: nothing they
+        // typed has been lost, and trying again is the fix.
+        error: 'We could not confirm you are a person. Please tick the box again and resubmit.',
+        captcha: true,
+      });
+    }
 
     const questions = questionsFor(role.apiKey);
 

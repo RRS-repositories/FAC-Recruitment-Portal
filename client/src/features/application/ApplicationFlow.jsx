@@ -44,6 +44,9 @@ export function ApplicationFlow({ role, onExit }) {
   const [acknowledged, setAcknowledged] = useState(false);
 
   const telemetry = useTelemetry();
+  // Null until the visitor passes the checkbox, and null again the moment the
+  // token expires. Only meaningful when a captcha is configured at all.
+  const [captchaToken, setCaptchaToken] = useState(null);
   const topRef = useRef(null);
   const step = STEPS[stepIndex];
 
@@ -117,6 +120,7 @@ export function ApplicationFlow({ role, onExit }) {
         sessionId,
         cv: file,
         source: role.source,
+        captchaToken,
       });
       setAcknowledged(result?.acknowledged === true);
       setDone(true);
@@ -139,7 +143,7 @@ export function ApplicationFlow({ role, onExit }) {
     } finally {
       setSubmitting(false);
     }
-  }, [role, details, written, answers, telemetry, sessionId, file]);
+  }, [role, details, written, answers, telemetry, sessionId, file, captchaToken]);
 
   if (loadError) {
     return (
@@ -242,6 +246,8 @@ export function ApplicationFlow({ role, onExit }) {
             onSubmit={submit}
             submitting={submitting}
             submitError={submitError}
+            captchaToken={captchaToken}
+            onCaptchaToken={setCaptchaToken}
           />
         )}
       </div>

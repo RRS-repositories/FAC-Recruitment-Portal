@@ -608,6 +608,29 @@ export function SettingsPage() {
 
             {isAdmin ? (
               <>
+                {/* ── The public form's protection ─────────────────────────── */}
+                <Card>
+                  <h2 className="text-[1.1rem] font-bold text-ink">Spam protection</h2>
+                  {data.captchaMode === 'on' ? (
+                    <p className="mt-2 flex items-start gap-2 text-[0.88rem] leading-relaxed text-muted">
+                      <Icon name="shield" size={16} className="mt-0.5 flex-shrink-0 text-ok" />
+                      <span>
+                        The application form is behind a Cloudflare check, and every submission is
+                        verified here before it is read.
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="mt-2 flex items-start gap-2 rounded-panel border border-amber-300 bg-amber-50 p-4 text-[0.86rem] leading-relaxed text-amber-900">
+                      <Icon name="alert" size={16} className="mt-0.5 flex-shrink-0" />
+                      <span>
+                        <b className="font-semibold">The form has no spam protection.</b> No
+                        Turnstile secret is configured, so applications are accepted without a
+                        check. Rate limiting still applies.
+                      </span>
+                    </p>
+                  )}
+                </Card>
+
                 {/* ── Retention ───────────────────────────────────────────── */}
                 <Card>
                   <h2 className="text-[1.1rem] font-bold text-ink">Keeping CVs</h2>
