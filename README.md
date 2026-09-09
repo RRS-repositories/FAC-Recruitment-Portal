@@ -1,46 +1,49 @@
-# Atlas Recruitment
+# FAC Recruitment Portal
+
+Recruitment portal for Fast Action Claims: the public application flow,
+interview booking, and the manager dashboard.
 
 ```
-atlas-recruitment-website/   Marketing site — React + Vite + Tailwind, static
+client/     React 18 + Vite + Tailwind — application pages and dashboard
+server/     Express 5 + PostgreSQL — applications, review, booking, email
+shared/     Scoring and AI-detection, imported by both halves
 ```
 
 ## Quick start
 
 ```bash
-cd atlas-recruitment-website
+cd server && cp .env.example .env   # then fill it in
+npm install && npm run migrate
+npm run dev                         # http://127.0.0.1:5000
+
+cd ../client
 npm install
-npm run dev      # http://localhost:5173
-npm run build    # static output in dist/
+npm run dev                         # http://localhost:5173
 ```
 
-See [atlas-recruitment-website/README.md](atlas-recruitment-website/README.md) for
-the full structure, design tokens and conventions, and [CLAUDE.md](CLAUDE.md) for
-the standing rules that govern work in this repo.
+Run both: the Vite dev proxy forwards `/api` to the server, mirroring
+production, where nginx serves the built client and proxies `/api` on the same
+origin — so CORS never has to exist.
 
-## There is no backend here
+`shared/` is imported by the client through the `@shared` alias, so a client
+build needs the repository root, not just `client/`.
 
-The site is a static frontend. The **FAC recruitment portal** owns the enquiry
-API and the database — enquiry submissions will be posted to it once it exists.
+## The backend is designed to be mounted
 
-Until then the form has no endpoint, and it says so rather than pretending:
-submitting shows the phone number and email address instead of a success panel.
-Switching it on is a build-time variable, not a code change:
+`createRecruitRouter()` lets the CRM host this API inside its own Express app
+rather than running a second service. Standalone (`npm start`) is for
+development and for running it on its own if that is ever wanted; either way the
+portal keeps **its own database** and does not connect to the CRM's.
 
-```bash
-VITE_ENQUIRY_ENDPOINT=https://<portal-host>/api/enquiries npm run build
-```
+## The Atlas Recruitment website has moved
 
-An intake service and admin inbox previously lived in this repo and were removed
-when the backend moved to the portal. The parts worth reusing there — shared
-validation, honeypot and timing checks, the notification outbox, and the
-`atlas_enquiries` migration — are in git history at commit `ff5b683`.
+The marketing site previously lived here under `atlas-recruitment-website/`. It
+is now `RRS-repositories/Atlas-Recruitment-Website`. History up to the split
+remains in this repository, including commit `ff5b683`, which holds the intake
+service and admin inbox that were removed when the backend moved here.
 
-## Deploying
+## Rules
 
-`npm run build` emits a static `dist/`. The app uses `BrowserRouter`, so the host
-must serve `index.html` for unknown paths — `public/_redirects` (Netlify) and
-`vercel.json` (Vercel) are included. For nginx:
-
-```nginx
-location / { try_files $uri $uri/ /index.html; }
-```
+See [CLAUDE.md](CLAUDE.md) for the standing rules that govern work in this repo —
+branch → PR → merge, never push to `main`, and the data-hygiene constraints that
+apply because this repository is public and the data is real.
