@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Flag } from '@/components/ui/Flag';
+import { COL, COLUMN_COUNT } from './columns';
 import { ROLES } from '@/data/roles';
 import { WRITTEN_QUESTIONS } from '@/data/writtenQuestions';
 import { gradeFor } from '@shared/scoring';
@@ -203,8 +204,8 @@ export function ApplicantRow({
       <tr className="border-b border-line align-top last:border-0 hover:bg-lav-soft/40">
         {/* Name, with the role underneath it rather than beside — the column
             is the narrowest thing on the row and a chip would push it wider. */}
-        <td className="px-3 py-4">
-          <b className="block whitespace-nowrap text-[0.95rem] font-bold leading-tight text-ink">
+        <td className={cn('px-3 py-4', COL.name)}>
+          <b className="block truncate text-[0.95rem] font-bold leading-tight text-ink" title={applicant.fullName}>
             {applicant.fullName}
           </b>
           <span className="mt-0.5 flex items-center gap-1.5 whitespace-nowrap text-[0.76rem] text-muted">
@@ -213,7 +214,7 @@ export function ApplicantRow({
           </span>
         </td>
 
-        <td className="max-w-[190px] px-3 py-4">
+        <td className={cn('px-3 py-4', COL.email)}>
           <a
             href={`mailto:${applicant.email}`}
             title={applicant.email}
@@ -223,7 +224,7 @@ export function ApplicantRow({
           </a>
         </td>
 
-        <td className="px-3 py-4">
+        <td className={cn('px-3 py-4', COL.score)}>
           <b className={cn('block text-[0.95rem] font-bold leading-none tabular', GRADE_TEXT[grade.tone])}>
             {applicant.score}%
           </b>
@@ -232,11 +233,11 @@ export function ApplicantRow({
           </span>
         </td>
 
-        <td className="px-3 py-4">
+        <td className={cn('px-3 py-4', COL.ai)}>
           <Badge tone={AI_TONE[applicant.ai.level]}>{AI_LEVEL_LABEL[applicant.ai.level]}</Badge>
         </td>
 
-        <td className="px-3 py-4">
+        <td className={cn('px-3 py-4', COL.duration)}>
           <span
             className={cn(
               'whitespace-nowrap text-[0.86rem] tabular',
@@ -247,11 +248,11 @@ export function ApplicantRow({
           </span>
         </td>
 
-        <td className="px-3 py-4">
+        <td className={cn('px-3 py-4', COL.status)}>
           <Badge tone={STATUS_TONE[applicant.status]}>{applicant.status}</Badge>
         </td>
 
-        <td className="px-3 py-4">
+        <td className={cn('px-3 py-4', COL.interview)}>
           {applicant.interviewStatus === 'not_invited' ? (
             <span className="text-[0.86rem] text-muted">—</span>
           ) : (
@@ -268,7 +269,7 @@ export function ApplicantRow({
           )}
         </td>
 
-        <td className="px-3 py-4">
+        <td className={cn('px-3 py-4', COL.decision)}>
           {applicant.status === 'pending' ? (
             <div className="flex gap-1.5">
               <button
@@ -316,7 +317,7 @@ export function ApplicantRow({
 
       {open ? (
         <tr className="border-b border-line last:border-0">
-          <td colSpan={9} className="p-0">
+          <td colSpan={COLUMN_COUNT} className="p-0">
         <div
               role="region"
               aria-label={`Details for ${applicant.fullName}`}
