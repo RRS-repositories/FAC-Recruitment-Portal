@@ -51,6 +51,9 @@ export function TemplatesPage() {
   const [signedIn, setSignedIn] = useState(() => Boolean(getAdminToken()));
   const [templates, setTemplates] = useState([]);
   const [mode, setMode] = useState(null);
+  // Which half of the email is on screen. Defaults to the one nearly
+  // every candidate actually sees.
+  const [view, setView] = useState('rendered');
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -201,15 +204,55 @@ export function TemplatesPage() {
                     </dd>
                   </dl>
 
-                  {/* Monospace and pre-wrapped: this is exactly the text that
-                        goes out, spacing included. */}
                   <div className="mt-5">
-                    <p className="mb-1.5 text-[0.72rem] font-semibold uppercase tracking-wide text-muted">
-                      Message
-                    </p>
-                    <pre className="overflow-x-auto whitespace-pre-wrap rounded-panel border border-line bg-lav-soft/60 p-4 font-mono text-[0.82rem] leading-relaxed text-body">
-                      {current.preview.text}
-                    </pre>
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[0.72rem] font-semibold uppercase tracking-wide text-muted">
+                        Message
+                      </p>
+                      {/* Both, because both go out. The HTML is what almost
+                          everyone sees; the plain text is what lands when a
+                          client blocks it, and it is the half a manager can
+                          actually proofread. */}
+                      {current.preview.html ? (
+                        <div className="flex gap-1" role="group" aria-label="How to view the message">
+                          {[
+                            ['rendered', 'As it arrives'],
+                            ['text', 'Plain text'],
+                          ].map(([value, label]) => (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() => setView(value)}
+                              aria-pressed={view === value}
+                              className={cn(
+                                'rounded-control px-3 py-1.5 text-[0.78rem] font-semibold transition-colors',
+                                view === value
+                                  ? 'bg-ink text-white'
+                                  : 'border border-line bg-white text-ink hover:border-violet',
+                              )}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    {current.preview.html && view === 'rendered' ? (
+                      // Sandboxed: it is our own markup, but an iframe is what
+                      // stops the email's styles leaking into the dashboard.
+                      <iframe
+                        key={current.key}
+                        title={`${current.title} — as the candidate receives it`}
+                        srcDoc={current.preview.html}
+                        sandbox=""
+                        className="h-[560px] w-full rounded-panel border border-line bg-white"
+                      />
+                    ) : (
+                      <pre className="overflow-x-auto whitespace-pre-wrap rounded-panel border border-line bg-lav-soft/60 p-4 font-mono text-[0.82rem] leading-relaxed text-body">
+                        {current.preview.text}
+                      </pre>
+                    )}
                   </div>
 
                   {current.preview.attachments?.length ? (
