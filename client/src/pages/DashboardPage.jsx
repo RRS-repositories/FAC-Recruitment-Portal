@@ -18,6 +18,7 @@ import {
   adminMarkAttendance,
   adminMe,
   adminReissueLink,
+  adminSettings,
   adminSignOut,
   getAdminToken,
 } from '@/lib/api';
@@ -163,6 +164,31 @@ export function DashboardPage() {
   useEffect(() => {
     if (signedIn) load();
   }, [signedIn, load]);
+
+  /**
+   * Opens the decision confirmation, re-checking whether email actually leaves.
+   *
+   * `emailLive` is captured when the list loads, and a dashboard left open
+   * across a settings change then states the opposite of the truth. That is
+   * not hypothetical: alerts were switched on while a tab sat open, so the
+   * dialog said no email would reach the candidate while the acceptance email
+   * was in fact sent — inviting the admin to send a duplicate by hand.
+   *
+   * So the question is asked again at the moment it is put. A failed check
+   * leaves the last known answer rather than blocking the decision: being
+   * unable to describe the consequence is not a reason to prevent the action.
+   */
+  const askToDecide = useCallback(async (id, decision) => {
+    setDecideError('');
+    setConfirming({ id, decision });
+    try {
+      const settings = await adminSettings();
+      setEmailLive(Boolean(settings.flags?.recruitment_alerts) && settings.mailMode === 'smtp');
+    } catch {
+      /* keep the value the list reported */
+    }
+  }, []);
+
 
   // A tab reloaded with a token still in it knows it is signed in but not as
   // whom. This also double-checks the token: if it has expired overnight, the
@@ -501,10 +527,7 @@ export function DashboardPage() {
                   <ApplicantRow
                     key={applicant.id}
                     applicant={applicant}
-                    onDecide={(id, decision) => {
-                      setDecideError('');
-                      setConfirming({ id, decision });
-                    }}
+                    onDecide={askToDecide}
                     onReissue={reissue}
                     onAttendance={markAttendance}
                   />
