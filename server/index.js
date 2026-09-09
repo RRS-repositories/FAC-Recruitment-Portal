@@ -1,27 +1,13 @@
 import 'dotenv/config';
 import express from 'express';
-import { pool, assertConnection } from './lib/db.js';
+import { pool, assertConnection, ownsPool } from './lib/db.js';
 import { createHealthRouter } from './routes/health.js';
-import { createRolesRouter } from './routes/roles.js';
-import { createPrivacyRouter } from './routes/privacy.js';
-import { createApplicationsRouter } from './routes/applications.js';
-import { createBookingRouter } from './routes/booking.js';
-import { createAdminRouter } from './routes/admin.js';
+import { createRecruitRouter } from './router.js';
 import { startOutboxWorker } from './lib/outbox.js';
 import { startRetentionSweep } from './lib/retention.js';
 import { verifyMail, mailMode } from './lib/mailer.js';
-// Imported for its side effects: registering every email template at boot, so
-// a queued row can never find its template missing.
-import './templates/index.js';
 
 const PORT = Number(process.env.PORT || 5000);
-
-// Without a salt the stored IP hashes would be reversible with a rainbow
-// table, which defeats the point of hashing them at all.
-const ipSalt = process.env.IP_HASH_SALT;
-if (!ipSalt) {
-  throw new Error('[fac-recruit] IP_HASH_SALT is not set. Refusing to start.');
-}
 
 const app = express();
 
@@ -31,12 +17,13 @@ app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 
+// Kept at the top level as well as inside the router: this is the endpoint
+// monitoring already watches, and moving it would be a silent break.
 app.use('/api/health', createHealthRouter());
-app.use('/api/recruit/roles', createRolesRouter());
-app.use('/api/recruit/privacy', createPrivacyRouter());
-app.use('/api/recruit/applications', createApplicationsRouter({ ipSalt }));
-app.use('/api/recruit/book', createBookingRouter());
-app.use('/api/recruit/admin', createAdminRouter());
+
+// Everything else, from the same definition a host application would mount.
+// Standalone we have no pool to hand it, so lib/db.js builds its own.
+app.use('/api/recruit', createRecruitRouter());
 
 // Malformed JSON should read as a client error, not a stack trace.
 app.use((error, _req, res, next) => {
@@ -87,7 +74,9 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     console.log(`[fac-recruit] ${signal} — shutting down`);
     stopOutbox();
     stopRetention();
-    server.close(() => pool.end().then(() => process.exit(0)));
+    // Only close a pool we opened. Mounted in another application it is
+    // the host's, and closing it would take that application down with us.
+    server.close(() => (ownsPool() ? pool.end() : Promise.resolve()).then(() => process.exit(0)));
     setTimeout(() => process.exit(1), 10_000).unref();
   });
 }
