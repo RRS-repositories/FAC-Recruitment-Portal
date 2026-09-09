@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/ui/Icon';
 import { Flag } from '@/components/ui/Flag';
+import { COLUMNS } from '@/features/dashboard/columns';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ApplicantRow } from '@/features/dashboard/ApplicantRow';
@@ -474,21 +475,22 @@ export function DashboardPage() {
             }
           />
         ) : applicants.length > 0 ? (
-          <div className="overflow-x-auto">
+          <div>
             <table
               aria-busy={loading || undefined}
-              className={cn('w-full min-w-[960px] border-collapse text-left', loading && 'opacity-60')}
+              className={cn('w-full table-fixed border-collapse text-left', loading && 'opacity-60')}
             >
               <thead>
                 <tr className="bg-lav-soft text-[0.78rem] font-semibold text-muted">
-                  <th scope="col" className="px-3 py-3 font-semibold">Name</th>
-                  <th scope="col" className="px-3 py-3 font-semibold">Email</th>
-                  <th scope="col" className="px-3 py-3 font-semibold">Score</th>
-                  <th scope="col" className="px-3 py-3 font-semibold">AI check</th>
-                  <th scope="col" className="whitespace-nowrap px-3 py-3 font-semibold">Time taken</th>
-                  <th scope="col" className="px-3 py-3 font-semibold">Status</th>
-                  <th scope="col" className="px-3 py-3 font-semibold">Interview</th>
-                  <th scope="col" className="px-3 py-3 font-semibold">Decision</th>
+                  {COLUMNS.map((column) => (
+                    <th
+                      key={column.key}
+                      scope="col"
+                      className={cn('whitespace-nowrap px-3 py-3 font-semibold', column.width, column.cell)}
+                    >
+                      {column.label}
+                    </th>
+                  ))}
                   <th scope="col" className="py-3 pr-3">
                     <span className="sr-only">Show details</span>
                   </th>
