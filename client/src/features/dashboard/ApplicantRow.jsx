@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { Flag } from '@/components/ui/Flag';
-import { COL, COLUMN_COUNT } from './columns';
+import { COL, COLUMN_COUNT, CHEVRON_WIDTH } from './columns';
 import { ROLES } from '@/data/roles';
 import { WRITTEN_QUESTIONS } from '@/data/writtenQuestions';
 import { gradeFor } from '@shared/scoring';
@@ -294,7 +294,7 @@ export function ApplicantRow({
           )}
         </td>
 
-        <td className="py-4 pr-3">
+        <td className={cn('py-4 pr-3', CHEVRON_WIDTH)}>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}

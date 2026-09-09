@@ -19,15 +19,28 @@
  * opens when the row is expanded.
  */
 export const COLUMNS = [
-  { key: 'name', label: 'Name', cell: '', width: 'w-[20%]' },
-  { key: 'email', label: 'Email', cell: 'hidden lg:table-cell', width: 'w-[20%]' },
-  { key: 'score', label: 'Score', cell: '', width: 'w-[10%]' },
-  { key: 'ai', label: 'AI check', cell: 'hidden md:table-cell', width: 'w-[10%]' },
-  { key: 'duration', label: 'Time taken', cell: 'hidden xl:table-cell', width: 'w-[9%]' },
-  { key: 'status', label: 'Status', cell: '', width: 'w-[11%]' },
-  { key: 'interview', label: 'Interview', cell: 'hidden sm:table-cell', width: 'w-[14%]' },
+  { key: 'name', label: 'Name', cell: '', width: 'w-[18%]' },
+  { key: 'email', label: 'Email', cell: 'hidden lg:table-cell', width: 'w-[18%]' },
+  { key: 'score', label: 'Score', cell: '', width: 'w-[9%]' },
+  { key: 'ai', label: 'AI check', cell: 'hidden md:table-cell', width: 'w-[9%]' },
+  { key: 'duration', label: 'Time taken', cell: 'hidden xl:table-cell', width: 'w-[8%]' },
+  { key: 'status', label: 'Status', cell: '', width: 'w-[10%]' },
+  { key: 'interview', label: 'Interview', cell: 'hidden sm:table-cell', width: 'w-[13%]' },
   { key: 'decision', label: 'Decision', cell: '', width: 'w-[10%]' },
 ];
+
+/**
+ * The chevron column, which has a header but no label.
+ *
+ * It needs a declared width like every other column. The table is `table-fixed`,
+ * so a column with no width gets whatever is left — and when the eight above
+ * summed to 104% there was nothing left, giving the chevron zero width. The
+ * accordion still worked; the control that opens it was simply invisible, which
+ * reads as the feature having been removed.
+ *
+ * The eight above now total 95%, leaving exactly this 5%.
+ */
+export const CHEVRON_WIDTH = 'w-[5%]';
 
 /** Looked up by key, so a cell cannot accidentally take another's rules. */
 export const COL = Object.fromEntries(COLUMNS.map((c) => [c.key, c.cell]));

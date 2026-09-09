@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/ui/Icon';
 import { Flag } from '@/components/ui/Flag';
-import { COLUMNS } from '@/features/dashboard/columns';
+import { COLUMNS, CHEVRON_WIDTH } from '@/features/dashboard/columns';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ApplicantRow } from '@/features/dashboard/ApplicantRow';
@@ -491,7 +491,7 @@ export function DashboardPage() {
                       {column.label}
                     </th>
                   ))}
-                  <th scope="col" className="py-3 pr-3">
+                  <th scope="col" className={cn('py-3 pr-3', CHEVRON_WIDTH)}>
                     <span className="sr-only">Show details</span>
                   </th>
                 </tr>
