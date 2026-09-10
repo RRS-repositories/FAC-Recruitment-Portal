@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { llmMode, llmModel } from '../lib/llm.js';
+import { isEnabled } from '../lib/flags.js';
 import { retentionMonths } from '../lib/retention.js';
 
 /**
@@ -29,10 +31,24 @@ export function createPrivacyRouter() {
       console.error('[fac-recruit] retention lookup failed for privacy notice:', error.message);
     }
 
+    // Whether an application is actually sent to a model, answered from the
+    // running system rather than written into the page as prose. Both have to
+    // be true for anything to leave, and a notice that says otherwise in
+    // either direction is worse than no notice at all — this is the promise
+    // the firm is making to a candidate about their CV.
+    let aiReview = { enabled: false, model: null };
+    try {
+      const on = llmMode() === 'on' && (await isEnabled('recruitment_ai_review'));
+      aiReview = { enabled: on, model: on ? llmModel() : null };
+    } catch (error) {
+      console.error('[fac-recruit] AI review lookup failed for privacy notice:', error.message);
+    }
+
     res.set('Cache-Control', 'public, max-age=300');
     return res.json({
       ok: true,
       retentionMonths: months,
+      aiReview,
       contactEmail:
         process.env.MAIL_REPLY_TO || process.env.MAIL_FROM || 'recruitment@fastactionclaims.co.uk',
     });

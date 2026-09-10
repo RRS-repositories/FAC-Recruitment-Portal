@@ -117,6 +117,10 @@ export function ApplicantRow({
   const [detail, setDetail] = useState(null);
   const [emails, setEmails] = useState(null);
   const [mailMode, setMailMode] = useState(null);
+  // The model's review of this application, and the rule score beside it. Both
+  // arrive with the detail, so neither costs a request of its own.
+  const [review, setReview] = useState(null);
+  const [ruleScore, setRuleScore] = useState(null);
   const [detailError, setDetailError] = useState('');
   const [downloadError, setDownloadError] = useState('');
   const [busy, setBusy] = useState('');
@@ -144,6 +148,8 @@ export function ApplicantRow({
         setDetail(normaliseApplicant(result.application));
         setEmails(result.emails ?? []);
         setMailMode(result.mailMode ?? null);
+        setReview(result.review ?? null);
+        setRuleScore(result.ruleScore ?? null);
       })
       .catch((failure) => {
         if (!cancelled) setDetailError(failure.message);
@@ -353,6 +359,74 @@ export function ApplicantRow({
                 An indicator, not proof. Read the answers before deciding.
               </p>
             </div>
+          ) : null}
+
+          {/* ── The model's review ───────────────────────────────────────────
+              Deliberately below the behavioural flag, and deliberately quieter
+              than it: this is a second opinion on a first reading, not a
+              verdict. Everything shown is what the model said and why, because
+              a score with no argument behind it is not something a manager can
+              act on or defend. */}
+          {review?.status === 'done' ? (
+            <div className="mt-5 rounded-panel border border-line bg-lav-soft/40 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-[0.8rem] font-bold uppercase tracking-wide text-violet-deep">
+                  Model review
+                </p>
+                <p className="text-[0.75rem] text-muted">
+                  {review.model}
+                  {review.prompt_version ? ` · prompt v${review.prompt_version}` : ''}
+                  {review.cv_chars ? ` · read ${review.cv_chars.toLocaleString()} characters of CV` : ' · no CV text'}
+                </p>
+              </div>
+
+              <p className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="text-[1.35rem] font-extrabold text-ink">{review.fitment_score}%</span>
+                <span className="text-[0.82rem] text-muted">fit for this role</span>
+                {/* The disagreement is the reason both numbers exist. Said out
+                    loud only when it is wide enough to be worth a second look. */}
+                {ruleScore !== null && Math.abs(ruleScore - review.fitment_score) >= 15 ? (
+                  <span className="rounded-control bg-amber-100 px-2 py-0.5 text-[0.75rem] font-semibold text-amber-900">
+                    questionnaire scored {ruleScore}% — worth a look
+                  </span>
+                ) : null}
+              </p>
+
+              {review.fitment_summary ? (
+                <p className="mt-2 text-[0.88rem] leading-relaxed text-ink">{review.fitment_summary}</p>
+              ) : null}
+
+              {review.fitment_reasons?.length ? (
+                <ul className="mt-2 grid gap-1">
+                  {review.fitment_reasons.map((reason) => (
+                    <li key={reason} className="text-[0.86rem] text-muted">· {reason}</li>
+                  ))}
+                </ul>
+              ) : null}
+
+              {review.ai_rationale ? (
+                <p className="mt-3 border-t border-line pt-3 text-[0.84rem] text-muted">
+                  <b className="font-semibold text-ink">On AI use — {review.ai_opinion}:</b>{' '}
+                  {review.ai_rationale}
+                </p>
+              ) : null}
+
+              <p className="mt-3 text-[0.8rem] italic text-muted">
+                A machine's opinion, formed without meeting anyone. It decides nothing.
+              </p>
+            </div>
+          ) : null}
+
+          {/* Silence would read as "the model saw nothing wrong", which is the
+              opposite of the truth when it never ran. */}
+          {review && review.status !== 'done' ? (
+            <p className="mt-5 text-[0.84rem] text-muted">
+              {review.status === 'queued'
+                ? 'The model has not reviewed this application yet.'
+                : review.status === 'skipped'
+                  ? 'This application was not sent for review.'
+                  : `The review could not be completed${review.last_error ? `: ${review.last_error}` : '.'}`}
+            </p>
           ) : null}
 
           <div className="mt-5 grid gap-4">
