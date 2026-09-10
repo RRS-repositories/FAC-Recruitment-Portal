@@ -174,6 +174,24 @@ export function SettingsPage() {
     }
   };
 
+  /**
+   * The lunch break, as two fields.
+   *
+   * `blocks` is an array so a rule can block more than one window, but only the
+   * first has ever been used and giving it a repeater would be building for a
+   * case nobody has. The rest are preserved untouched by every edit here.
+   *
+   * Clearing both fields removes the break rather than saving an empty window,
+   * because a block with no times is not a thing the availability code can mean.
+   */
+  const lunch = { label: 'Lunch', start: '', end: '', ...(form.blocks?.[0] ?? {}) };
+  const setLunch = (patch) =>
+    setForm((f) => {
+      const [first, ...rest] = f.blocks ?? [];
+      const next = { label: 'Lunch', start: '', end: '', ...first, ...patch };
+      return { ...f, blocks: !next.start && !next.end ? rest : [next, ...rest] };
+    });
+
   const saveAvailability = async () => {
     setBusy('availability');
     setError('');
@@ -469,10 +487,39 @@ export function SettingsPage() {
                     </Field>
                   </div>
 
-                  {form.blocks?.length ? (
-                    <p className="mt-4 text-[0.84rem] text-muted">
-                      Blocked every day:{' '}
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <Field
+                      label="Lunch starts"
+                      hint="Blocked every working day, in UK time. Clear both to have no break."
+                    >
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="time"
+                          value={lunch.start}
+                          onChange={(e) => setLunch({ start: e.target.value })}
+                        />
+                      )}
+                    </Field>
+                    <Field label="Lunch ends">
+                      {(props) => (
+                        <TextInput
+                          {...props}
+                          type="time"
+                          value={lunch.end}
+                          onChange={(e) => setLunch({ end: e.target.value })}
+                        />
+                      )}
+                    </Field>
+                  </div>
+
+                  {/* Any further blocked window is still honoured; it just has
+                      no field yet, so say so rather than let it look lost. */}
+                  {form.blocks?.length > 1 ? (
+                    <p className="mt-3 text-[0.84rem] text-muted">
+                      Also blocked every day:{' '}
                       {form.blocks
+                        .slice(1)
                         .map((b) => `${b.label ?? 'Blocked'} ${b.start}–${b.end}`)
                         .join(', ')}
                       .
