@@ -234,6 +234,7 @@ registerTemplate({
       `Your interview with ${data.interviewerName} is booked for ${whenLine(data)}.`,
       '',
       'It lasts about 30 minutes and takes place on video.',
+      '',
       joinLine(data),
       '',
       'A calendar file is attached so you can add it to your own diary.',
@@ -283,6 +284,7 @@ registerTemplate({
       `Your interview is now ${whenLine(data)}.`,
       '',
       'Please delete the earlier time from your diary if you added it.',
+      '',
       joinLine(data),
     
       ],
@@ -328,6 +330,7 @@ registerTemplate({
       `Role:      ${data.roleTitle}`,
       '',
       data.moved ? 'Please remove the earlier time from your diary.' : 'A calendar file is attached.',
+      '',
       joinLine(data),
     
       ],
@@ -384,7 +387,7 @@ registerTemplate({
       '',
       `Here is the link for your interview with ${data.interviewerName}, ${whenLine(data)}.`,
       '',
-      `Join here: ${data.meetLink}`,
+      `Join the interview: ${data.meetLink}`,
       '',
       'It is worth opening the link a few minutes early the first time, in case your browser asks permission for the camera and microphone.',
       '',
