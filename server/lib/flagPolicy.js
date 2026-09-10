@@ -19,6 +19,7 @@ export const FLAGS = [
   'recruitment_booking',
   'recruitment_alerts',
   'recruitment_ai_review',
+  'recruitment_auto_meet',
 ];
 
 export const flagKey = (name) => `flags.${name}`;

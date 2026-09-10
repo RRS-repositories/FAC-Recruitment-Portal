@@ -15,6 +15,7 @@ test('the three flags from spec §2 exist, plus the AI review switch', () => {
     'recruitment_booking',
     'recruitment_alerts',
     'recruitment_ai_review',
+    'recruitment_auto_meet',
   ]);
 });
 
@@ -32,6 +33,7 @@ test('a missing row is off', () => {
     recruitment_booking: false,
     recruitment_alerts: false,
     recruitment_ai_review: false,
+    recruitment_auto_meet: false,
   });
 });
 
