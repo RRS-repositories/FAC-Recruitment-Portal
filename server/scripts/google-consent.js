@@ -32,7 +32,21 @@ import { google } from 'googleapis';
 // Loopback, because Google removed the copy-a-code-from-the-page flow
 // (urn:ietf:wg:oauth:2.0:oob) in 2022. A desktop-app client is allowed to use
 // any localhost port, so this takes whatever the OS gives it.
-const SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
+const SCOPES = [
+  // Creating, moving and cancelling the interview event, and minting its Meet
+  // link. The narrowest scope that can do it.
+  'https://www.googleapis.com/auth/calendar.events',
+  // Reading when they are already busy, so a candidate cannot book over a
+  // meeting they arranged themselves (spec §5.6). Asked for HERE rather than
+  // later on purpose: adding a scope afterwards means going back to the same
+  // person for a second consent, and the whole point of this script is that
+  // they are interrupted once.
+  //
+  // It grants free/busy times only — start and end, nothing else. Not titles,
+  // not attendees, not who they are meeting. A recruitment portal has no
+  // business reading anyone's diary.
+  'https://www.googleapis.com/auth/calendar.freebusy',
+];
 
 const [clientId, clientSecret] = process.argv.slice(2);
 if (!clientId || !clientSecret) {
