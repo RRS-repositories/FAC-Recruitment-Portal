@@ -18,12 +18,20 @@
 /**
  * RECRUIT_-PREFIXED, AND THAT PREFIX IS LOAD-BEARING.
  *
- * The CRM this module is mounted inside already uses OLLAMA_BASE_URL, for its
- * own local Ollama on 127.0.0.1 — aiworker.js, server.js, complaint-paragraph
- * and id-name-extract all read it. dotenv takes the last definition of a key,
- * so adding a plain OLLAMA_BASE_URL for recruitment would have silently
- * repointed all four at a hosted service: their features broken, and CRM data
- * leaving the building. Found on the box before it was written, not after.
+ * The CRM this module is mounted inside already reads OLLAMA_API_KEY,
+ * OLLAMA_MODEL, OLLAMA_URL and OLLAMA_MAX_CONCURRENT — in aiworker.js,
+ * complaint-paragraph.js and lib/id-name-extract.js, all pointed at its own
+ * local Ollama on 127.0.0.1:11435.
+ *
+ * Two of those are names this module would otherwise have wanted. dotenv takes
+ * the LAST definition of a key, so putting a plain OLLAMA_API_KEY and
+ * OLLAMA_MODEL in that file for recruitment would have handed the CRM's three
+ * features a bearer token for a service they do not call, and told them to ask
+ * their local instance for gemma4:31b — a model it does not have. They would
+ * have started failing at the moment recruitment was configured, with nothing
+ * connecting the two.
+ *
+ * Found by reading the box before appending to it.
  *
  * The tables are recruit_*, the routes are /api/recruit/*, and the environment
  * is RECRUIT_* for exactly the same reason.
