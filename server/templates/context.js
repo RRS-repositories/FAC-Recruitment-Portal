@@ -115,11 +115,20 @@ export const whenLine = (data) =>
 /**
  * What to say about joining.
  *
- * Stage 7 populates `meet_link`. Until it does, promising a link that nothing
- * creates would be a lie the candidate discovers on the day — so the wording
- * changes with the fact, and improves on its own when the column fills.
+ * `meet_link` is filled automatically once a slot is booked. Until it is —
+ * because the calendar is off, or Google was unreachable — promising a link
+ * that nothing creates would be a lie the candidate discovers on the day, so
+ * the wording changes with the fact and improves on its own when the column
+ * fills.
+ *
+ * THE SHAPE OF THIS STRING IS LOAD-BEARING. `htmlFromText` turns a block that
+ * reads "Label: https://..." into a real button, and anything else into a
+ * paragraph. So the text before the colon becomes the button's label — and the
+ * line must be its own block, with a blank line either side of it, or it is
+ * swallowed into the preceding paragraph and renders as a bare link. That is
+ * exactly what it did in three of the five emails that use it.
  */
 export const joinLine = (data) =>
   data.meetLink
-    ? `Join here: ${data.meetLink}`
+    ? `Join the interview: ${data.meetLink}`
     : 'We will email you the video link before your interview.';
