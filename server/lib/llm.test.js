@@ -42,11 +42,11 @@ test('something with no JSON in it is handed back, not invented', () => {
 });
 
 test('the model is off unless a key is set', () => {
-  const had = process.env.OLLAMA_API_KEY;
-  delete process.env.OLLAMA_API_KEY;
+  const had = process.env.RECRUIT_OLLAMA_API_KEY;
+  delete process.env.RECRUIT_OLLAMA_API_KEY;
   assert.equal(llmMode(), 'off');
-  process.env.OLLAMA_API_KEY = 'x';
+  process.env.RECRUIT_OLLAMA_API_KEY = 'x';
   assert.equal(llmMode(), 'on');
-  if (had === undefined) delete process.env.OLLAMA_API_KEY;
-  else process.env.OLLAMA_API_KEY = had;
+  if (had === undefined) delete process.env.RECRUIT_OLLAMA_API_KEY;
+  else process.env.RECRUIT_OLLAMA_API_KEY = had;
 });

@@ -2,8 +2,8 @@
  * The model, behind one switch — in the same shape as the mailer and the
  * captcha, so there is one way to read "is this actually on?".
  *
- *   OLLAMA_API_KEY set    → reviews are sent to the model
- *   OLLAMA_API_KEY unset  → nothing is sent, and the API says so out loud
+ *   RECRUIT_OLLAMA_API_KEY set    → reviews are sent to the model
+ *   RECRUIT_OLLAMA_API_KEY unset  → nothing is sent, and the API says so out loud
  *
  * The second mode is not a fallback, it is the default. Turning this on starts
  * sending candidates' CVs and written answers to a third party, so it takes a
@@ -15,15 +15,28 @@
  * whatever this module needs too.
  */
 
+/**
+ * RECRUIT_-PREFIXED, AND THAT PREFIX IS LOAD-BEARING.
+ *
+ * The CRM this module is mounted inside already uses OLLAMA_BASE_URL, for its
+ * own local Ollama on 127.0.0.1 — aiworker.js, server.js, complaint-paragraph
+ * and id-name-extract all read it. dotenv takes the last definition of a key,
+ * so adding a plain OLLAMA_BASE_URL for recruitment would have silently
+ * repointed all four at a hosted service: their features broken, and CRM data
+ * leaving the building. Found on the box before it was written, not after.
+ *
+ * The tables are recruit_*, the routes are /api/recruit/*, and the environment
+ * is RECRUIT_* for exactly the same reason.
+ */
 const DEFAULT_BASE = 'https://ollama.com';
-const TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 90_000);
+const TIMEOUT_MS = Number(process.env.RECRUIT_OLLAMA_TIMEOUT_MS || 90_000);
 
 /** 'on' once a key exists. Reported by the API and shown in Settings. */
-export const llmMode = () => (process.env.OLLAMA_API_KEY ? 'on' : 'off');
+export const llmMode = () => (process.env.RECRUIT_OLLAMA_API_KEY ? 'on' : 'off');
 
-export const llmModel = () => process.env.OLLAMA_MODEL || 'gemma4:31b';
+export const llmModel = () => process.env.RECRUIT_OLLAMA_MODEL || 'gemma4:31b';
 
-const baseUrl = () => (process.env.OLLAMA_BASE_URL || DEFAULT_BASE).replace(/\/+$/, '');
+const baseUrl = () => (process.env.RECRUIT_OLLAMA_BASE_URL || DEFAULT_BASE).replace(/\/+$/, '');
 
 export class LlmError extends Error {
   constructor(message, { retryable = true } = {}) {
@@ -48,7 +61,7 @@ export class LlmError extends Error {
  */
 export async function askForJson({ system, prompt, temperature = 0 }) {
   if (llmMode() === 'off') {
-    throw new LlmError('OLLAMA_API_KEY is not set', { retryable: false });
+    throw new LlmError('RECRUIT_OLLAMA_API_KEY is not set', { retryable: false });
   }
 
   const body = {
@@ -71,7 +84,7 @@ export async function askForJson({ system, prompt, temperature = 0 }) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OLLAMA_API_KEY}`,
+        Authorization: `Bearer ${process.env.RECRUIT_OLLAMA_API_KEY}`,
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -137,7 +150,7 @@ export function unwrapJson(content) {
  */
 export async function verifyLlm() {
   if (llmMode() === 'off') {
-    return { ok: false, mode: 'off', detail: 'OLLAMA_API_KEY is not set, so no application is reviewed' };
+    return { ok: false, mode: 'off', detail: 'RECRUIT_OLLAMA_API_KEY is not set, so no application is reviewed' };
   }
   try {
     const { parsed } = await askForJson({
