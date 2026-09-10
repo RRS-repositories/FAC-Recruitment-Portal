@@ -7,6 +7,7 @@ import { formatDayIn, formatTimeIn } from '../lib/zonedTime.js';
 import { notifyBooked, notifyCancelled } from '../lib/notify.js';
 import { blackoutsFor } from '../lib/blackouts.js';
 import { requireFlag } from '../lib/flags.js';
+import { attachMeetLink, moveMeetLink, cancelMeetLink } from '../lib/meetLink.js';
 
 /**
  * Candidate self-service booking.
@@ -240,6 +241,22 @@ export function createBookingRouter() {
 
       await client.query('COMMIT');
 
+      // AFTER the commit, and deliberately. The transaction above holds an
+      // advisory lock on the interviewer; a call to Google inside it would put
+      // every other candidate booking this interviewer behind a third party's
+      // network, timeouts and outages.
+      //
+      // Not awaited into the response either: the candidate has booked, and
+      // whether Google answered in the next second is not their problem. The
+      // confirmation email drains about thirty seconds from now and re-reads
+      // meet_link when it does, so in practice it carries the link; when it
+      // does not, the wording degrades honestly and the sweep fills it in
+      // long before the T-24h reminder.
+      const linkWork = isReschedule ? moveMeetLink(row.id) : attachMeetLink(row.id);
+      linkWork.catch((error) =>
+        console.error(`[fac-recruit] Meet link work failed for ${row.id}:`, error.message),
+      );
+
       return res.json({
         ok: true,
         booked: {
@@ -296,6 +313,12 @@ export function createBookingRouter() {
         });
 
         await client.query('COMMIT');
+
+        // Same reasoning, and the same place: nobody should be left holding an
+        // invitation to an interview that is not happening.
+        cancelMeetLink(row.id).catch((error) =>
+          console.error(`[fac-recruit] could not cancel the event for ${row.id}:`, error.message),
+        );
       } catch (failure) {
         await client.query('ROLLBACK').catch(() => {});
         throw failure;
