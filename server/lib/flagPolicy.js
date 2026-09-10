@@ -6,8 +6,20 @@
  * counts as ON — should be testable without one.
  */
 
-/** Spec §2. All three default OFF. */
-export const FLAGS = ['recruitment_portal', 'recruitment_booking', 'recruitment_alerts'];
+/**
+ * Spec §2. All default OFF.
+ *
+ * `recruitment_ai_review` matters more than the others: switching it on starts
+ * sending candidates' CVs and written answers to a third-party model. It needs
+ * a key in the environment as well, so neither an accidental flag nor a stray
+ * key does anything on its own.
+ */
+export const FLAGS = [
+  'recruitment_portal',
+  'recruitment_booking',
+  'recruitment_alerts',
+  'recruitment_ai_review',
+];
 
 export const flagKey = (name) => `flags.${name}`;
 

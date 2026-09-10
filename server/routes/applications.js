@@ -18,6 +18,7 @@ import { notifyApplicationReceived } from '../lib/notify.js';
 import { isEnabled, requireFlag } from '../lib/flags.js';
 import { mailMode } from '../lib/mailer.js';
 import { verifyCaptcha } from '../lib/captcha.js';
+import { queueReview } from '../lib/llmReview.js';
 
 /**
  * Application intake.
@@ -217,6 +218,13 @@ export function createApplicationsRouter({ ipSalt }) {
       // the application it acknowledges commit together — a candidate can
       // never be told we have their application when we do not.
       await notifyApplicationReceived(client, applicant);
+
+      // Queued in the same transaction, for the same reason: a review that
+      // exists for an application that rolled back would be a review of
+      // nothing. The worker picks it up on its own schedule, and if the model
+      // is off, unreachable or switched off by flag, the row simply waits —
+      // no candidate is ever delayed by it.
+      await queueReview(client, applicant.id);
 
       await client.query('COMMIT');
 
