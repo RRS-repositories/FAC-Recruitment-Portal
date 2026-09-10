@@ -7,6 +7,7 @@ import { startOutboxWorker } from './lib/outbox.js';
 import { startRetentionSweep } from './lib/retention.js';
 import { startLlmReviewWorker } from './lib/llmReview.js';
 import { startMeetLinkSweep } from './lib/meetLink.js';
+import { startNoShowSweep } from './lib/attendance.js';
 import { verifyMail, mailMode } from './lib/mailer.js';
 
 const PORT = Number(process.env.PORT || 5000);
@@ -44,6 +45,7 @@ let stopOutbox = () => {};
 let stopRetention = () => {};
 let stopReviews = () => {};
 let stopMeetSweep = () => {};
+let stopNoShow = () => {};
 
 const server = app.listen(PORT, '127.0.0.1', async () => {
   console.log(`[fac-recruit] listening on 127.0.0.1:${PORT}`);
@@ -73,6 +75,7 @@ const server = app.listen(PORT, '127.0.0.1', async () => {
   stopRetention = startRetentionSweep();
   stopReviews = startLlmReviewWorker();
   stopMeetSweep = startMeetLinkSweep();
+  stopNoShow = startNoShowSweep();
 });
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
@@ -82,6 +85,7 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     stopRetention();
     stopReviews();
     stopMeetSweep();
+    stopNoShow();
     // Only close a pool we opened. Mounted in another application it is
     // the host's, and closing it would take that application down with us.
     server.close(() => (ownsPool() ? pool.end() : Promise.resolve()).then(() => process.exit(0)));
