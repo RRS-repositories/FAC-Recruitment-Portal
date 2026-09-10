@@ -393,8 +393,8 @@ export function BookingPage() {
    * zone is named. Anything without both ends is skipped rather than rendered
    * as a half-window.
    */
-  const zoneLabel = data.rulesTimezone === 'Europe/London' ? 'UK' : (data.rulesTimezone ?? '');
-  const blockedNote = (data.blocks ?? [])
+  const zoneLabel = data?.rulesTimezone === 'Europe/London' ? 'UK' : (data?.rulesTimezone ?? '');
+  const blockedNote = (data?.blocks ?? [])
     .filter((b) => b?.start && b?.end)
     .map((b) => `${(b.label ?? 'a break').toLowerCase()} (${b.start}–${b.end}${zoneLabel ? ' ' + zoneLabel : ''})`)
     .reduce((acc, text, i, all) => acc + text + (i < all.length - 1 ? ', ' : ' and '), '');
