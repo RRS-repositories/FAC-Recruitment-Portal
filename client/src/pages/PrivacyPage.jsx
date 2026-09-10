@@ -110,6 +110,32 @@ export default function PrivacyPage() {
             </p>
           </Section>
 
+          {/* Shown only while it is true. The server answers from the running
+              system — the flag AND the key — so this section cannot promise
+              one thing while the software does another, in either direction.
+              A candidate is entitled to know their CV left the building. */}
+          {facts?.aiReview?.enabled ? (
+            <Section title="A model also reads your application">
+              <p>
+                Your CV and your written answers are sent to an external AI service, which returns
+                an assessment of how well your experience fits the role and whether the writing
+                appears AI-assisted. The service processes the text to produce that assessment.
+              </p>
+              <p>
+                We use it because it reads every application in the same way. It is not always
+                right, and it is never the last word:{' '}
+                <b className="font-semibold text-ink">
+                  no application is rejected because of what it says
+                </b>
+                . A member of our team reads the answers and decides.
+              </p>
+              <p>
+                If you would rather your application were not sent to it, email us at the address
+                below before or after you apply and we will review yours by hand instead.
+              </p>
+            </Section>
+          ) : null}
+
           <Section title="Why we are allowed to hold it">
             <p>
               We rely on taking steps at your request before entering into a contract of employment,

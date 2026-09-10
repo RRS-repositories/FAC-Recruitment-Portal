@@ -688,7 +688,27 @@ export function createAdminRouter() {
       // "did they get the link?" without guessing.
       const emails = await historyFor(req.params.id);
 
-      return res.json({ ok: true, application: rows[0], audit, emails, mailMode: mailMode() });
+      // The model's review, if there is one. `raw` is deliberately left behind:
+      // it is kept for a dispute, not for a screen, and it is large.
+      const { rows: review } = await pool.query(
+        `SELECT status, model, prompt_version, fitment_score, fitment_summary,
+                fitment_reasons, ai_opinion, ai_rationale, cv_chars, last_error,
+                completed_at
+           FROM recruit_llm_reviews WHERE applicant_id = $1`,
+        [req.params.id],
+      );
+
+      return res.json({
+        ok: true,
+        application: rows[0],
+        audit,
+        emails,
+        mailMode: mailMode(),
+        review: review[0] ?? null,
+        // Shown beside the model's number so a manager can see the two
+        // disagree, which is the only reason to keep both.
+        ruleScore: rows[0].rule_score,
+      });
     } catch (error) {
       console.error('[fac-recruit] admin detail failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not load that application.' });

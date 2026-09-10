@@ -9,8 +9,13 @@ import { FLAGS, flagKey, isOn, readFlags } from './flagPolicy.js';
  * everything that must NOT.
  */
 
-test('the three flags from spec §2 exist', () => {
-  assert.deepEqual(FLAGS, ['recruitment_portal', 'recruitment_booking', 'recruitment_alerts']);
+test('the three flags from spec §2 exist, plus the AI review switch', () => {
+  assert.deepEqual(FLAGS, [
+    'recruitment_portal',
+    'recruitment_booking',
+    'recruitment_alerts',
+    'recruitment_ai_review',
+  ]);
 });
 
 test('only the boolean true is on', () => {
@@ -26,6 +31,7 @@ test('a missing row is off', () => {
     recruitment_portal: false,
     recruitment_booking: false,
     recruitment_alerts: false,
+    recruitment_ai_review: false,
   });
 });
 
@@ -61,4 +67,21 @@ test('unrelated settings rows are ignored', () => {
 
 test('keys are namespaced so they cannot collide with other settings', () => {
   assert.equal(flagKey('recruitment_portal'), 'flags.recruitment_portal');
+});
+
+test('the AI review switch is off unless its own row says true', () => {
+  // Turning this on sends candidates' CVs and answers to a third party. It has
+  // to be as hard to switch on by accident as the flag that exposes the form.
+  assert.equal(readFlags([]).recruitment_ai_review, false);
+  for (const value of ['true', 1, {}, null]) {
+    assert.equal(
+      readFlags([{ key: 'flags.recruitment_ai_review', value }]).recruitment_ai_review,
+      false,
+      `${JSON.stringify(value)} must not open this door`,
+    );
+  }
+  assert.equal(
+    readFlags([{ key: 'flags.recruitment_ai_review', value: true }]).recruitment_ai_review,
+    true,
+  );
 });
