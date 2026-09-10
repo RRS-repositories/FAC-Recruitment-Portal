@@ -20,6 +20,7 @@ export const FLAGS = [
   'recruitment_alerts',
   'recruitment_ai_review',
   'recruitment_auto_meet',
+  'recruitment_auto_noshow',
 ];
 
 export const flagKey = (name) => `flags.${name}`;
