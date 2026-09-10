@@ -183,11 +183,17 @@ export function SettingsPage() {
    *
    * Clearing both fields removes the break rather than saving an empty window,
    * because a block with no times is not a thing the availability code can mean.
+   *
+   * `form?`, not `form.` — this runs on every render, including the first one
+   * before load() has filled it in, and `form` starts as null. Optional
+   * chaining on `blocks` alone does not help when it is the object holding it
+   * that is missing; without the `?` here the whole settings page throws
+   * before it can draw anything.
    */
-  const lunch = { label: 'Lunch', start: '', end: '', ...(form.blocks?.[0] ?? {}) };
+  const lunch = { label: 'Lunch', start: '', end: '', ...(form?.blocks?.[0] ?? {}) };
   const setLunch = (patch) =>
     setForm((f) => {
-      const [first, ...rest] = f.blocks ?? [];
+      const [first, ...rest] = f?.blocks ?? [];
       const next = { label: 'Lunch', start: '', end: '', ...first, ...patch };
       return { ...f, blocks: !next.start && !next.end ? rest : [next, ...rest] };
     });
