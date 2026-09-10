@@ -214,7 +214,17 @@ export async function cancelInterviewEvent({ calendarId = 'primary', eventId }) 
  * Whether Google answers, said at boot beside verifyMail and verifyLlm.
  *
  * A revoked token should be visible on deploy, not on the morning of an
- * interview. Reads one calendar rather than creating anything.
+ * interview.
+ *
+ * IT LISTS EVENTS RATHER THAN READING THE CALENDAR. `calendars.get` looks like
+ * the natural health check and is the wrong one: it needs a calendar-read
+ * scope, and all we ask the user for is `calendar.events` — enough to create,
+ * move and cancel interviews, and deliberately not enough to read the rest of
+ * their diary. The first deploy proved it, answering `403 Request had
+ * insufficient authentication scopes` while event creation worked perfectly.
+ *
+ * A health check outside the permissions the feature actually holds tests
+ * nothing the feature needs, and reports a fault that is not there.
  */
 export async function verifyCalendar() {
   if (calendarMode() === 'off') {
@@ -222,11 +232,11 @@ export async function verifyCalendar() {
   }
   try {
     const cal = await calendar();
-    const { data } = await cal.calendars.get({ calendarId: 'primary' });
+    await cal.events.list({ calendarId: 'primary', maxResults: 1 });
     return {
       ok: true,
       mode: 'on',
-      detail: `${data.summary ?? 'primary'}${inviteCandidate() ? ', candidate invited' : ''}`,
+      detail: `calendar.events granted${inviteCandidate() ? ', candidate invited' : ''}`,
     };
   } catch (error) {
     return { ok: false, mode: 'on', detail: classify(error, 'calendar unreachable').message };
