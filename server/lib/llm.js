@@ -21,7 +21,7 @@ const TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 90_000);
 /** 'on' once a key exists. Reported by the API and shown in Settings. */
 export const llmMode = () => (process.env.OLLAMA_API_KEY ? 'on' : 'off');
 
-export const llmModel = () => process.env.OLLAMA_MODEL || 'gemma3:27b';
+export const llmModel = () => process.env.OLLAMA_MODEL || 'gemma4:31b';
 
 const baseUrl = () => (process.env.OLLAMA_BASE_URL || DEFAULT_BASE).replace(/\/+$/, '');
 
@@ -95,14 +95,40 @@ export async function askForJson({ system, prompt, temperature = 0 }) {
 
   let parsed;
   try {
-    parsed = JSON.parse(content);
+    parsed = JSON.parse(unwrapJson(content));
   } catch {
-    // Constrained decoding should make this impossible, so if it happens the
-    // request is worth repeating rather than discarding.
     throw new LlmError(`model returned content that is not JSON: ${String(content).slice(0, 200)}`);
   }
 
   return { parsed, raw };
+}
+
+/**
+ * The JSON out of whatever the model wrapped it in.
+ *
+ * `format: 'json'` is supposed to make this unnecessary and does not. Gemma
+ * returns its object inside a ```json fence, which is valid markdown and
+ * invalid JSON, so a straight parse fails on every single review — found by
+ * running one before shipping rather than after.
+ *
+ * Two steps, narrowest first: strip a fence if there is one, and otherwise
+ * take everything between the first brace and the last. The second is a blunt
+ * instrument, so it is only reached when the first has already failed, and a
+ * result that still will not parse is reported rather than guessed at.
+ */
+export function unwrapJson(content) {
+  const text = String(content).trim();
+
+  const fenced = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/i);
+  if (fenced) return fenced[1].trim();
+
+  if (text.startsWith('{') || text.startsWith('[')) return text;
+
+  const first = text.search(/[[{]/);
+  const last = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+  if (first !== -1 && last > first) return text.slice(first, last + 1);
+
+  return text;
 }
 
 /**

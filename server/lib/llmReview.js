@@ -42,7 +42,7 @@ const MAX_ATTEMPTS = Number(process.env.LLM_REVIEW_MAX_ATTEMPTS || 4);
 const INTERVAL_MS = Number(process.env.LLM_REVIEW_INTERVAL_MS || 60_000);
 const BATCH = Number(process.env.LLM_REVIEW_BATCH || 3);
 
-const SYSTEM = `You assess job applications for a UK law firm and reply only with JSON.
+export const SYSTEM = `You assess job applications for a UK law firm and reply only with JSON.
 
 Two things are asked of you, and they are separate judgements. Do not let one
 colour the other: a strong candidate may have used AI, and a weak one may not.
