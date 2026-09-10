@@ -382,6 +382,24 @@ export function BookingPage() {
 
   const day = days[Math.min(dayIndex, days.length - 1)];
 
+  /**
+   * "lunch (12:30-13:15 UK) and " — or nothing at all.
+   *
+   * Read from the rule the slots were built from, so it cannot say one thing
+   * while the buttons below it say another. It used to be prose naming a fixed
+   * 11:30-12:30, which stopped being true the moment lunch moved.
+   *
+   * The times are the interviewer's wall clock, not the candidate's, so the
+   * zone is named. Anything without both ends is skipped rather than rendered
+   * as a half-window.
+   */
+  const zoneLabel = data.rulesTimezone === 'Europe/London' ? 'UK' : (data.rulesTimezone ?? '');
+  const blockedNote = (data.blocks ?? [])
+    .filter((b) => b?.start && b?.end)
+    .map((b) => `${(b.label ?? 'a break').toLowerCase()} (${b.start}–${b.end}${zoneLabel ? ' ' + zoneLabel : ''})`)
+    .reduce((acc, text, i, all) => acc + text + (i < all.length - 1 ? ', ' : ' and '), '');
+
+
   // "Thu 10 Sept" -> weekday and date number, for the day tiles. Parsed from
   // the label the server already formatted in the CANDIDATE's timezone rather
   // than from `date`, which is the interviewer's day and can be a day out.
@@ -512,7 +530,7 @@ export function BookingPage() {
           {/* Pick a time */}
           <h2 className="text-[1.06rem] font-extrabold tracking-tight text-ink">Pick a time</h2>
           <p className="mb-4 mt-1 text-[0.84rem] text-muted">
-            Only free times are shown — lunch (11:30–12:30 UK) and evenings are not offered.
+            Only free times are shown — {blockedNote}evenings are not offered.
           </p>
 
           <div

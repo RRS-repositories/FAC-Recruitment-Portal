@@ -147,6 +147,13 @@ export function createBookingRouter() {
         interview: publicInterview(row),
         timezone: row.candidate_tz,
         days,
+        // The page explains why there is a gap in the middle of the day. It
+        // used to say "lunch (11:30-12:30 UK)" in prose, which silently became
+        // a lie the first time anyone moved lunch. These are the rule's own
+        // wall-clock windows, in its own zone, so the sentence cannot drift
+        // from the slots beside it.
+        blocks: Array.isArray(rule.blocks) ? rule.blocks : [],
+        rulesTimezone: rule.timezone,
       });
     } catch (err) {
       console.error('[fac-recruit] booking load failed:', err.message);
