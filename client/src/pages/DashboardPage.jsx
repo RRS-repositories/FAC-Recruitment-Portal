@@ -278,8 +278,10 @@ export function DashboardPage() {
       setConfirming(null);
 
       // The booking token comes back exactly once and is never retrievable
-      // again. Until stage 5 sends the email, showing it here is the only way
-      // it reaches the candidate — so it is shown rather than dropped.
+      // again. The email carrying it is queued by the same request, so this is
+      // a copy for the manager rather than the candidate's only route — but a
+      // token dropped on the floor is still a token nobody can recover, so it
+      // is shown.
       if (result.bookingToken && applicant) {
         setBookingLink({
           name: applicant.fullName,
@@ -676,9 +678,14 @@ export function DashboardPage() {
         </Modal>
       ) : null}
 
-      {/* The booking link, shown once. Automatic email is stage 5; until then
-          this is how the candidate gets it, so it must not be dismissable by
-          accident. */}
+      {/* The booking link, shown once.
+          Automatic email is no longer "stage 5" — accepting queues the
+          shortlisting email with this link in it, and so does reissuing. So
+          what this dialog is for changed: it used to be the only way the
+          candidate got the link, and is now a copy for the manager in case
+          they need it. The wording follows `emailLive` rather than stating
+          either, because a dialog that tells somebody to send an email that
+          has already gone gets the candidate two. */}
       {bookingLink ? (
         <Modal
           titleId="booking-title"
@@ -688,13 +695,26 @@ export function DashboardPage() {
           dismissable={false}
         >
           <h2 id="booking-title" className="text-[1.15rem] font-bold text-ink">
-            Send {bookingLink.name} their {bookingLink.reissued ? 'new ' : ''}booking link
+            {emailLive
+              ? `${bookingLink.name}'s ${bookingLink.reissued ? 'new ' : ''}booking link`
+              : `Send ${bookingLink.name} their ${bookingLink.reissued ? 'new ' : ''}booking link`}
           </h2>
           <p className="mt-2 text-[0.9rem] leading-relaxed text-muted">
-            Automatic emails are not switched on yet, so send this to{' '}
-            <b className="font-semibold text-ink">{bookingLink.email}</b> yourself.{' '}
-            <b className="font-semibold text-ink">This link is shown once</b> — it cannot be
-            retrieved again.{' '}
+            {emailLive ? (
+              <>
+                This has already been emailed to{' '}
+                <b className="font-semibold text-ink">{bookingLink.email}</b>. Here it is as well,
+                in case you need it — <b className="font-semibold text-ink">it is shown once</b> and
+                cannot be retrieved again.{' '}
+              </>
+            ) : (
+              <>
+                No email is being sent, so send this to{' '}
+                <b className="font-semibold text-ink">{bookingLink.email}</b> yourself.{' '}
+                <b className="font-semibold text-ink">This link is shown once</b> — it cannot be
+                retrieved again.{' '}
+              </>
+            )}
             {bookingLink.reissued ? 'Their previous link has stopped working.' : ''}
           </p>
           <p className="mt-4 break-all rounded-panel border border-line bg-lav-soft p-3 font-mono text-[0.8rem] text-ink">
