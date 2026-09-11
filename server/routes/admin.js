@@ -35,6 +35,18 @@ import { buildCalendar } from '../lib/calendar.js';
 const PAGE_SIZE = 25;
 const STATUSES = new Set(['pending', 'accepted', 'declined']);
 
+/**
+ * The sorts the list will honour. Anything else is newest-first.
+ *
+ * Sorting happens HERE rather than in the browser because the list is
+ * paginated: sorted on the client, "highest score first" would order the
+ * twenty-five rows already on screen and quietly mean "the best of page one".
+ */
+const SORTS = new Set(['score_desc', 'score_asc', 'duration_desc', 'duration_asc']);
+
+/** The AI-check bands a manager can narrow to. `all` is simply no filter. */
+const AI_LEVELS = new Set(['clean', 'possible', 'ai_used']);
+
 const LIST = `
   SELECT a.id, a.created_at, a.role, a.full_name, a.email, a.phone,
          a.rule_score, a.final_score, a.status, a.duration_sec,
@@ -53,7 +65,25 @@ const LIST = `
           OR a.email::text ILIKE '%' || $3 || '%')
      AND ($6::date IS NULL OR a.created_at >= $6::date)
      AND ($7::date IS NULL OR a.created_at < ($7::date + 1))
-   ORDER BY a.created_at DESC
+     AND ($8::text IS NULL OR a.ai_use_level = $8)
+   ORDER BY
+     -- One ORDER BY with the choice as a parameter, rather than SQL built by
+     -- string concatenation. $9 can only ever be one of the handful of values
+     -- SORTS allows, so this cannot be turned into an injection even if the
+     -- allow-list above it were ever removed.
+     --
+     -- NULLS LAST throughout, deliberately: an applicant whose score or
+     -- duration was never recorded should sit at the bottom of either
+     -- direction, not float to the top of "lowest first" and look like the
+     -- worst candidate.
+     CASE WHEN $9 = 'score_desc'    THEN a.final_score  END DESC NULLS LAST,
+     CASE WHEN $9 = 'score_asc'     THEN a.final_score  END ASC  NULLS LAST,
+     CASE WHEN $9 = 'duration_desc' THEN a.duration_sec END DESC NULLS LAST,
+     CASE WHEN $9 = 'duration_asc'  THEN a.duration_sec END ASC  NULLS LAST,
+     -- Always the last word, so a page of equal scores keeps a stable order
+     -- rather than shuffling between requests and repeating or skipping rows
+     -- across pagination.
+     a.created_at DESC
    LIMIT $4 OFFSET $5
 `;
 
@@ -67,6 +97,7 @@ const COUNT = `
           OR a.email::text ILIKE '%' || $3 || '%')
      AND ($4::date IS NULL OR a.created_at >= $4::date)
      AND ($5::date IS NULL OR a.created_at < ($5::date + 1))
+     AND ($6::text IS NULL OR a.ai_use_level = $6)
 `;
 
 /**
@@ -89,6 +120,10 @@ const TAB_COUNTS = `
          OR a.email::text ILIKE '%' || $2 || '%')
     AND ($3::date IS NULL OR a.created_at >= $3::date)
     AND ($4::date IS NULL OR a.created_at < ($4::date + 1))
+    -- The AI filter narrows these too, or a pill reading "Accepted 4" would
+    -- open a list of two and the numbers on the screen would contradict
+    -- each other.
+    AND ($5::text IS NULL OR a.ai_use_level = $5)
 `;
 
 // The summary counts every application, not just the filtered page: it is the
@@ -633,12 +668,23 @@ export function createAdminRouter() {
     const from = asDate(req.query.from);
     const to = asDate(req.query.to);
 
+    // An allow-list, not a passthrough. The sort reaches SQL as a bound
+    // parameter either way, but naming the permitted values here means an
+    // unexpected one falls back to newest-first rather than becoming an
+    // argument with the database.
+    const sort = SORTS.has(req.query.sort) ? req.query.sort : null;
+
+    // 'all' and absent mean the same thing: do not narrow. Anything
+    // unrecognised is ignored rather than returning nothing, so a stale
+    // bookmark shows the list instead of an empty screen.
+    const aiLevel = AI_LEVELS.has(req.query.ai) ? req.query.ai : null;
+
     try {
       const [list, count, summary, tabs] = await Promise.all([
-        pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE, from, to]),
-        pool.query(COUNT, [status, role, search, from, to]),
+        pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE, from, to, aiLevel, sort]),
+        pool.query(COUNT, [status, role, search, from, to, aiLevel]),
         pool.query(SUMMARY),
-        pool.query(TAB_COUNTS, [role, search, from, to]),
+        pool.query(TAB_COUNTS, [role, search, from, to, aiLevel]),
       ]);
 
       return res.json({
