@@ -81,6 +81,41 @@ function RowSkeleton() {
   );
 }
 
+/**
+ * One column's sort control: off, descending, ascending, off again.
+ *
+ * The arrow is the state — a button that looks identical whether or not it is
+ * the active sort tells a manager nothing about why the list is in the order
+ * it is in. `aria-sort` carries the same fact for a screen reader, since the
+ * arrow is decorative to one.
+ */
+function SortButton({ label, column, sort, onToggle }) {
+  const active = sort === `${column}_desc` ? 'desc' : sort === `${column}_asc` ? 'asc' : null;
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(column)}
+      aria-sort={active === 'desc' ? 'descending' : active === 'asc' ? 'ascending' : 'none'}
+      aria-label={
+        active
+          ? `Sorted by ${label}, ${active === 'desc' ? 'highest first' : 'lowest first'}. Press to change.`
+          : `Sort by ${label}`
+      }
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-control border-[1.5px] px-3 py-2 text-[0.86rem] font-semibold transition-colors',
+        active
+          ? 'border-violet bg-violet-soft text-violet-deep'
+          : 'border-line bg-white text-ink hover:border-violet',
+      )}
+    >
+      {label}
+      <span aria-hidden="true" className="text-[0.75rem] leading-none">
+        {active === 'desc' ? '↓' : active === 'asc' ? '↑' : '⇅'}
+      </span>
+    </button>
+  );
+}
+
 export function DashboardPage() {
   usePageMeta({
     title: 'Applicants — Fast Action Claims',
@@ -112,6 +147,11 @@ export function DashboardPage() {
   const [role, setRole] = useState('all');
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
+  // null means "newest first", the order this screen has always had. Sorting
+  // is done by the server because the list is paginated: sorted here, "highest
+  // score first" would only order the twenty-five rows already on screen.
+  const [sort, setSort] = useState(null);
+  const [aiLevel, setAiLevel] = useState('all');
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -144,6 +184,8 @@ export function DashboardPage() {
         page,
         from,
         to,
+        sort,
+        ai: aiLevel,
       });
       setApplicants(result.applications.map(normaliseApplicant));
       setSummary(normaliseSummary(result.summary));
@@ -159,7 +201,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, apiRole, search, page, from, to, signOut]);
+  }, [status, apiRole, search, page, from, to, sort, aiLevel, signOut]);
 
   useEffect(() => {
     if (signedIn) load();
@@ -226,6 +268,22 @@ export function DashboardPage() {
   const chooseStatus = applyFilter(setStatus);
   const changeFrom = applyFilter(setFrom);
   const changeTo = applyFilter(setTo);
+  const chooseAiLevel = applyFilter(setAiLevel);
+
+  /**
+   * Cycles one column: descending, then ascending, then back to newest-first.
+   *
+   * Third press returns to the default rather than sticking on ascending —
+   * otherwise there is no way back to the order the screen opens in without
+   * reloading, and "lowest score first" is not a view anybody wants to be
+   * stuck in.
+   */
+  const toggleSort = (column) => {
+    setPage(1);
+    setSort((current) =>
+      current === `${column}_desc` ? `${column}_asc` : current === `${column}_asc` ? null : `${column}_desc`,
+    );
+  };
   const chooseRole = applyFilter(setRole);
   const changeQuery = applyFilter(setQuery);
 
@@ -469,6 +527,41 @@ export function DashboardPage() {
               ))}
             </div>
 
+            {/* Sort, and the AI band. Placed before the search box so the ml-auto
+                on that box still pushes it to the right-hand end. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <SortButton
+                label="Score"
+                column="score"
+                sort={sort}
+                onToggle={toggleSort}
+              />
+              <SortButton
+                label="Time taken"
+                column="duration"
+                sort={sort}
+                onToggle={toggleSort}
+              />
+
+              <label htmlFor="ai-filter" className="sr-only">
+                Filter by AI check
+              </label>
+              <select
+                id="ai-filter"
+                value={aiLevel}
+                onChange={(e) => chooseAiLevel(e.target.value)}
+                className={cn(
+                  'rounded-control border-[1.5px] bg-white py-2 pl-3 pr-8 text-[0.86rem] font-semibold focus:border-violet focus:outline-none',
+                  aiLevel === 'all' ? 'border-line text-ink' : 'border-violet text-violet-deep',
+                )}
+              >
+                <option value="all">AI check: all</option>
+                <option value="clean">Clean</option>
+                <option value="possible">Possible AI</option>
+                <option value="ai_used">AI used</option>
+              </select>
+            </div>
+
             <div className="relative ml-auto w-full sm:w-64">
               <label htmlFor="applicant-search" className="sr-only">
                 Search applicants by name or email
@@ -549,6 +642,8 @@ export function DashboardPage() {
                   setStatus('all');
                   setRole('all');
                   setQuery('');
+                  setAiLevel('all');
+                  setSort(null);
                 }}
               >
                 Clear filters

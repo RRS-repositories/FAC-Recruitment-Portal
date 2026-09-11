@@ -155,11 +155,16 @@ export const adminSignOut = () => setAdminToken(null);
 /** Who the held token belongs to. Also the cheapest way to test it is still valid. */
 export const adminMe = () => request('/recruit/admin/me', { headers: withAuth() });
 
-export function adminApplications({ status, role, q, page = 1, from, to } = {}) {
+export function adminApplications({ status, role, q, page = 1, from, to, sort, ai } = {}) {
   const params = new URLSearchParams();
   if (status && status !== 'all') params.set('status', status);
   if (role && role !== 'all') params.set('role', role);
   if (q) params.set('q', q);
+  // Both are left off when they mean "no narrowing", so the request says only
+  // what was actually asked for. The server ignores anything it does not
+  // recognise rather than returning an empty list.
+  if (sort) params.set('sort', sort);
+  if (ai && ai !== 'all') params.set('ai', ai);
   // Half-typed dates are left off rather than sent: the server ignores them
   // anyway, and not sending them keeps the request honest about what it asked.
   if (from) params.set('from', from);
