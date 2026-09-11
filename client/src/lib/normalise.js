@@ -58,7 +58,12 @@ export function normaliseApplicant(row) {
     durationSec: row.duration_sec ?? null,
 
     ai: {
-      level: row.ai_use_level ?? 'clean',
+      // Passed through as it came, including missing. It used to default to
+      // 'clean', which told a manager an application had been checked and was
+      // fine when in truth it had not been checked at all -- a false
+      // reassurance about the one thing this column exists to warn about.
+      // `aiLevelLabel` renders anything unrecognised as "Not checked".
+      level: row.ai_use_level ?? null,
       score: row.ai_use_score ?? 0,
       reasons: reasonsOf(row.ai_use_reasons),
     },
