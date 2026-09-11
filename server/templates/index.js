@@ -1,6 +1,7 @@
 import { registerTemplate } from '../lib/templates.js';
 import { buildIcs } from '../lib/ics.js';
 import { loadContext, publicBaseUrl, SIGN_OFF, joinLine, whenLine } from './context.js';
+import { declineReapply, declineSentence } from '../../shared/declineReasons.js';
 import { shell, p, greeting, callout, button, bodyBoth, esc } from './layout.js';
 
 /**
@@ -9,7 +10,10 @@ import { shell, p, greeting, callout, button, bodyBoth, esc } from './layout.js'
  * The four decision emails are the client's own words, copied from the
  * prototype (`ROLES.india.email`, `ROLES.sa.email`) rather than rewritten —
  * they have been read and approved, and improving someone's rejection letter
- * uninvited is not a favour. The other seven are drafted here and need
+ * uninvited is not a favour. Two changes have since been asked for and made:
+ * the India decline no longer claims a high volume of applications, and a
+ * decline that names a reason the candidate can act on now carries an
+ * invitation to apply again. The other seven are drafted here and need
  * sign-off before they reach a real candidate.
  *
  * Each template is:
@@ -176,9 +180,20 @@ const declineEmail = ({ key, title, country, opening, body, closing }) =>
     key,
     title,
     when: 'When a manager declines an applicant.',
-    description: `Wording and layout supplied by the client, in the ${country} template. Unchanged.`,
-    mergeFields: ['firstName', 'declineSentence'],
-    sample: SAMPLE,
+    description:
+      `Wording and layout supplied by the client, in the ${country} template. The reason paragraph `
+      + 'appears only when a manager chose one, and the invitation to apply again only for the '
+      + 'reasons a candidate can act on. The preview below shows both.',
+    mergeFields: ['firstName', 'declineSentence', 'declineReapply'],
+    // The preview carries a reason and its invitation, because a template
+    // screen that only ever shows the plainest version of an email is not
+    // showing the manager what they are about to send.
+    sample: {
+      ...SAMPLE,
+      declineSentence: declineSentence('answers_generic'),
+      declineReapply: declineReapply('answers_generic'),
+      reapplyUrl: publicBaseUrl(),
+    },
     load,
     render: (data) => {
       // Said only when there is something to say. A manager who chose no
@@ -186,6 +201,19 @@ const declineEmail = ({ key, title, country, opening, body, closing }) =>
       // paragraph is absent rather than empty, and an email with no reason
       // reads exactly as it always has.
       const reason = data.declineSentence ? [data.declineSentence] : [];
+
+      /*
+       * The invitation to apply again.
+       *
+       * Only attached to a reason that carries one, and only when a reason was
+       * given at all — see shared/declineReasons.js for which and why. It is
+       * real rather than a courtesy: since recruit_012 the unique index is
+       * partial, so a declined application genuinely does not block a new one,
+       * and the link goes to the form they can fill in today.
+       */
+      const applyAgain = data.declineReapply || null;
+      const applyUrl = data.reapplyUrl || publicBaseUrl();
+
       return {
         subject: 'Fast Action Claims — Application update',
         text: [
@@ -196,6 +224,7 @@ const declineEmail = ({ key, title, country, opening, body, closing }) =>
           body,
           ...(reason.length ? [''] : []),
           ...reason,
+          ...(applyAgain ? ['', applyAgain, '', `Apply again: ${applyUrl}`] : []),
           '',
           closing,
           '',
@@ -209,6 +238,7 @@ const declineEmail = ({ key, title, country, opening, body, closing }) =>
             p(esc(opening)),
             p(esc(body)),
             ...reason.map((line) => p(esc(line))),
+            ...(applyAgain ? [p(esc(applyAgain)), button(applyUrl, 'Apply again')] : []),
             p(esc(closing)),
           ].join('\n'),
         }),
@@ -222,7 +252,7 @@ declineEmail({
   country: 'India',
   opening:
     'Thank you for taking the time to apply for the Paralegal Internship at Fast Action Claims via Internshala.',
-  body: "After careful consideration, we've decided not to progress your application on this occasion. This doesn't reflect on your abilities — we received a very high volume of applications and the selection was competitive.",
+  body: "After careful consideration, we've decided not to progress your application on this occasion. This doesn't reflect on your abilities.",
   closing: 'We appreciate your interest in our firm and wish you every success in your career.',
 });
 
