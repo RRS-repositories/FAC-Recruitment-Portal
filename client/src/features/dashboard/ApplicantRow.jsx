@@ -7,7 +7,7 @@ import { COL, COLUMN_COUNT, CHEVRON_WIDTH } from './columns';
 import { ROLES } from '@/data/roles';
 import { WRITTEN_QUESTIONS } from '@/data/writtenQuestions';
 import { gradeFor } from '@shared/scoring';
-import { AI_LEVEL_LABEL } from '@shared/aiDetect';
+import { aiLevelLabel } from '@shared/aiDetect';
 import { adminApplication, adminDownloadCv, adminSendMeetingLink } from '@/lib/api';
 import { normaliseApplicant } from '@/lib/normalise';
 import { formatDate, formatDateTime, formatDuration } from '@/lib/format';
@@ -33,6 +33,10 @@ const INTERVIEW_TONE = {
 };
 
 const AI_TONE = { clean: 'ok', possible: 'warn', ai_used: 'danger' };
+// A level we do not recognise is not reassuring and not an accusation --
+// it is a fault. Drawn neutral, and labelled "Not checked", so it reads as
+// something to look into rather than as a verdict either way.
+const aiTone = (level) => AI_TONE[level] ?? 'quiet';
 
 /**
  * Template keys read as machine names. A manager should see what the email
@@ -240,7 +244,7 @@ export function ApplicantRow({
         </td>
 
         <td className={cn('px-3 py-4', COL.ai)}>
-          <Badge tone={AI_TONE[applicant.ai.level]}>{AI_LEVEL_LABEL[applicant.ai.level]}</Badge>
+          <Badge tone={aiTone(applicant.ai.level)}>{aiLevelLabel(applicant.ai.level)}</Badge>
         </td>
 
         <td className={cn('px-3 py-4', COL.duration)}>

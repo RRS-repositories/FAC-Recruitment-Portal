@@ -15,7 +15,8 @@
  * overrides it, and the seeded rows currently match them exactly.
  *
  * A flag is a prompt to look, never a verdict: the reasons are always shown,
- * and nothing is auto-declined on it.
+ * and nothing is auto-declined on it. "AI used" additionally requires the
+ * model to agree -- see `levelFor`, which is where the label is decided.
  */
 
 export const AI_PHRASES = [
@@ -164,15 +165,57 @@ export function readTuning(rows = []) {
   };
 }
 
+/**
+ * Where the label is decided. The one place, so the two callers cannot drift.
+ *
+ * THE RULE: the top label needs both judges, and they must have reached it by
+ * different routes — the model found something in the text, AND the machine saw
+ * it arrive mechanically (pasted, or typed impossibly fast).
+ *
+ * Behaviour alone can no longer say "AI used", however high it scores, because
+ * behaviour cannot see authorship. Pasting is evidence that somebody pasted. It
+ * is not evidence of who wrote it — a candidate drafting in Word and a
+ * candidate copying from ChatGPT leave the identical trace. Measured against
+ * the 290 applications live when this was written, behaviour alone flagged 100
+ * and the model disagreed with 82 of them, including one where it said in as
+ * many words that the candidate had pasted Latin filler text rather than AI.
+ *
+ * The model alone cannot say it either. Reading its "likely" rationales, what
+ * it mostly detects is *generic* writing — "devoid of personal detail", "high
+ * level platitudes" — and generic correlates with inexperience at least as
+ * much as with AI. On its own it is a reason to look, never a verdict.
+ *
+ * So: both agree, by different evidence, and it is "AI used". Either one alone,
+ * and it is "worth a look". Neither, and it is clean.
+ */
+export function levelFor({ score = 0, mechanical = false, opinion = null }, thresholds) {
+  const t = thresholds ?? DEFAULT_TUNING.thresholds;
+  if (opinion === 'likely' && mechanical) return 'ai_used';
+  if (opinion === 'likely' || score >= t.possible) return 'possible';
+  return 'clean';
+}
+
+/**
+ * Which signals count as mechanical corroboration.
+ *
+ * Tab switches deliberately are not among them. They fire for 181 of 290 live
+ * applicants — 62% — and a signal that flags two thirds of everybody cannot
+ * discriminate between them. Leaving the page is how people use a browser.
+ * They still contribute to the score, and so still raise "worth a look".
+ */
+const MECHANICAL = ['paste', 'typingSpeed', 'fastWritten'];
+
 export function detectAiUse(writtenAnswers, telemetry = {}, tuning = DEFAULT_TUNING) {
   const { weights, limits, thresholds, phrases } = tuning ?? DEFAULT_TUNING;
   const text = Object.values(writtenAnswers ?? {}).join('\n');
   const chars = text.length;
   const reasons = [];
+  const fired = {};
   let score = 0;
 
   if (telemetry.pasteChars > limits.pasteChars) {
     score += weights.paste;
+    fired.paste = true;
     reasons.push(`Pasted ${telemetry.pasteChars} characters into answer boxes`);
   }
 
@@ -180,12 +223,14 @@ export function detectAiUse(writtenAnswers, telemetry = {}, tuning = DEFAULT_TUN
     const cps = telemetry.typedChars / telemetry.activeSecs;
     if (cps > limits.charsPerSecond) {
       score += weights.typingSpeed;
+      fired.typingSpeed = true;
       reasons.push(`Typing speed ${cps.toFixed(1)} characters/sec sustained`);
     }
   }
 
   if (chars > limits.writtenCharsFloor && telemetry.writtenSecs > 0 && telemetry.writtenSecs < limits.writtenSecondsFloor) {
     score += weights.fastWritten;
+    fired.fastWritten = true;
     reasons.push(`${chars} characters written in ${telemetry.writtenSecs}s`);
   }
 
@@ -193,25 +238,41 @@ export function detectAiUse(writtenAnswers, telemetry = {}, tuning = DEFAULT_TUN
   const hits = phrases.filter((phrase) => lower.includes(phrase));
   if (hits.length >= limits.phraseHitFloor) {
     score += Math.min(weights.phrases, hits.length * limits.phrasePointsEach);
+    fired.phrases = true;
     reasons.push(`AI-style phrasing: "${hits.slice(0, 3).join('", "')}"`);
   }
 
   const emDashes = (text.match(/—/g) ?? []).length;
   if (emDashes >= limits.emDashFloor) {
     score += weights.emDashes;
+    fired.emDashes = true;
     reasons.push(`${emDashes} em dashes`);
   }
 
   if (telemetry.tabSwitches >= limits.tabSwitchFloor) {
     score += weights.tabSwitches;
+    fired.tabSwitches = true;
     reasons.push(`Left the page ${telemetry.tabSwitches} times while writing`);
   }
 
   score = Math.min(100, score);
-  const level =
-    score >= thresholds.aiUsed ? 'ai_used' : score >= thresholds.possible ? 'possible' : 'clean';
 
-  return { level, score, reasons };
+  // No model opinion exists yet at this point — the review runs seconds later,
+  // in its own worker. So a freshly submitted application is never labelled
+  // "AI used" here, and the review is what promotes it. That is the honest
+  // ordering: we have not yet read the words.
+  const mechanical = MECHANICAL.some((key) => fired[key] === true);
+
+  return {
+    level: levelFor({ score, mechanical, opinion: null }, thresholds),
+    score,
+    reasons,
+    // Carried so the review can apply the rule without re-deriving it from the
+    // reason strings, which are wording and would break the moment somebody
+    // improved a sentence.
+    mechanical,
+    signals: fired,
+  };
 }
 
 export const AI_LEVEL_LABEL = {
@@ -219,3 +280,23 @@ export const AI_LEVEL_LABEL = {
   possible: 'Possible AI',
   ai_used: 'AI used',
 };
+
+/** The three the column can show, in the order a manager reads them. */
+export const AI_LEVELS = ['clean', 'possible', 'ai_used'];
+
+/**
+ * The label for a level — for ANY level, including ones that should not exist.
+ *
+ * `AI_LEVEL_LABEL[level]` returns undefined for a value that is not one of the
+ * three, and React renders undefined as nothing: a blank cell in the one column
+ * whose job is to warn somebody. A null was already handled upstream, but only
+ * a null — a level that was misspelt, or added on the server before the client
+ * knew about it, fell straight through into an empty badge.
+ *
+ * So this is total. Every input returns something a person can read, and an
+ * unrecognised one says so out loud rather than quietly reading as "Clean",
+ * which would be a false reassurance about the very thing being checked.
+ */
+export function aiLevelLabel(level) {
+  return AI_LEVEL_LABEL[level] ?? 'Not checked';
+}

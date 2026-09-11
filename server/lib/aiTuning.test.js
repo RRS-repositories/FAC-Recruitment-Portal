@@ -41,7 +41,7 @@ const SEEDED_ROWS = [
   },
 ];
 
-/** A submission that trips paste and tab switches — 45 + 15 = 60, the `ai_used` line. */
+/** A submission that trips paste and tab switches — 45 + 15 = 60. */
 const BORDERLINE = {
   written: { w1: 'A perfectly ordinary answer with nothing notable in it.' },
   telemetry: { pasteChars: 400, tabSwitches: 6 },
@@ -65,16 +65,18 @@ test('no rows at all is the same as the built-in defaults', () => {
   assert.deepEqual(readTuning(), readTuning(SEEDED_ROWS));
 });
 
-test('raising the cutoff moves an application off the flag', () => {
-  // The retune actually under discussion: 60 -> 75 takes the paste-plus-tab
-  // -switch pattern, which is most of what is flagged today, out of "AI used".
+test('raising the threshold moves an application off the review queue', () => {
+  // What a threshold now governs is the clean/possible line -- how much
+  // behaviour is worth a manager's attention. It no longer governs the top
+  // label, because behaviour alone can no longer reach it whatever the number:
+  // see levelFor in shared/aiDetect.js.
   const before = detectAiUse(BORDERLINE.written, BORDERLINE.telemetry);
-  assert.equal(before.level, 'ai_used');
+  assert.equal(before.level, 'possible');
   assert.equal(before.score, 60);
 
-  const raised = readTuning([{ key: 'ai_use.thresholds', value: { ai_used: 75, possible: 30 } }]);
+  const raised = readTuning([{ key: 'ai_use.thresholds', value: { ai_used: 90, possible: 70 } }]);
   const after = detectAiUse(BORDERLINE.written, BORDERLINE.telemetry, raised);
-  assert.equal(after.level, 'possible');
+  assert.equal(after.level, 'clean');
   assert.equal(after.score, 60, 'the score is unchanged; only where the line sits moved');
 });
 

@@ -17,9 +17,13 @@
  *    disagreement is the whole value — it marks the applications worth a
  *    second look.
  *
- * 2. Nothing here decides anything. The fitment score is stored beside the
- *    rule score; the AI opinion becomes one more reason in a verdict that is
- *    still led by behaviour. No application is auto-declined, ever.
+ * 2. Nothing here decides anything on its own -- and since the verdict rule
+ *    changed, that is true in both directions. The fitment score is stored
+ *    beside the rule score, and the AI opinion is now one of the two things
+ *    that must agree before an application can be labelled "AI used": the
+ *    model must find something in the text AND the machine must have seen it
+ *    arrive mechanically. Neither half can convict alone. No application is
+ *    auto-declined, ever.
  */
 
 import { pool } from './db.js';
@@ -28,6 +32,8 @@ import { extractCvText, CvTextError } from './cvText.js';
 import { resolveCv } from './storage.js';
 import { ROLE_BY_API_KEY, questionsFor, WRITTEN_QUESTIONS } from './roles.js';
 import { isEnabled } from './flags.js';
+import { aiTuning } from './aiTuning.js';
+import { DEFAULT_TUNING, detectAiUse, levelFor } from '../../shared/aiDetect.js';
 
 /**
  * Bumped whenever the wording below changes.
@@ -141,7 +147,7 @@ export async function queueReview(client, applicantId) {
 
 const CLAIM = `
   SELECT r.applicant_id, r.attempts,
-         a.role, a.written_answers, a.mcq_answers, a.cv_object_key,
+         a.role, a.written_answers, a.mcq_answers, a.cv_object_key, a.telemetry,
          a.ai_use_level, a.ai_use_score, a.ai_use_reasons
     FROM recruit_llm_reviews r
     JOIN recruit_applicants a ON a.id = r.applicant_id
@@ -156,17 +162,39 @@ const CLAIM = `
 /**
  * Folds the model's opinion into the behavioural verdict.
  *
- * Spec §13.3 is why this is worth so little: a text-only judgement about
- * fluent non-native writers is the exact failure mode the behavioural signals
- * exist to avoid. Fifteen points cannot on its own carry a clean application
- * past the 30-point "possible" line — it can only tip one that was already
- * close, and it always says so in the reasons.
+ * The model's fifteen points are unchanged, and still deliberately small — the
+ * score stays a behavioural number that a manager can sort by. What changed is
+ * that the LABEL is no longer read off that score alone: `levelFor` requires
+ * the model and the machine to agree before it will say "AI used". See the
+ * comment on `levelFor` in shared/aiDetect.js for why, and for the numbers.
+ *
+ * `mechanical` has to be passed in rather than guessed from the reason strings.
+ * Those are wording meant for a person, and matching on them would break
+ * silently the first time somebody improved a sentence.
+ *
+ * The thresholds come from the tuning, not from constants. This function used
+ * to hardcode 60 and 30, which meant that retuning `ai_use.thresholds` was
+ * quietly ignored for exactly those applications the model had an opinion
+ * about — the settings appeared to work, and did not.
  */
-export function foldAiOpinion({ level, score, reasons }, { aiOpinion, aiRationale }) {
-  if (aiOpinion !== 'likely') return { level, score, reasons };
+export function foldAiOpinion(
+  { level, score, reasons, mechanical = false },
+  { aiOpinion, aiRationale },
+  tuning = DEFAULT_TUNING,
+) {
+  const thresholds = (tuning ?? DEFAULT_TUNING).thresholds;
+  const opinion = aiOpinion ?? null;
+
+  // Re-decided even when the model saw nothing: a behavioural score that was
+  // labelled "ai_used" by the old rule must come back down to "possible" now
+  // that behaviour alone cannot reach the top label.
+  if (opinion !== 'likely') {
+    return { level: levelFor({ score, mechanical, opinion }, thresholds), score, reasons };
+  }
+
   const next = Math.min(100, (score ?? 0) + 15);
   return {
-    level: next >= 60 ? 'ai_used' : next >= 30 ? 'possible' : 'clean',
+    level: levelFor({ score: next, mechanical, opinion }, thresholds),
     score: next,
     reasons: [...(reasons ?? []), `Model review: ${aiRationale ?? 'reads as AI-assisted'}`],
   };
@@ -210,6 +238,11 @@ export async function drainReviews() {
   if (llmMode() === 'off') return 0;
   if (!(await isEnabled('recruitment_ai_review'))) return 0;
 
+  // Read once for the batch rather than per row: it is cached anyway, and one
+  // drain should not be able to apply two different tunings to two applicants
+  // because somebody saved a setting halfway through.
+  const tuning = await aiTuning();
+
   const client = await pool.connect();
   let done = 0;
   try {
@@ -237,9 +270,21 @@ export async function drainReviews() {
 
         // final_score is generated from COALESCE(ai_score, rule_score), so this
         // one write is what promotes the model's number on the dashboard.
+        // Which mechanical signals fired is recomputed from what was stored
+        // rather than parsed back out of the reason strings. Same inputs, same
+        // tuning, so it reproduces the verdict taken at submission -- it is
+        // asking the question the stored row never recorded an answer to.
+        const { mechanical } = detectAiUse(row.written_answers, row.telemetry ?? {}, tuning);
+
         const folded = foldAiOpinion(
-          { level: row.ai_use_level, score: row.ai_use_score, reasons: row.ai_use_reasons ?? [] },
+          {
+            level: row.ai_use_level,
+            score: row.ai_use_score,
+            reasons: row.ai_use_reasons ?? [],
+            mechanical,
+          },
           review,
+          tuning,
         );
         await client.query(
           `UPDATE recruit_applicants

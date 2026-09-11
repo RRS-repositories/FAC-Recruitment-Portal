@@ -79,14 +79,17 @@ test('an unrecognised ai_opinion reads as unclear, never as a verdict', () => {
 test('the model alone cannot push a clean application past "possible"', () => {
   // Spec §13.3: a text-only judgement about fluent non-native writers must not
   // be able to convict on its own. 15 points cannot cross the 30-point line.
-  const clean = { level: 'clean', score: 0, reasons: [] };
+  const clean = { level: 'clean', score: 0, reasons: [], mechanical: false };
   const after = foldAiOpinion(clean, { aiOpinion: 'likely', aiRationale: 'no personal detail' });
-  assert.equal(after.level, 'clean');
-  assert.ok(after.score < 30, 'a clean application must stay clean on the model alone');
+  assert.equal(after.level, 'possible', 'a reason to look');
+  assert.notEqual(after.level, 'ai_used', 'never a verdict on the text alone');
+  assert.ok(after.score < 30, 'and it barely moves the score');
 });
 
 test('but it can tip one that behaviour had already put near the line', () => {
-  const near = { level: 'possible', score: 45, reasons: ['Pasted 300 characters'] };
+  // mechanical: they pasted. That is what lets the model's agreement convict --
+  // two judges, two kinds of evidence.
+  const near = { level: 'possible', score: 45, reasons: ['Pasted 300 characters'], mechanical: true };
   const after = foldAiOpinion(near, { aiOpinion: 'likely', aiRationale: 'register changes sharply' });
   assert.equal(after.score, 60);
   assert.equal(after.level, 'ai_used');
