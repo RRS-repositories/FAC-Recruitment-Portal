@@ -10,6 +10,14 @@
  * internal shorthand and a poor thing to say to a person; the sentence is the
  * most defensible version of the same fact.
  *
+ * `reapply` is the invitation to try again, and only two reasons carry one.
+ * The test is whether the candidate can actually do anything about it: answers
+ * that read as somebody else's work and answers that stayed general are both
+ * things the same person could put right tomorrow, and since a declined
+ * application no longer blocks a new one, the email can say so. Not enough
+ * relevant experience is not fixable by the weekend, and inviting somebody to
+ * reapply against it would waste their time and ours.
+ *
  * NONE is the default and means no reason is recorded and none is sent. That
  * is the honest default: a manager who has not chosen a reason has not given
  * one, and the email should not invent one.
@@ -46,6 +54,8 @@ export const DECLINE_REASONS = [
     label: 'Answers too general',
     sentence:
       'Your written answers stayed general rather than telling us about your own experience, so it was difficult to judge what you would bring to the role.',
+    reapply:
+      'If you would like to be considered, you are welcome to apply again. Answers that draw on your own experience, with specific examples, tell us far more than general ones.',
   },
   {
     code: 'ai_used',
@@ -58,6 +68,12 @@ export const DECLINE_REASONS = [
     // is what the evidence supports.
     sentence:
       'We ask that answers are written in your own words, and on this occasion your written answers did not read as your own work.',
+    // The invitation is what keeps the paragraph above fair. We are telling
+    // somebody their answers read as AI-written on evidence that is signals
+    // rather than proof, so the same email has to give the person who did
+    // write them a way to say so — by writing them again.
+    reapply:
+      'If you would like to be considered, you are welcome to apply again. Please write your answers yourself, in your own words, and take as long over them as you need.',
   },
   {
     code: 'other',
@@ -87,4 +103,17 @@ export function declineSentence(code, note) {
     return written ? written.slice(0, 500) : null;
   }
   return BY_CODE.get(code)?.sentence ?? null;
+}
+
+/**
+ * The invitation to apply again, or null for none.
+ *
+ * Deliberately not offered for `other`: a manager writing their own reason has
+ * not told us whether it is one the candidate could put right, and an
+ * invitation attached to an unknown reason is a promise nobody checked. They
+ * can write it themselves if they mean it.
+ */
+export function declineReapply(code) {
+  if (!code || code === NO_REASON || code === 'other') return null;
+  return BY_CODE.get(code)?.reapply ?? null;
 }

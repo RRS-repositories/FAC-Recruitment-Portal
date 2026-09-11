@@ -1,6 +1,6 @@
 import { ROLE_BY_API_KEY } from '../lib/roles.js';
 import { formatDayIn, formatTimeIn } from '../lib/zonedTime.js';
-import { declineSentence } from '../../shared/declineReasons.js';
+import { declineReapply, declineSentence } from '../../shared/declineReasons.js';
 
 /**
  * What every email needs to know, fetched at the moment of sending.
@@ -77,6 +77,12 @@ export async function loadContext(row, db) {
     // between the decision and the email going out is the one the candidate
     // reads.
     declineSentence: declineSentence(record.decline_reason, record.decline_reason_note),
+
+    // The invitation to apply again, for the reasons that carry one. Also
+    // resolved here rather than at queue time, so a manager who corrects
+    // the reason before the email leaves changes both halves together.
+    declineReapply: declineReapply(record.decline_reason),
+    reapplyUrl: publicBaseUrl(),
 
     // Filled in below only when there is a time to talk about.
     localDay: null,

@@ -5,6 +5,7 @@ import {
   DECLINE_REASONS,
   NO_REASON,
   declineReason,
+  declineReapply,
   declineSentence,
   isDeclineReason,
 } from '../../shared/declineReasons.js';
@@ -71,6 +72,27 @@ test('"other" with nothing written says nothing', () => {
 test('a very long note is capped rather than sent whole', () => {
   const long = 'x'.repeat(2000);
   assert.equal(declineSentence('other', long).length, 500);
+});
+
+test('only the reasons a candidate can act on invite them back', () => {
+  // Fixable tonight: write it yourself, write it specifically. Not fixable
+  // tonight: how much relevant experience you have. Inviting somebody to
+  // reapply against the second wastes their evening and our inbox.
+  assert.ok(declineReapply('ai_used'));
+  assert.ok(declineReapply('answers_generic'));
+
+  for (const code of ['experience', 'role_fit', 'incomplete']) {
+    assert.equal(declineReapply(code), null, `${code} should not invite a reapply`);
+  }
+});
+
+test('no reason and "other" never invite a reapply', () => {
+  // No reason means nothing is said at all. "Other" means we do not know
+  // whether it is something they could put right, so we do not promise it is.
+  assert.equal(declineReapply(NO_REASON), null);
+  assert.equal(declineReapply('other'), null);
+  assert.equal(declineReapply(null), null);
+  assert.equal(declineReapply('nonsense'), null);
 });
 
 test('a preset reason ignores any note sent alongside it', () => {
