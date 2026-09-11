@@ -14,6 +14,7 @@ import {
 import { resolveCv, cvExists } from '../lib/storage.js';
 import { generateBookingToken, tokenExpiry } from '../lib/bookingToken.js';
 import { notifyDecision, notifyMeetingLink, notifyNoShow } from '../lib/notify.js';
+import { isDeclineReason, NO_REASON } from '../../shared/declineReasons.js';
 import { cancelPendingFor, historyFor } from '../lib/outbox.js';
 import { describeTemplates } from '../lib/templates.js';
 import { mailMode } from '../lib/mailer.js';
@@ -774,16 +775,41 @@ export function createAdminRouter() {
       return res.status(400).json({ ok: false, error: 'Status must be accepted or declined.' });
     }
 
+    /**
+     * Why, when declining. Only ever recorded on a decline — an accepted
+     * application has no reason to carry one, and storing it would leave a
+     * field that means nothing half the time.
+     *
+     * An unrecognised code is refused rather than quietly stored: a code the
+     * dropdown no longer offers is a record nobody can read back.
+     */
+    let reasonCode = null;
+    let reasonNote = null;
+    if (status === 'declined') {
+      const asked = typeof req.body?.reason === 'string' ? req.body.reason : NO_REASON;
+      if (!isDeclineReason(asked)) {
+        return res.status(400).json({ ok: false, error: 'That is not a reason we recognise.' });
+      }
+      reasonCode = asked === NO_REASON ? null : asked;
+      if (reasonCode === 'other') {
+        reasonNote = String(req.body?.reasonNote ?? '').trim().slice(0, 500) || null;
+        if (!reasonNote) {
+          return res.status(400).json({ ok: false, error: 'Please write the reason, or choose No reason.' });
+        }
+      }
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
       const { rows } = await client.query(
         `UPDATE recruit_applicants
-            SET status = $2, decided_by_email = $3, decided_at = now()
+            SET status = $2, decided_by_email = $3, decided_at = now(),
+                decline_reason = $4, decline_reason_note = $5
           WHERE id = $1 AND status = 'pending'
-          RETURNING id, full_name, email, role`,
-        [req.params.id, status, req.admin.email],
+          RETURNING id, full_name, email, role, decline_reason, decline_reason_note`,
+        [req.params.id, status, req.admin.email, reasonCode, reasonNote],
       );
 
       if (!rows[0]) {
@@ -817,7 +843,15 @@ export function createAdminRouter() {
       await client.query(
         `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
          VALUES ($1, $2, $3, $4)`,
-        [rows[0].id, req.admin.email, status, JSON.stringify({ decidedBy: req.admin.email })],
+        [
+          rows[0].id,
+          req.admin.email,
+          status,
+          // The reason goes in the trail as well as on the row. The row holds
+          // the current state; the trail holds what was decided and why at the
+          // moment it was decided, which is the question anyone asks later.
+          JSON.stringify({ decidedBy: req.admin.email, reason: reasonCode, note: reasonNote }),
+        ],
       );
 
       // Queued in the same transaction as the decision. Either both happen or

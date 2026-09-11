@@ -5,6 +5,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Icon } from '@/components/ui/Icon';
 import { Flag } from '@/components/ui/Flag';
 import { COLUMNS, CHEVRON_WIDTH } from '@/features/dashboard/columns';
+import { DECLINE_REASONS, NO_REASON, declineReason } from '@shared/declineReasons.js';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ApplicantRow } from '@/features/dashboard/ApplicantRow';
@@ -157,6 +158,10 @@ export function DashboardPage() {
   const [loadError, setLoadError] = useState('');
   const [confirming, setConfirming] = useState(null);
   const [deciding, setDeciding] = useState(false);
+  // Reset every time the dialog opens, so a reason chosen for one candidate
+  // can never be carried into the next by a manager working through a list.
+  const [reason, setReason] = useState(NO_REASON);
+  const [reasonNote, setReasonNote] = useState('');
   const [decideError, setDecideError] = useState('');
   const [bookingLink, setBookingLink] = useState(null);
   const [actionError, setActionError] = useState('');
@@ -222,6 +227,8 @@ export function DashboardPage() {
    */
   const askToDecide = useCallback(async (id, decision) => {
     setDecideError('');
+    setReason(NO_REASON);
+    setReasonNote('');
     setConfirming({ id, decision });
     try {
       const settings = await adminSettings();
@@ -331,7 +338,13 @@ export function DashboardPage() {
     setDeciding(true);
     setDecideError('');
     try {
-      const result = await adminDecide(confirming.id, confirming.decision);
+      const result = await adminDecide(
+        confirming.id,
+        confirming.decision,
+        // Only ever sent on a decline. The server ignores it otherwise, but
+        // not sending it keeps the request honest about what was asked.
+        confirming.decision === 'declined' ? { reason, reasonNote } : undefined,
+      );
       const applicant = confirmingApplicant;
       setConfirming(null);
 
@@ -751,6 +764,60 @@ export function DashboardPage() {
               )}
             </span>
           </p>
+          {/* Why, when declining. Not shown on an accept: there is nothing to
+              explain, and a field that means nothing half the time is a field
+              people stop reading. */}
+          {confirming.decision === 'declined' ? (
+            <div className="mt-4">
+              <label
+                htmlFor="decline-reason"
+                className="block text-[0.8rem] font-bold uppercase tracking-wide text-muted"
+              >
+                Reason
+              </label>
+              <select
+                id="decline-reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                disabled={deciding}
+                className="mt-1.5 w-full rounded-control border-[1.5px] border-line bg-white px-3 py-2 text-[0.88rem] focus:border-violet focus:outline-none"
+              >
+                {DECLINE_REASONS.map((r) => (
+                  <option key={r.code} value={r.code}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+
+              {reason === 'other' ? (
+                <>
+                  <label htmlFor="decline-note" className="sr-only">
+                    Write the reason
+                  </label>
+                  <textarea
+                    id="decline-note"
+                    value={reasonNote}
+                    onChange={(e) => setReasonNote(e.target.value.slice(0, 500))}
+                    disabled={deciding}
+                    rows={3}
+                    placeholder="In your own words — this is sent to the candidate."
+                    className="mt-2 w-full rounded-control border-[1.5px] border-line bg-white px-3 py-2 text-[0.88rem] focus:border-violet focus:outline-none"
+                  />
+                  <p className="mt-1 text-[0.78rem] text-muted">
+                    {reasonNote.trim().length}/500 · written exactly as typed, so read it back
+                    before sending.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1.5 text-[0.8rem] leading-relaxed text-muted">
+                  {reason === NO_REASON
+                    ? 'No reason is recorded, and the email says only that the application was unsuccessful.'
+                    : `The candidate is told: “${declineReason(reason)?.sentence ?? ''}”`}
+                </p>
+              )}
+            </div>
+          ) : null}
+
           {decideError ? (
             <p role="alert" className="mt-3 text-[0.85rem] font-medium text-danger">
               {decideError}

@@ -248,11 +248,16 @@ export function createApplicationsRouter({ ipSalt }) {
       if (error instanceof UploadError) {
         return res.status(400).json({ ok: false, errors: { cv: error.message } });
       }
-      // 23505 = unique_violation, which here can only be (email, role).
+      // 23505 = unique_violation, which here can only be (email, role) — and
+      // since recruit_012 that index is partial, so it fires only when there
+      // is an application still in play. Somebody previously declined is not
+      // blocked and never sees this; the wording says "already with us"
+      // rather than "already applied" so it stays true for them too.
       if (error.code === '23505') {
         return res.status(409).json({
           ok: false,
-          error: 'You have already applied for this role with that email address.',
+          error:
+            'You already have an application with us for this role. We will be in touch about that one.',
         });
       }
       // Log the failure, never the payload — it is someone's personal data.

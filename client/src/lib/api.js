@@ -176,10 +176,17 @@ export function adminApplications({ status, role, q, page = 1, from, to, sort, a
 export const adminApplication = (id) =>
   request(`/recruit/admin/applications/${id}`, { headers: withAuth() });
 
-export const adminDecide = (id, status) =>
+/**
+ * Accept or decline.
+ *
+ * `why` is only meaningful on a decline — `{ reason, reasonNote }`, where the
+ * note is used only when the reason is 'other'. Left off entirely for an
+ * accept, so the request says only what was actually asked.
+ */
+export const adminDecide = (id, status, why) =>
   request(`/recruit/admin/applications/${id}`, {
     method: 'PATCH',
-    body: { status },
+    body: why ? { status, reason: why.reason, reasonNote: why.reasonNote } : { status },
     headers: withAuth(),
   });
 

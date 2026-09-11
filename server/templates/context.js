@@ -1,5 +1,6 @@
 import { ROLE_BY_API_KEY } from '../lib/roles.js';
 import { formatDayIn, formatTimeIn } from '../lib/zonedTime.js';
+import { declineSentence } from '../../shared/declineReasons.js';
 
 /**
  * What every email needs to know, fetched at the moment of sending.
@@ -19,6 +20,7 @@ const UK = 'Europe/London';
 const ONE = `
   SELECT a.id            AS applicant_id,
          a.full_name, a.email, a.role, a.candidate_tz, a.status AS applicant_status,
+         a.decline_reason, a.decline_reason_note,
          i.id            AS interview_id,
          i.starts_at, i.ends_at, i.status AS interview_status,
          i.meet_link, i.reschedule_count,
@@ -69,6 +71,12 @@ export async function loadContext(row, db) {
     interviewStatus: record.interview_status,
     rescheduleCount: record.reschedule_count ?? 0,
     meetLink: record.meet_link ?? null,
+
+    // The decline reason as a finished sentence, or null. Resolved here, at
+    // SEND time, like everything else — so a reason corrected in the minute
+    // between the decision and the email going out is the one the candidate
+    // reads.
+    declineSentence: declineSentence(record.decline_reason, record.decline_reason_note),
 
     // Filled in below only when there is a time to talk about.
     localDay: null,
