@@ -550,7 +550,7 @@ export function DashboardPage() {
                 onToggle={toggleSort}
               />
               <SortButton
-                label="Time taken"
+                label="Form open"
                 column="duration"
                 sort={sort}
                 onToggle={toggleSort}

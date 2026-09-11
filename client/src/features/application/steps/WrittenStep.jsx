@@ -45,7 +45,10 @@ export function WrittenStep({ role, answers, onChange, onBack, onNext, telemetry
                     value={value}
                     onChange={set(question.id)}
                     onPaste={telemetry.onPaste}
-                    onKeyDown={telemetry.onKeyDown}
+                    // `input`, not `keydown`: a phone keyboard reports no key.
+                    // See useTelemetry.js -- it recorded nothing at all for the
+                    // 82% of applicants who apply from one.
+                    onInput={telemetry.onInput}
                     placeholder="Take your time — a few sentences is plenty."
                   />
                   <p

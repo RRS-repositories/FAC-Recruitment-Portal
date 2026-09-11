@@ -6,9 +6,16 @@
 /** "7m 42s" — the time-taken column in the dashboard. */
 export function formatDuration(seconds) {
   if (seconds == null) return '—';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}m ${String(s).padStart(2, '0')}s`;
+
+  // Rolls into hours. Without this a form left open overnight printed as
+  // "951m 00s", which reads as a fault rather than as what it is: somebody who
+  // opened the page, went away, and came back the next day. Past an hour the
+  // seconds stop being interesting, so they are dropped.
+  const total = Math.max(0, Math.round(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m`;
+  return `${m}m ${String(total % 60).padStart(2, '0')}s`;
 }
 
 const dateTime = new Intl.DateTimeFormat('en-GB', {
