@@ -43,3 +43,13 @@ export function dedupeKey(...parts) {
   if (key.length > 200) throw new Error(`dedupe key too long (${key.length}): ${key.slice(0, 60)}…`);
   return key;
 }
+
+/**
+ * Where a queued message can go.
+ *
+ * Here rather than in outbox.js for the same reason the backoff curve is: it
+ * is a fact about the queue that a test should be able to assert without
+ * opening a database connection. It must stay in step with the CHECK
+ * constraint added by recruit_014.
+ */
+export const CHANNELS = ['email', 'mattermost'];

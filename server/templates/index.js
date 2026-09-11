@@ -266,6 +266,77 @@ declineEmail({
   closing: 'We appreciate your interest in the firm and wish you every success in your career.',
 });
 
+// ── Sarah's posts to the Mattermost interview channel ───────────────────────
+
+/*
+ * These two are not emails, and the differences are deliberate.
+ *
+ * The audience is the interviewer and the hiring manager, both in the channel,
+ * so the time is given in the INTERVIEWER'S day rather than the candidate's.
+ * For the India role those are the same zone; for South Africa they are not,
+ * and a post telling somebody in Kolkata that an interview is at 10:00 SAST is
+ * how a person joins an hour late.
+ *
+ * Nothing beyond name, role, time and link goes in. No score, no AI verdict,
+ * no CV, no dashboard link. A chat channel is a permanent record with a wider
+ * audience than the dashboard, and the dashboard already holds all of it
+ * behind a login.
+ *
+ * `subject` is required by the registry and unused by a chat post; it is what
+ * the templates preview screen shows, so it is written for a person anyway.
+ */
+
+/** The interviewer's own day and time, with UK alongside. */
+const chatWhen = (data) =>
+  data.interviewerDay && data.interviewerTime
+    ? `${data.interviewerDay} at ${data.interviewerTime} (${data.ukTime} UK)`
+    : 'a time still to be chosen';
+
+registerTemplate({
+  key: 'recruit.chat.booked',
+  title: 'Mattermost — interview booked',
+  audience: 'internal',
+  when: 'Posted to the interview channel when a candidate books, and again if they move it.',
+  description:
+    'Goes to the Mattermost interview channel, not to anybody by email. Carries no score, no AI verdict and no CV — the dashboard holds those behind a login.',
+  mergeFields: ['fullName', 'roleTitle', 'interviewerDay', 'interviewerTime', 'ukTime'],
+  sample: SAMPLE,
+  load,
+  render: (data) => ({
+    subject: `Interview booked — ${data.fullName}`,
+    text: [
+      `**Interview booked — ${data.fullName}**`,
+      `${data.roleTitle} · ${chatWhen(data)}`,
+      `Interviewer: ${data.interviewerName}`,
+    ].join('\n'),
+  }),
+});
+
+registerTemplate({
+  key: 'recruit.chat.t10',
+  title: 'Mattermost — ten minutes before',
+  audience: 'internal',
+  when: 'Posted to the interview channel ten minutes before an interview starts.',
+  description:
+    'The joining link, resolved at the moment it posts — so it is the current link for the current time even if the interview was moved after it was queued.',
+  mergeFields: ['fullName', 'roleTitle', 'meetLink', 'interviewerTime', 'ukTime'],
+  sample: SAMPLE,
+  load,
+  render: (data) => ({
+    subject: `Interview in 10 minutes — ${data.fullName}`,
+    text: [
+      `**Interview in 10 minutes — ${data.fullName}**`,
+      `${data.roleTitle} · ${chatWhen(data)}`,
+      // Promising a link that does not exist is worse than saying so: whoever
+      // reads this has ten minutes to find another way in, and only if we are
+      // honest about it now.
+      data.meetLink
+        ? `Join: ${data.meetLink}`
+        : 'No video link was created for this one — check the interview in the dashboard.',
+    ].join('\n'),
+  }),
+});
+
 // ── Booking ─────────────────────────────────────────────────────────────────
 
 registerTemplate({

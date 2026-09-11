@@ -785,6 +785,16 @@ export function SettingsPage() {
                       AI.
                     </p>
                   ) : null}
+
+                  {data.chatMode === 'off' ? (
+                    <p className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-3.5 text-[0.85rem] leading-relaxed text-amber-900">
+                      <b className="font-semibold">Nothing is posted to Mattermost.</b> Interviews
+                      are still booked and everyone still gets their emails, but the interview
+                      channel will stay silent — no booking notice, and no joining link ten minutes
+                      before.
+                      {data.chatMissing?.length ? ` Not set: ${data.chatMissing.join(', ')}.` : ''}
+                    </p>
+                  ) : null}
                 </Card>
               </>
             ) : null}
