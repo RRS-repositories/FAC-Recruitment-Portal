@@ -13,7 +13,7 @@
  *   Interview        from  640px
  *   AI check         from  768px
  *   Email            from 1024px
- *   Time taken       from 1280px
+ *   Form open        from 1280px
  *
  * Nothing is lost by hiding one: every value here is also in the panel that
  * opens when the row is expanded.
@@ -23,7 +23,11 @@ export const COLUMNS = [
   { key: 'email', label: 'Email', cell: 'hidden lg:table-cell', width: 'w-[18%]' },
   { key: 'score', label: 'Score', cell: '', width: 'w-[9%]' },
   { key: 'ai', label: 'AI check', cell: 'hidden md:table-cell', width: 'w-[9%]' },
-  { key: 'duration', label: 'Time taken', cell: 'hidden xl:table-cell', width: 'w-[8%]' },
+  // "Form open", not "Time taken". The clock starts when the page loads and
+  // stops at submit, so it counts every gap -- lunch, sleep, a tab left open
+  // overnight. Median 13 minutes, but the longest on record is 15.8 hours.
+  // Calling that "time taken" invited a manager to read idle time as effort.
+  { key: 'duration', label: 'Form open', cell: 'hidden xl:table-cell', width: 'w-[8%]' },
   { key: 'status', label: 'Status', cell: '', width: 'w-[10%]' },
   { key: 'interview', label: 'Interview', cell: 'hidden sm:table-cell', width: 'w-[13%]' },
   { key: 'decision', label: 'Decision', cell: '', width: 'w-[10%]' },

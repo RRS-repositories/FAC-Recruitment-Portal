@@ -773,6 +773,18 @@ export function SettingsPage() {
                       file on the server rather than sent. Nothing is reaching candidates yet.
                     </p>
                   ) : null}
+
+                  {data.aiReviewMode === 'off' || data.flags?.recruitment_ai_review === false ? (
+                    <p className="mt-4 rounded-panel border border-amber-300 bg-amber-50 p-3.5 text-[0.85rem] leading-relaxed text-amber-900">
+                      <b className="font-semibold">Nothing is reading the written answers.</b>{' '}
+                      {data.aiReviewMode === 'off'
+                        ? 'No model key is configured, so the review never runs.'
+                        : 'The recruitment_ai_review flag is off. It has no switch on this page yet, so it has to be turned on in the settings table.'}{' '}
+                      Applications are still scored on behaviour — pasting, typing speed — but an
+                      empty “AI used” column means the check is not running, not that nobody used
+                      AI.
+                    </p>
+                  ) : null}
                 </Card>
               </>
             ) : null}

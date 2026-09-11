@@ -19,6 +19,7 @@ import { cancelPendingFor, historyFor } from '../lib/outbox.js';
 import { describeTemplates } from '../lib/templates.js';
 import { mailMode } from '../lib/mailer.js';
 import { captchaMode } from '../lib/captcha.js';
+import { llmMode } from '../lib/llm.js';
 import { FLAGS, allFlags, isEnabled, setFlag } from '../lib/flags.js';
 import { EMAIL, FIELD_LIMITS } from '../lib/validate.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
@@ -452,6 +453,11 @@ export function createAdminRouter() {
         // is not the control; the server verifying the token is, and only this
         // knows whether it does.
         captchaMode: captchaMode(),
+        // Same reason as captchaMode: the switch on the page is not the
+        // control. Without a model key nothing reads the written answers, so
+        // an empty "AI used" column means the check is not running rather
+        // than that nobody is cheating -- and those look identical.
+        aiReviewMode: llmMode(),
         retention: { months, dueCount: due.length },
       });
     } catch (error) {

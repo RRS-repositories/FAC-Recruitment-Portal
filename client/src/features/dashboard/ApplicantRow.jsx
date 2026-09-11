@@ -336,7 +336,7 @@ export function ApplicantRow({
           <dl className="grid gap-4 sm:grid-cols-3">
             <Detail label="Phone">{full.phone}</Detail>
             <Detail label="Applied">{formatDateTime(applicant.createdAt)}</Detail>
-            <Detail label="Time taken">{formatDuration(applicant.durationSec)}</Detail>
+            <Detail label="Form open">{formatDuration(applicant.durationSec)}</Detail>
           </dl>
 
           {applicant.decidedByEmail ? (
