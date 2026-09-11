@@ -14,6 +14,7 @@ import {
 import { storeCv, deleteCv, UploadError, CV_LIMITS } from '../lib/storage.js';
 import { scoreApplication } from '../../shared/scoring.js';
 import { detectAiUse } from '../../shared/aiDetect.js';
+import { aiTuning } from '../lib/aiTuning.js';
 import { notifyApplicationReceived } from '../lib/notify.js';
 import { isEnabled, requireFlag } from '../lib/flags.js';
 import { mailMode } from '../lib/mailer.js';
@@ -144,7 +145,12 @@ export function createApplicationsRouter({ ipSalt }) {
     // Scored here, from the weights the client never received. §4: never trust
     // a score that arrived over the wire.
     const ruleScore = scoreApplication(questions, answers);
-    const ai = detectAiUse(written, telemetry);
+    // §13.3: the tuning comes from recruit_settings rather than from the
+    // constants, so a threshold that turns out to be wrong for this candidate
+    // pool is an edit and not a deploy. Cached, and it falls back to the
+    // built-in numbers when the table cannot be read — an application is
+    // never refused over a settings row.
+    const ai = detectAiUse(written, telemetry, await aiTuning());
 
     // Prefer the server's own record of when they started. A client clock can
     // be wrong or edited; if the session is missing we fall back to what was
