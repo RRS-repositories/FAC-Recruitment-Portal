@@ -177,18 +177,43 @@ const declineEmail = ({ key, title, country, opening, body, closing }) =>
     title,
     when: 'When a manager declines an applicant.',
     description: `Wording and layout supplied by the client, in the ${country} template. Unchanged.`,
-    mergeFields: ['firstName'],
+    mergeFields: ['firstName', 'declineSentence'],
     sample: SAMPLE,
     load,
-    render: (data) => ({
-      subject: 'Fast Action Claims — Application update',
-      text: [`Dear ${data.firstName},`, '', opening, '', body, '', closing, '', SIGN_OFF].join('\n'),
-      html: shell({
-        heading: 'Application update',
-        preview: 'An update on your application to Fast Action Claims.',
-        body: [greeting(data.firstName), p(esc(opening)), p(esc(body)), p(esc(closing))].join('\n'),
-      }),
-    }),
+    render: (data) => {
+      // Said only when there is something to say. A manager who chose no
+      // reason gave none, and the email must not invent one — so the
+      // paragraph is absent rather than empty, and an email with no reason
+      // reads exactly as it always has.
+      const reason = data.declineSentence ? [data.declineSentence] : [];
+      return {
+        subject: 'Fast Action Claims — Application update',
+        text: [
+          `Dear ${data.firstName},`,
+          '',
+          opening,
+          '',
+          body,
+          ...(reason.length ? [''] : []),
+          ...reason,
+          '',
+          closing,
+          '',
+          SIGN_OFF,
+        ].join('\n'),
+        html: shell({
+          heading: 'Application update',
+          preview: 'An update on your application to Fast Action Claims.',
+          body: [
+            greeting(data.firstName),
+            p(esc(opening)),
+            p(esc(body)),
+            ...reason.map((line) => p(esc(line))),
+            p(esc(closing)),
+          ].join('\n'),
+        }),
+      };
+    },
   });
 
 declineEmail({
