@@ -1,7 +1,8 @@
 import { pool } from './db.js';
 import { sendMail, mailMode } from './mailer.js';
+import { postInterviewMessage, chatMode } from './chat.js';
 import { renderQueued } from './templates.js';
-import { BATCH, MAX_ATTEMPTS, backoffSeconds } from './outboxPolicy.js';
+import { BATCH, CHANNELS, MAX_ATTEMPTS, backoffSeconds } from './outboxPolicy.js';
 import { isEnabled } from './flags.js';
 
 /**
@@ -29,7 +30,7 @@ import { isEnabled } from './flags.js';
  * overlapping tick of this one — cannot pick up the same email twice.
  */
 const CLAIM = `
-  SELECT id, template, to_email, to_name, applicant_id, interview_id, vars, attempts
+  SELECT id, template, to_email, to_name, applicant_id, interview_id, vars, attempts, channel
     FROM recruit_outbox
    WHERE sent_at IS NULL
      AND cancelled_at IS NULL
@@ -59,18 +60,24 @@ export async function enqueue(client, {
   vars = {},
   sendAfter = null,
   dedupeKey,
+  channel = 'email',
 }) {
   if (!template || !toEmail || !dedupeKey) {
     throw new Error('enqueue needs a template, a recipient and a dedupe key');
   }
+  if (!CHANNELS.includes(channel)) {
+    // Refused rather than defaulted. A typo that quietly became an email would
+    // send a chat post to a candidate's inbox.
+    throw new Error(`enqueue got an unknown channel: ${channel}`);
+  }
 
   const { rows } = await client.query(
     `INSERT INTO recruit_outbox
-       (template, to_email, to_name, applicant_id, interview_id, vars, send_after, dedupe_key)
-     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()), $8)
+       (template, to_email, to_name, applicant_id, interview_id, vars, send_after, dedupe_key, channel)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()), $8, $9)
      ON CONFLICT (dedupe_key) DO NOTHING
      RETURNING id`,
-    [template, toEmail, toName, applicantId, interviewId, JSON.stringify(vars), sendAfter, dedupeKey],
+    [template, toEmail, toName, applicantId, interviewId, JSON.stringify(vars), sendAfter, dedupeKey, channel],
   );
 
   return rows[0]?.id ?? null;
@@ -147,14 +154,54 @@ export async function drainOnce() {
         continue;
       }
 
+      /*
+       * A chat post with nowhere to go is cancelled, not retried.
+       *
+       * Retrying would burn the attempt ceiling over about twenty minutes and
+       * end in "failed", which reads as Mattermost having a problem. It does
+       * not: nobody configured it. Cancelling says that once, in the row, and
+       * the Settings page says it permanently -- the same choice the
+       * notifications flag makes just above.
+       */
+      if (row.channel === 'mattermost' && chatMode() === 'off') {
+        await client.query(
+          `UPDATE recruit_outbox
+              SET cancelled_at = now(), last_error = $2, vars = '{}'::jsonb, updated_at = now()
+            WHERE id = $1`,
+          [row.id, 'Mattermost is not configured'],
+        );
+        summary.cancelled += 1;
+        continue;
+      }
+
       try {
         const message = await renderQueued(row, client);
-        const result = await sendMail({
-          to: row.to_email,
-          toName: row.to_name,
-          template: row.template,
-          ...message,
-        });
+
+        /*
+         * One queue, two destinations.
+         *
+         * Everything around this line -- claiming, the dedupe key, the backoff
+         * curve, the attempt ceiling, `sent_at`, `cancelled_at`, the visible
+         * unsent row -- is shared, which is the whole reason a chat post is a
+         * queue row rather than a second mechanism with its own scheduler.
+         * The only thing that differs is who is handed the rendered text.
+         *
+         * A chat post that fails throws, exactly as a failed send does, so it
+         * lands in the same retry path below rather than being marked sent.
+         */
+        let result;
+        if (row.channel === 'mattermost') {
+          const posted = await postInterviewMessage({ text: message.text });
+          if (!posted.ok) throw new Error(`mattermost: ${posted.reason}`);
+          result = { mode: 'mattermost', reference: posted.postId ?? 'posted' };
+        } else {
+          result = await sendMail({
+            to: row.to_email,
+            toName: row.to_name,
+            template: row.template,
+            ...message,
+          });
+        }
 
         // `vars` is emptied on success. For the acceptance email it holds the
         // raw booking token — the one value that cannot be re-derived — and it

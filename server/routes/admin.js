@@ -20,6 +20,7 @@ import { describeTemplates } from '../lib/templates.js';
 import { mailMode } from '../lib/mailer.js';
 import { captchaMode } from '../lib/captcha.js';
 import { llmMode } from '../lib/llm.js';
+import { chatMode, chatMissing } from '../lib/chat.js';
 import { FLAGS, allFlags, isEnabled, setFlag } from '../lib/flags.js';
 import { EMAIL, FIELD_LIMITS } from '../lib/validate.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
@@ -458,6 +459,10 @@ export function createAdminRouter() {
         // an empty "AI used" column means the check is not running rather
         // than that nobody is cheating -- and those look identical.
         aiReviewMode: llmMode(),
+        // Same reason again: nothing on screen distinguishes "no interview was
+        // posted to the channel" from "posting was never switched on".
+        chatMode: chatMode(),
+        chatMissing: chatMissing(),
         retention: { months, dueCount: due.length },
       });
     } catch (error) {

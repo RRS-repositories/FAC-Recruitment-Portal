@@ -152,6 +152,48 @@ async function notifyInterviewer(client, { applicant, interviewId, when, moved }
     vars: { moved },
     dedupeKey: dedupeKey(moved ? 'iv-moved' : 'iv-booked', interviewId, when),
   });
+
+  /*
+   * The same two facts, in the Mattermost interview channel.
+   *
+   * Queued here rather than anywhere else because this function has already
+   * done the work of finding an active interviewer, and because everything the
+   * queue gives an email it gives these for nothing: exactly-once through the
+   * dedupe key, retry with backoff, and cancellation when the interview moves
+   * -- `cancelPendingFor` does not care what channel a row is on.
+   *
+   * `toEmail` is the interviewer's address on both. A chat post has no
+   * recipient address of its own, and this keeps the row honest about who it
+   * concerns, so the applicant's delivery history still reads properly.
+   *
+   * Queued even when Mattermost is not configured. The drain cancels those
+   * with a reason rather than retrying, and the day the env values are added
+   * the feature starts working with no deploy and no change here.
+   */
+  await enqueue(client, {
+    channel: 'mattermost',
+    template: 'recruit.chat.booked',
+    toEmail: to,
+    applicantId: applicant.id,
+    interviewId,
+    dedupeKey: dedupeKey(moved ? 'chat-moved' : 'chat-booked', interviewId, when),
+  });
+
+  // Ten minutes before, alongside the candidate's own reminder. Only if that
+  // is still in the future -- a booking made five minutes before the slot
+  // would otherwise queue a post that is already late.
+  const tenBefore = new Date(when.getTime() - 10 * 60_000);
+  if (tenBefore.getTime() > Date.now()) {
+    await enqueue(client, {
+      channel: 'mattermost',
+      template: 'recruit.chat.t10',
+      toEmail: to,
+      applicantId: applicant.id,
+      interviewId,
+      sendAfter: tenBefore,
+      dedupeKey: dedupeKey('chat10', interviewId, when),
+    });
+  }
 }
 
 /**
