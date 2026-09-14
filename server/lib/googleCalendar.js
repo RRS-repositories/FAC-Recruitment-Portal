@@ -37,6 +37,39 @@ const TIMEOUT_MS = Number(process.env.RECRUIT_GOOGLE_TIMEOUT_MS || 20_000);
  */
 const inviteCandidate = () => process.env.RECRUIT_GOOGLE_INVITE_CANDIDATE !== 'false';
 
+/**
+ * People added to every interview invite so they can join without knocking.
+ *
+ * WHY THIS EXISTS. These meetings belong to a personal Google account that
+ * nobody attends, and Google is explicit that "only the meeting organizer can
+ * find or approve requests to join a meeting". So anyone NOT on the calendar
+ * invite who opens the link is left knocking at a door nobody can open. Being
+ * on the invite is what lets somebody straight in — Google's access rules let
+ * "anyone invited through a Google Calendar event" join without knocking.
+ *
+ * It works on the person's SIGNED-IN GOOGLE ACCOUNT, not on an address alone.
+ * Somebody opening the link in a browser signed into a different account, or
+ * into none, is a stranger to Meet and knocks like anyone else.
+ *
+ * Comma-separated in RECRUIT_GOOGLE_EXTRA_GUESTS, so adding or removing a
+ * person is an env change rather than a deploy. Anything that is not shaped
+ * like an address is dropped rather than sent to Google, which would reject
+ * the whole event over one typo and leave the interview with no link.
+ */
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function extraGuests(env = process.env) {
+  const seen = new Set();
+  return String(env.RECRUIT_GOOGLE_EXTRA_GUESTS ?? '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => {
+      if (!EMAIL.test(s) || seen.has(s)) return false;
+      seen.add(s);
+      return true;
+    });
+}
+
 export const calendarMode = () =>
   process.env.RECRUIT_GOOGLE_CLIENT_ID &&
   process.env.RECRUIT_GOOGLE_CLIENT_SECRET &&
@@ -127,6 +160,14 @@ export async function createInterviewEvent({
     attendees.push({ email: candidateEmail, displayName: candidateName, responseStatus: 'needsAction' });
   }
   if (interviewerEmail) attendees.push({ email: interviewerEmail, displayName: interviewerName });
+
+  // Skipped when they are already on the invite as the candidate or the
+  // interviewer — Google accepts a duplicate attendee, but it then shows the
+  // same person twice on the event.
+  const already = new Set(attendees.map((a) => a.email.toLowerCase()));
+  for (const email of extraGuests()) {
+    if (!already.has(email)) attendees.push({ email });
+  }
 
   let data;
   try {

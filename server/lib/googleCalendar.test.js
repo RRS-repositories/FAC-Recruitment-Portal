@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { calendarMode, CalendarError, resetCalendarClient } from './googleCalendar.js';
+import { calendarMode, CalendarError, extraGuests, resetCalendarClient } from './googleCalendar.js';
 
 /**
  * What is worth pinning without a Google account attached: that the feature is
@@ -52,4 +52,36 @@ test('a half-configured calendar is off, not broken', async () => {
 test('errors carry whether they are worth retrying', () => {
   assert.equal(new CalendarError('x').retryable, true, 'unknown failures are worth another try');
   assert.equal(new CalendarError('x', { retryable: false }).retryable, false);
+});
+
+/* ── Extra guests who join without knocking ──────────────────────────────── */
+
+
+test('extra guests: none configured means nobody is added', () => {
+  assert.deepEqual(extraGuests({}), []);
+  assert.deepEqual(extraGuests({ RECRUIT_GOOGLE_EXTRA_GUESTS: '' }), []);
+  assert.deepEqual(extraGuests({ RECRUIT_GOOGLE_EXTRA_GUESTS: '   ' }), []);
+});
+
+test('extra guests: a comma-separated list is trimmed and lowercased', () => {
+  assert.deepEqual(
+    extraGuests({ RECRUIT_GOOGLE_EXTRA_GUESTS: ' Joe@Example.co.uk , second@example.com' }),
+    ['joe@example.co.uk', 'second@example.com'],
+  );
+});
+
+test('extra guests: a typo is dropped rather than sent to Google', () => {
+  // Google rejects the WHOLE event over one malformed attendee, which would
+  // leave the interview with no Meet link at all.
+  assert.deepEqual(
+    extraGuests({ RECRUIT_GOOGLE_EXTRA_GUESTS: 'joe@example.co.uk, not-an-address, @nope, a@b' }),
+    ['joe@example.co.uk'],
+  );
+});
+
+test('extra guests: the same person listed twice is added once', () => {
+  assert.deepEqual(
+    extraGuests({ RECRUIT_GOOGLE_EXTRA_GUESTS: 'joe@example.co.uk,JOE@example.co.uk' }),
+    ['joe@example.co.uk'],
+  );
 });
