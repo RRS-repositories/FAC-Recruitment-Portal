@@ -9,7 +9,7 @@ import { FLAGS, flagKey, isOn, readFlags } from './flagPolicy.js';
  * everything that must NOT.
  */
 
-test('the three flags from spec §2 exist, plus the AI review switch', () => {
+test('the three flags from spec §2 exist, plus the later feature switches', () => {
   assert.deepEqual(FLAGS, [
     'recruitment_portal',
     'recruitment_booking',
@@ -17,6 +17,7 @@ test('the three flags from spec §2 exist, plus the AI review switch', () => {
     'recruitment_ai_review',
     'recruitment_auto_meet',
     'recruitment_auto_noshow',
+    'recruitment_noshow_rebook',
   ]);
 });
 
@@ -36,6 +37,7 @@ test('a missing row is off', () => {
     recruitment_ai_review: false,
     recruitment_auto_meet: false,
     recruitment_auto_noshow: false,
+    recruitment_noshow_rebook: false,
   });
 });
 
