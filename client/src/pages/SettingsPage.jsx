@@ -59,6 +59,11 @@ const FLAG_COPY = {
     on: 'Emails are sent as things happen.',
     off: 'No email leaves the system. Applications and decisions are still recorded, and each unsent email is listed against the applicant so you can follow up by hand.',
   },
+  recruitment_noshow_rebook: {
+    title: 'No-show re-book',
+    on: '“Not attended” emails one final re-book link, valid 7 days. Missing that interview, or not re-booking in time, closes the application and adds the address to do-not-rehire.',
+    off: 'Missed interviews are recorded with the attendance buttons only. Nothing is re-offered, and nothing closes on its own.',
+  },
 };
 
 /** A switch with its consequence spelled out, rather than a bare toggle. */

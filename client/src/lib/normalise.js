@@ -55,6 +55,11 @@ export function normaliseApplicant(row) {
     // state — it is "not invited", which the badge already knows how to draw.
     interviewStatus: row.interview_status ?? 'not_invited',
     interviewAt: row.interview_at ?? null,
+    // The no-show re-book. Strictly true only, so an older server that does
+    // not send these reads as "no re-book", never as a final chance.
+    interviewFinalChance: row.interview_final_chance === true,
+    interviewExpiresAt: row.interview_expires_at ?? null,
+    noShowCount: Number.isInteger(row.no_show_count) ? row.no_show_count : 0,
     durationSec: row.duration_sec ?? null,
 
     ai: {

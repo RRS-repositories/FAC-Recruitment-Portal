@@ -144,5 +144,6 @@ test('both new emails appear on the templates screen and preview without a datab
     assert.ok(entry.preview?.html, `${key} previews`);
     assert.equal(entry.error ?? null, null, `${key} renders its own sample`);
   }
-  assert.match(described.find((t) => t.key === 'recruit.noshow.final').title, /DRAFT/);
+  // Approved 15 Sep: no longer labelled a draft.
+  assert.doesNotMatch(described.find((t) => t.key === 'recruit.noshow.final').title, /DRAFT/);
 });

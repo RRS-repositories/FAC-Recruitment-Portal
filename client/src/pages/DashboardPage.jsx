@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { ApplicantRow } from '@/features/dashboard/ApplicantRow';
 import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
+import { NotAttendedModal } from '@/features/dashboard/NotAttendedModal';
 import { ROLES } from '@/data/roles';
 import usePageMeta from '@/hooks/usePageMeta';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
@@ -26,6 +27,7 @@ import {
   getAdminToken,
 } from '@/lib/api';
 import { normaliseApplicant, normaliseSummary } from '@/lib/normalise';
+import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
 const STATUS_FILTERS = [
@@ -167,6 +169,11 @@ export function DashboardPage() {
   const [decideError, setDecideError] = useState('');
   const [bookingLink, setBookingLink] = useState(null);
   const [actionError, setActionError] = useState('');
+  // The no-show re-book: whether it is switched on (the server says), the
+  // pending links, and the applicant whose "Not attended" dialog is open.
+  const [noShowRebook, setNoShowRebook] = useState(false);
+  const [rebooks, setRebooks] = useState(null);
+  const [notAttending, setNotAttending] = useState(null);
 
   // Filtering happens server-side — the list is paged, so filtering the
   // twenty-five rows in hand would silently ignore every match on page two.
@@ -200,6 +207,8 @@ export function DashboardPage() {
       setPageSize(result.pageSize);
       setEmailLive(Boolean(result.emailLive));
       setTabs(result.tabs ?? EMPTY_TABS);
+      setNoShowRebook(result.noShowRebook === true);
+      setRebooks(result.rebooks ?? null);
     } catch (failure) {
       // An expired or rejected token is not an error to show — it is a request
       // to sign in again.
@@ -382,6 +391,26 @@ export function DashboardPage() {
     }
   };
 
+  /**
+   * After a successful "Not attended". On the re-book path with email off, the
+   * new link is shown once, exactly as a reissued link is -- it cannot be
+   * looked up again, and nobody else is going to send it.
+   */
+  const notAttendedDone = async (result) => {
+    const who = notAttending;
+    setNotAttending(null);
+    setActionError('');
+    if (result.path === 'rebook' && !result.emailLive && result.bookingToken && who) {
+      setBookingLink({
+        name: who.fullName,
+        email: who.email,
+        url: `${window.location.origin}/book/${result.bookingToken}`,
+        rebook: true,
+      });
+    }
+    await load();
+  };
+
   const confirmingApplicant = confirming ? applicants.find((a) => a.id === confirming.id) : null;
 
   const commit = async () => {
@@ -481,7 +510,10 @@ export function DashboardPage() {
 
       <section
         aria-label="Summary"
-        className="relative z-10 mb-6 -mt-10 grid grid-cols-2 gap-3.5 px-1 md:grid-cols-3 lg:grid-cols-6"
+        className={cn(
+          'relative z-10 mb-6 -mt-10 grid grid-cols-2 gap-3.5 px-1 md:grid-cols-3',
+          noShowRebook ? 'lg:grid-cols-7' : 'lg:grid-cols-6',
+        )}
       >
         <Stat label="Total" value={summary.total} />
         <Stat label="Awaiting review" value={summary.pending} tone="warn" />
@@ -489,7 +521,51 @@ export function DashboardPage() {
         <Stat label="Declined" value={summary.declined} tone="danger" />
         <Stat label="Interviews booked" value={summary.booked} tone="brand" />
         <Stat label="AI detected" value={summary.aiFlagged} tone="danger" />
+        {noShowRebook ? (
+          <Stat label="Re-books pending" value={rebooks?.pending ?? 0} tone="warn" />
+        ) : null}
       </section>
+
+      {/* Final re-book links about to run out unused. When one does, the
+          application closes and the address goes on do-not-rehire on its own,
+          so this is the last point a manager can chase the candidate. */}
+      {noShowRebook && rebooks?.expiringSoon?.length ? (
+        <div
+          role="status"
+          className="mb-4 rounded-panel border border-amber-300 bg-amber-50 px-4 py-3 text-[0.86rem] leading-relaxed text-amber-900"
+        >
+          <p className="flex items-center gap-2 font-semibold">
+            <Icon name="alert" size={16} className="flex-shrink-0" />
+            {rebooks.expiringSoon.length === 1
+              ? '1 final re-book link runs out within 48 hours'
+              : `${rebooks.expiringSoon.length} final re-book links run out within 48 hours`}
+          </p>
+          <ul className="mt-1.5 grid gap-0.5">
+            {rebooks.expiringSoon.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPage(1);
+                    setStatus('all');
+                    setRole('all');
+                    setAiLevel('all');
+                    setFrom('');
+                    setTo('');
+                    setQuery(r.email);
+                    setFocusId(r.id);
+                  }}
+                  className="font-semibold underline underline-offset-2 hover:text-amber-950"
+                >
+                  {r.fullName}
+                </button>{' '}
+                — not booked, expires {formatDateTime(r.expiresAt)}. If unused, the application
+                closes automatically.
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {actionError ? (
         <p
@@ -690,6 +766,8 @@ export function DashboardPage() {
                     onDecide={askToDecide}
                     onReissue={reissue}
                     onAttendance={markAttendance}
+                    onNotAttended={setNotAttending}
+                    noShowRebook={noShowRebook}
                     focus={applicant.id === focusId}
                   />
                 ))}
@@ -893,6 +971,14 @@ export function DashboardPage() {
         </Modal>
       ) : null}
 
+      {notAttending ? (
+        <NotAttendedModal
+          applicant={notAttending}
+          onClose={() => setNotAttending(null)}
+          onDone={notAttendedDone}
+        />
+      ) : null}
+
       {/* The booking link, shown once.
           Automatic email is no longer "stage 5" — accepting queues the
           shortlisting email with this link in it, and so does reissuing. So
@@ -946,8 +1032,11 @@ export function DashboardPage() {
               href={`mailto:${bookingLink.email}?subject=${encodeURIComponent(
                 'Your interview with Fast Action Claims',
               )}&body=${encodeURIComponent(
-                `Hi ${bookingLink.name},\n\nGood news — we would like to invite you to an interview. ` +
-                  `Please pick a time that suits you here:\n\n${bookingLink.url}\n\nBest wishes,\nFast Action Claims`,
+                bookingLink.rebook
+                  ? `Hi ${bookingLink.name},\n\nWe missed you at your interview. This is your final opportunity to re-book, ` +
+                      `and the link is valid for 7 days:\n\n${bookingLink.url}\n\nBest wishes,\nFast Action Claims`
+                  : `Hi ${bookingLink.name},\n\nGood news — we would like to invite you to an interview. ` +
+                      `Please pick a time that suits you here:\n\n${bookingLink.url}\n\nBest wishes,\nFast Action Claims`,
               )}`}
             >
               <Icon name="mail" size={15} />
