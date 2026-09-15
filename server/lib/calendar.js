@@ -28,7 +28,18 @@ import {
 const INTERVIEWS = `
   SELECT i.id, i.starts_at, i.ends_at, i.status, i.meet_link,
          a.id AS applicant_id, a.full_name, a.email, a.role,
-         a.final_score, a.candidate_tz
+         a.final_score, a.candidate_tz,
+         -- For the popup's colours and buttons. Through to_jsonb so the
+         -- calendar cannot break on a database without recruit_015.
+         COALESCE((to_jsonb(i) ->> 'is_final_chance')::boolean, false) AS is_final_chance,
+         -- Attendance buttons act on the applicant's LATEST interview with a
+         -- time; offering them on an older slot would mark a different one.
+         NOT EXISTS (
+           SELECT 1 FROM recruit_interviews l
+            WHERE l.applicant_id = i.applicant_id
+              AND l.starts_at IS NOT NULL
+              AND l.created_at > i.created_at
+         ) AS is_latest
     FROM recruit_interviews i
     JOIN recruit_applicants a ON a.id = i.applicant_id
    WHERE i.interviewer_id = $1
@@ -150,6 +161,9 @@ export async function buildCalendar({ interviewerId, from, to, now = new Date() 
                 // Already selected above and never passed on, so the calendar
                 // showed everything about a booking except how to join it.
                 meetLink: interview.meet_link ?? null,
+                startsAt: new Date(interview.starts_at).toISOString(),
+                isFinalChance: interview.is_final_chance === true,
+                isLatest: interview.is_latest === true,
               },
             }
           : {}),

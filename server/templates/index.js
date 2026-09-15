@@ -713,10 +713,10 @@ registerTemplate({
  */
 registerTemplate({
   key: 'recruit.noshow.final',
-  title: 'Not attended — application closed (DRAFT)',
+  title: 'Not attended — application closed',
   when: 'When a manager marks a final-chance interview "Not attended".',
   description:
-    'DRAFT — no wording was supplied, so this needs approval before the feature is switched on. ' +
+    'Approved 15 Sep. ' +
     'Short and factual: states the missed final interview and that the application is closed, as the re-book email said it would be. ' +
     'It is the only email sent: the ordinary decline email is not sent as well.',
   mergeFields: ['firstName', 'roleTitle', 'localDay', 'localTime', 'ukTime'],

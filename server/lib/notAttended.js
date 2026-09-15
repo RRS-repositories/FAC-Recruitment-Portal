@@ -3,7 +3,14 @@ import { generateBookingToken, tokenExpiry } from './bookingToken.js';
 import { cancelPendingFor } from './outbox.js';
 import { notifyNoShowFinal, notifyNoShowRebook } from './notify.js';
 import { cancelMeetLink } from './meetLink.js';
-import { DNR_REASON, PATHS, REBOOK_EXPIRY_DAYS, notAttendedDecision } from './rebookPolicy.js';
+import { renderQueued } from './templates.js';
+import {
+  DNR_REASON,
+  PATHS,
+  REBOOK_EXPIRY_DAYS,
+  notAttendedDecision,
+  notAttendedLabel,
+} from './rebookPolicy.js';
 
 /**
  * "Not attended" -- what one press does, in one transaction.
@@ -28,23 +35,23 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * first left behind -- the new re-book row -- and is refused. The unique index
  * on rebook_of_interview_id backs this up in the database regardless.
  */
-const LOCK_APPLICANT = `
+const READ_APPLICANT = `
   SELECT id, status, do_not_rehire, email, full_name, role
     FROM recruit_applicants
    WHERE id = $1
-     FOR UPDATE
 `;
+const LOCK_APPLICANT = `${READ_APPLICANT} FOR UPDATE`;
 
 // The most recent interview that HAS a time -- the same choice the existing
 // attendance endpoint makes, so the two buttons always mean the same interview.
-const LOCK_INTERVIEW = `
+const READ_INTERVIEW = `
   SELECT id, status, starts_at, is_final_chance
     FROM recruit_interviews
    WHERE applicant_id = $1 AND starts_at IS NOT NULL
    ORDER BY created_at DESC
    LIMIT 1
-     FOR UPDATE
 `;
+const LOCK_INTERVIEW = `${READ_INTERVIEW} FOR UPDATE`;
 
 /*
  * Does the candidate already hold a newer link? A re-book row from this
@@ -173,6 +180,68 @@ export async function markNotAttended({ applicantId, actorEmail, db = pool }) {
   }
 
   return result;
+}
+
+/*
+ * What pressing would do, WITHOUT doing it -- for the confirm dialog.
+ *
+ * The same reads, the same rules (notAttendedDecision) and the same email the
+ * press would queue, rendered through renderQueued exactly as the outbox
+ * renders it at send time. So the dialog cannot show a manager one email and
+ * send the candidate another, or offer a button the press would then refuse.
+ *
+ * Nothing is locked or written. The press re-decides inside its own
+ * transaction regardless, so a preview that goes stale while the dialog is
+ * open is refused there rather than acted on.
+ *
+ * The booking link in the preview is a placeholder: the real one is created
+ * only when the manager confirms, and is shown to them then.
+ */
+export const PREVIEW_TOKEN = 'your-new-link-is-created-when-you-confirm';
+
+export async function previewNotAttended({ applicantId, db = pool, now = new Date() }) {
+  if (!UUID.test(String(applicantId ?? ''))) {
+    return refused(404, 'not_found', 'That application could not be found.');
+  }
+
+  const { rows: applicants } = await db.query(READ_APPLICANT, [applicantId]);
+  const applicant = applicants[0];
+  const { rows: interviews } = applicant ? await db.query(READ_INTERVIEW, [applicantId]) : { rows: [] };
+  const interview = interviews[0];
+
+  let offerExists = false;
+  if (interview) {
+    const { rows } = await db.query(NEWER_OFFER, [interview.id]);
+    offerExists = rows[0].offer_exists === true;
+  }
+
+  const decision = notAttendedDecision({ applicant, interview, offerExists, now });
+  if (!decision.ok) {
+    if (decision.code === 'not_found') return refused(404, decision.code, decision.message);
+    return { ok: true, eligible: false, code: decision.code, message: decision.message };
+  }
+
+  const template = decision.path === PATHS.rebook ? 'recruit.noshow.rebook' : 'recruit.noshow.final';
+  const email = await renderQueued(
+    {
+      template,
+      applicant_id: applicant.id,
+      interview_id: interview.id,
+      vars: decision.path === PATHS.rebook ? { token: PREVIEW_TOKEN } : {},
+    },
+    db,
+  );
+
+  return {
+    ok: true,
+    eligible: true,
+    path: decision.path,
+    label: notAttendedLabel(decision),
+    applicant: { id: applicant.id, fullName: applicant.full_name, email: applicant.email },
+    interview: { id: interview.id, startsAt: interview.starts_at, status: interview.status },
+    expiryDays: REBOOK_EXPIRY_DAYS,
+    email: { template, subject: email.subject, html: email.html ?? null, text: email.text },
+  };
 }
 
 /** First missed interview: one final re-book. */

@@ -300,6 +300,20 @@ export const adminSetFlag = (name, enabled) =>
     headers: withAuth(),
   });
 
+/**
+ * What "Not attended" would do for this applicant -- allowed or not, which
+ * path, and the exact email -- without doing it. 404 while switched off.
+ */
+export const adminNotAttendedPreview = (id) =>
+  request(`/recruit/admin/applications/${id}/not-attended`, { headers: withAuth() });
+
+/** Marks the interview missed and offers the final re-book, or ends the application. */
+export const adminNotAttended = (id) =>
+  request(`/recruit/admin/applications/${id}/not-attended`, {
+    method: 'POST',
+    headers: withAuth(),
+  });
+
 /** Records whether the candidate turned up. */
 export const adminMarkAttendance = (id, status) =>
   request(`/recruit/admin/applications/${id}/interview`, {

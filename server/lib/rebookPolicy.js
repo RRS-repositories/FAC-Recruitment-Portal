@@ -14,6 +14,9 @@
 /** How long a re-book link lasts. The email says 7 days, so this must too. */
 export const REBOOK_EXPIRY_DAYS = 7;
 
+/** A pending re-book link is flagged on the dashboard this long before it runs out. */
+export const REBOOK_WARN_HOURS = 48;
+
 /**
  * Who recorded a decision nobody clicked "decline" for.
  *

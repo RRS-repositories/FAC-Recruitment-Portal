@@ -54,6 +54,8 @@ const EMAIL_LABEL = {
   'recruit.reminder.24h': 'Reminder, 24 hours before',
   'recruit.reminder.10m': 'Reminder, 10 minutes before',
   'recruit.noshow': 'We missed you, rebook',
+  'recruit.noshow.rebook': 'Missed interview, final re-book link',
+  'recruit.noshow.final': 'Application closed, final interview missed',
   'recruit.meet.link': 'Joining link',
 };
 
@@ -88,6 +90,24 @@ const GRADE_TEXT = {
   danger: 'text-danger',
 };
 
+/**
+ * The interview chip. A final-chance re-book reads differently from an ordinary
+ * booking, and a second missed interview says so -- the manager should not have
+ * to open the row to know this candidate is on their last chance.
+ *
+ * Driven only by the data: with no re-book rows (the feature never used) every
+ * chip is exactly the one it always was.
+ */
+function interviewChip(applicant) {
+  const { interviewStatus: status, interviewFinalChance: final, noShowCount } = applicant;
+  if (final && status === 'invited') return { label: 'Re-book sent', tone: 'warn' };
+  // "Re-booked", with "Final chance" on the line beneath: "Re-booked (final)"
+  // on one line ran into the Decision column.
+  if (final && status === 'booked') return { label: 'Re-booked', tone: 'warn' };
+  if (status === 'no_show' && noShowCount >= 2) return { label: `No-show ×${noShowCount}`, tone: 'danger' };
+  return { label: INTERVIEW_LABEL[status], tone: INTERVIEW_TONE[status] };
+}
+
 /** A stat that only appears when it is worth reading. */
 function Detail({ label, children }) {
   return (
@@ -115,6 +135,8 @@ export function ApplicantRow({
   onDecide,
   onReissue,
   onAttendance,
+  onNotAttended,
+  noShowRebook = false,
   fastSubmitSeconds = 240,
   focus = false,
 }) {
@@ -193,9 +215,16 @@ export function ApplicantRow({
 
   const full = detail ?? applicant;
 
-  // An accepted applicant always has somewhere their link could go wrong.
+  // A final re-book link is out and not yet booked.
+  const rebookPending = applicant.interviewFinalChance && applicant.interviewStatus === 'invited';
+
+  // An accepted applicant always has somewhere their link could go wrong --
+  // except a final-chance link while the re-book is on: the server refuses to
+  // extend or rotate it, so the button would only ever produce an error.
   const canReissue =
-    applicant.status === 'accepted' && !['attended', 'no_show'].includes(applicant.interviewStatus);
+    applicant.status === 'accepted' &&
+    !['attended', 'no_show'].includes(applicant.interviewStatus) &&
+    !(noShowRebook && applicant.interviewFinalChance);
   // Attendance is a record of something that happened, so the interview has
   // to have started before it can be recorded.
   const interviewPast =
@@ -203,6 +232,15 @@ export function ApplicantRow({
   const canMark =
     interviewPast && ['booked', 'attended', 'no_show'].includes(applicant.interviewStatus);
   const marked = ['attended', 'no_show'].includes(applicant.interviewStatus);
+  // "Not attended": offered where the server would allow it. The dialog asks
+  // the server anyway, so an edge case this misses is explained there rather
+  // than acted on.
+  const canNotAttend =
+    noShowRebook &&
+    applicant.status === 'accepted' &&
+    !applicant.doNotRehire &&
+    interviewPast &&
+    ['booked', 'no_show'].includes(applicant.interviewStatus);
   // Only worth offering once there is a time to join: a link with no
   // interview behind it is a link to nowhere.
   const canSendLink = applicant.interviewStatus === 'booked';
@@ -285,10 +323,18 @@ export function ApplicantRow({
             <span className="text-[0.86rem] text-muted">—</span>
           ) : (
             <>
-              <Badge tone={INTERVIEW_TONE[applicant.interviewStatus]}>
-                {INTERVIEW_LABEL[applicant.interviewStatus]}
-              </Badge>
-              {applicant.interviewAt ? (
+              <Badge tone={interviewChip(applicant).tone}>{interviewChip(applicant).label}</Badge>
+              {rebookPending && applicant.interviewExpiresAt ? (
+                <span className="mt-1 block whitespace-nowrap text-[0.72rem] text-warn">
+                  Final · expires {formatDate(applicant.interviewExpiresAt)}
+                </span>
+              ) : null}
+              {applicant.interviewFinalChance && applicant.interviewStatus === 'booked' ? (
+                <span className="mt-1 block whitespace-nowrap text-[0.72rem] font-semibold text-warn">
+                  Final chance
+                </span>
+              ) : null}
+              {!rebookPending && applicant.interviewAt ? (
                 <span className="mt-1 block whitespace-nowrap text-[0.72rem] text-muted">
                   {formatDateTime(applicant.interviewAt)}
                 </span>
@@ -563,7 +609,7 @@ export function ApplicantRow({
             </div>
           ) : null}
 
-          {canReissue || canMark || marked || canSendLink ? (
+          {canReissue || canMark || marked || canSendLink || canNotAttend || (noShowRebook && rebookPending) ? (
             <div className="mt-4 border-t border-line pt-4">
               <p className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted">
                 Interview
@@ -627,21 +673,58 @@ export function ApplicantRow({
                       <Icon name="check" size={15} />
                       {busy === 'attended' ? 'Saving…' : 'They attended'}
                     </Button>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      disabled={Boolean(busy) || applicant.interviewStatus === 'no_show'}
-                      onClick={async () => {
-                        setBusy('no_show');
-                        await onAttendance?.(applicant.id, 'no_show');
-                        setDetail(null);
-                        setBusy('');
-                      }}
-                    >
-                      <Icon name="close" size={15} />
-                      {busy === 'no_show' ? 'Saving…' : 'No-show'}
-                    </Button>
+                    {/* While the re-book is on, "Not attended" below replaces
+                        this: marking a no-show without offering the re-book
+                        is the step managers would otherwise forget. */}
+                    {!noShowRebook ? (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={Boolean(busy) || applicant.interviewStatus === 'no_show'}
+                        onClick={async () => {
+                          setBusy('no_show');
+                          await onAttendance?.(applicant.id, 'no_show');
+                          setDetail(null);
+                          setBusy('');
+                        }}
+                      >
+                        <Icon name="close" size={15} />
+                        {busy === 'no_show' ? 'Saving…' : 'No-show'}
+                      </Button>
+                    ) : null}
                   </>
+                ) : null}
+
+                {canNotAttend ? (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={Boolean(busy)}
+                    onClick={() => onNotAttended?.(applicant)}
+                  >
+                    <Icon name="clock" size={15} />
+                    {applicant.interviewFinalChance ? 'Not attended — final' : 'Not attended'}
+                  </Button>
+                ) : null}
+
+                {noShowRebook && rebookPending ? (
+                  // The correction for a mistaken "Not attended": recording
+                  // the missed interview as attended also withdraws the
+                  // re-book link (server side), so nothing is left live.
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={Boolean(busy)}
+                    onClick={async () => {
+                      setBusy('undo');
+                      await onAttendance?.(applicant.id, 'attended');
+                      setDetail(null);
+                      setBusy('');
+                    }}
+                  >
+                    <Icon name="check" size={15} />
+                    {busy === 'undo' ? 'Saving…' : 'They did attend — withdraw re-book'}
+                  </Button>
                 ) : null}
 
                 {marked ? (
@@ -732,6 +815,17 @@ export function ApplicantRow({
                   >
                     {full.meetLink}
                   </a>
+                </p>
+              ) : null}
+
+              {noShowRebook && rebookPending ? (
+                <p className="mt-2 text-[0.78rem] leading-relaxed text-muted">
+                  Final re-book link sent
+                  {applicant.interviewExpiresAt
+                    ? `, valid until ${formatDateTime(applicant.interviewExpiresAt)}`
+                    : ''}
+                  . It can&rsquo;t be reissued. If it isn&rsquo;t used by then, the application is
+                  closed and they are added to do-not-rehire automatically.
                 </p>
               ) : null}
 

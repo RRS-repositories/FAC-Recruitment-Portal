@@ -7,13 +7,16 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Field, TextInput } from '@/components/ui/Field';
 import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
+import { NotAttendedModal } from '@/features/dashboard/NotAttendedModal';
 import {
   adminAddBlackout,
   adminCalendar,
+  adminMarkAttendance,
   adminRemoveBlackout,
   adminSignOut,
   getAdminToken,
 } from '@/lib/api';
+import { gradeFor } from '@shared/scoring';
 import { roleFromApiKey } from '@/lib/normalise';
 import { formatTimeIn } from '@/lib/format';
 import usePageMeta from '@/hooks/usePageMeta';
@@ -92,6 +95,35 @@ const STATE = {
   },
 };
 
+/**
+ * How an interview reads once the no-show re-book is on: a final chance, one
+ * that happened, one that did not. Off, every interview keeps the single
+ * "booked" look it always had.
+ *
+ * Solid, dark enough for white text to stay readable -- amber, green and red
+ * at this weight all clear 4.5:1.
+ */
+const INTERVIEW_LOOK = {
+  final: { label: 'Final chance', cell: 'bg-amber-700 text-white border-amber-800', dot: 'bg-amber-700' },
+  attended: { label: 'Attended', cell: 'bg-emerald-700 text-white border-emerald-800', dot: 'bg-emerald-700' },
+  no_show: { label: 'No-show', cell: 'bg-red-700 text-white border-red-800', dot: 'bg-red-700' },
+};
+
+const lookFor = (slot, rebookOn) => {
+  if (slot.state !== 'booked') return STATE[slot.state] ?? STATE.free;
+  if (!rebookOn) return STATE.booked;
+  if (slot.interview.status === 'attended') return INTERVIEW_LOOK.attended;
+  if (slot.interview.status === 'no_show') return INTERVIEW_LOOK.no_show;
+  if (slot.interview.isFinalChance) return INTERVIEW_LOOK.final;
+  return STATE.booked;
+};
+
+const INTERVIEW_STATUS_TEXT = {
+  booked: 'Booked',
+  attended: 'Attended',
+  no_show: 'No-show',
+};
+
 /** Monday of the week containing a date, as YYYY-MM-DD. */
 function mondayOf(date) {
   const d = new Date(date);
@@ -152,6 +184,10 @@ export function CalendarPage() {
   // What the manager clicked: a booked slot to look at, or a free one to hold.
   const [chosen, setChosen] = useState(null);
   const [reason, setReason] = useState('');
+  // "Not attended" from the popup: the same dialog as the dashboard.
+  const [notAttending, setNotAttending] = useState(null);
+  // A re-book link to hand over when email is off. Shown once.
+  const [rebookLink, setRebookLink] = useState(null);
 
   const signOut = useCallback(() => {
     adminSignOut();
@@ -227,7 +263,40 @@ export function CalendarPage() {
     }
   };
 
+  /** "Mark attended" -- the existing attendance endpoint, unchanged. */
+  const markAttended = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await adminMarkAttendance(chosen.slot.interview.applicantId, 'attended');
+      setChosen(null);
+      await load();
+    } catch (failure) {
+      if (failure.status === 401) signOut();
+      else setError(failure.message);
+      setChosen(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const notAttendedDone = async (result) => {
+    const who = notAttending;
+    setNotAttending(null);
+    setChosen(null);
+    if (result.path === 'rebook' && !result.emailLive && result.bookingToken && who) {
+      setRebookLink({
+        name: who.fullName,
+        email: who.email,
+        url: `${window.location.origin}/book/${result.bookingToken}`,
+      });
+    }
+    await load();
+  };
+
   if (!signedIn) return <AdminSignIn onSignedIn={() => setSignedIn(true)} />;
+
+  const rebookOn = data?.noShowRebook === true;
 
   const thisWeek = weekStart === mondayOf(new Date());
 
@@ -386,7 +455,7 @@ export function CalendarPage() {
                       const slot = day.slots[row];
                       if (!slot) return <div key={day.date} className="border-l border-line" />;
 
-                      const look = STATE[slot.state] ?? STATE.free;
+                      const look = lookFor(slot, rebookOn);
                       const clickable =
                         slot.state === 'free' ||
                         slot.state === 'blocked' ||
@@ -394,7 +463,7 @@ export function CalendarPage() {
 
                       const label =
                         slot.state === 'booked'
-                          ? `Interview with ${slot.interview.fullName}, ${SHORT[day.weekday]} ${time}`
+                          ? `Interview with ${slot.interview.fullName}${rebookOn && look !== STATE.booked ? ` (${look.label})` : ''}, ${SHORT[day.weekday]} ${time}`
                           : `${look.label}, ${SHORT[day.weekday]} ${time}`;
 
                       return (
@@ -415,7 +484,7 @@ export function CalendarPage() {
                               {slot.state === 'booked' ? (
                                 <>
                                   <span className="block text-[0.62rem] uppercase tracking-wide text-white/70">
-                                    Interview with
+                                    {rebookOn && look !== STATE.booked ? look.label : 'Interview with'}
                                   </span>
                                   <span className="block truncate font-semibold">
                                     {slot.interview.fullName}
@@ -451,6 +520,14 @@ export function CalendarPage() {
                 {STATE[key].label}
               </span>
             ))}
+            {rebookOn
+              ? Object.entries(INTERVIEW_LOOK).map(([key, look]) => (
+                  <span key={key} className="inline-flex items-center gap-1.5">
+                    <span aria-hidden="true" className={cn('h-3 w-3 rounded-sm', look.dot)} />
+                    {look.label}
+                  </span>
+                ))
+              : null}
           </div>
 
           <p className="mt-3 text-[0.82rem] leading-relaxed text-muted">
@@ -485,8 +562,22 @@ export function CalendarPage() {
                 </div>
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted">Score</dt>
-                  <dd className="font-semibold text-ink">{chosen.slot.interview.score}</dd>
+                  <dd className="font-semibold text-ink">
+                    {chosen.slot.interview.score}
+                    {rebookOn && Number.isFinite(chosen.slot.interview.score)
+                      ? `% · ${gradeFor(chosen.slot.interview.score).label}`
+                      : ''}
+                  </dd>
                 </div>
+                {rebookOn ? (
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-muted">Status</dt>
+                    <dd className="font-semibold text-ink">
+                      {INTERVIEW_STATUS_TEXT[chosen.slot.interview.status] ?? chosen.slot.interview.status}
+                      {chosen.slot.interview.isFinalChance ? ' · final chance' : ''}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex justify-between gap-3">
                   <dt className="text-muted">Email</dt>
                   <dd className="truncate font-semibold text-ink">{chosen.slot.interview.email}</dd>
@@ -513,6 +604,49 @@ export function CalendarPage() {
                   </dd>
                 </div>
               </dl>
+              {/* Attendance, straight from the booking (switch on only). Only on
+                  the candidate's LATEST interview: both buttons act on that one,
+                  so offering them on an older slot would mark a different
+                  interview. Disabled, not hidden, before the start -- the
+                  reason is worth seeing. */}
+              {rebookOn && chosen.slot.interview.isLatest ? (
+                (() => {
+                  const iv = chosen.slot.interview;
+                  const started = new Date(iv.startsAt).getTime() <= Date.now();
+                  const notYet = "Interview hasn't started yet";
+                  return (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {iv.status !== 'attended' ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busy || !started}
+                          title={started ? undefined : notYet}
+                          onClick={markAttended}
+                        >
+                          <Icon name="check" size={15} />
+                          {busy ? 'Saving…' : 'Mark attended'}
+                        </Button>
+                      ) : null}
+                      {['booked', 'no_show'].includes(iv.status) ? (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          disabled={busy || !started}
+                          title={started ? undefined : notYet}
+                          onClick={() =>
+                            setNotAttending({ id: iv.applicantId, fullName: iv.fullName, email: iv.email })
+                          }
+                        >
+                          <Icon name="clock" size={15} />
+                          {iv.isFinalChance ? 'Not attended — final' : 'Not attended'}
+                        </Button>
+                      ) : null}
+                      {!started ? <span className="text-[0.8rem] text-muted">{notYet}</span> : null}
+                    </div>
+                  );
+                })()
+              ) : null}
               <div className="mt-6 flex justify-end gap-2">
                 <Button variant="secondary" onClick={() => setChosen(null)}>
                   Close
@@ -570,6 +704,39 @@ export function CalendarPage() {
               </div>
             </>
           )}
+        </Modal>
+      ) : null}
+
+      {notAttending ? (
+        <NotAttendedModal
+          applicant={notAttending}
+          onClose={() => setNotAttending(null)}
+          onDone={notAttendedDone}
+        />
+      ) : null}
+
+      {rebookLink ? (
+        <Modal titleId="rebook-link-title" className="max-w-lg" dismissable={false}>
+          <h2 id="rebook-link-title" className="text-[1.15rem] font-bold text-ink">
+            Send {rebookLink.name} their final re-book link
+          </h2>
+          <p className="mt-2 text-[0.9rem] leading-relaxed text-muted">
+            No email is being sent, so send this to{' '}
+            <b className="font-semibold text-ink">{rebookLink.email}</b> yourself. It is valid for 7
+            days and <b className="font-semibold text-ink">shown once</b> — it cannot be retrieved
+            again.
+          </p>
+          <p className="mt-4 break-all rounded-panel border border-line bg-lav-soft p-3 font-mono text-[0.8rem] text-ink">
+            {rebookLink.url}
+          </p>
+          <div className="mt-5 flex flex-wrap justify-end gap-2">
+            <Button variant="secondary" onClick={() => navigator.clipboard?.writeText(rebookLink.url)}>
+              Copy link
+            </Button>
+            <Button variant="quiet" onClick={() => setRebookLink(null)}>
+              Done
+            </Button>
+          </div>
         </Modal>
       ) : null}
     </AdminShell>

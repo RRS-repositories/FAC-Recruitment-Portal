@@ -26,8 +26,8 @@ import { EMAIL, FIELD_LIMITS } from '../lib/validate.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
 import { dueForDeletion, retentionMonths, setRetentionMonths } from '../lib/retention.js';
 import { buildCalendar } from '../lib/calendar.js';
-import { markNotAttended } from '../lib/notAttended.js';
-import { attendanceGuard, reissueGuard } from '../lib/rebookPolicy.js';
+import { markNotAttended, previewNotAttended } from '../lib/notAttended.js';
+import { REBOOK_WARN_HOURS, attendanceGuard, reissueGuard } from '../lib/rebookPolicy.js';
 
 /**
  * The manager's view: read applications, accept or decline them.
@@ -61,11 +61,27 @@ const LIST = `
          -- managers live on -- cannot break if code lands before recruit_015.
          COALESCE((to_jsonb(a) ->> 'do_not_rehire')::boolean, false) AS do_not_rehire,
          to_jsonb(a) ->> 'do_not_rehire_reason' AS do_not_rehire_reason,
-         i.status AS interview_status, i.starts_at AS interview_at
+         i.status AS interview_status, i.starts_at AS interview_at,
+         -- The no-show re-book's chips: whether the latest interview is a final
+         -- chance, when its link runs out, and how many interviews were missed.
+         -- Same to_jsonb rule as above.
+         i.is_final_chance AS interview_final_chance,
+         i.token_expires_at AS interview_expires_at,
+         (SELECT count(*)::int FROM recruit_interviews n
+           WHERE n.applicant_id = a.id AND n.status = 'no_show') AS no_show_count
     FROM recruit_applicants a
     LEFT JOIN LATERAL (
-      SELECT status, starts_at FROM recruit_interviews
-       WHERE applicant_id = a.id ORDER BY created_at DESC LIMIT 1
+      SELECT li.status, li.starts_at, li.token_expires_at,
+             COALESCE((to_jsonb(li) ->> 'is_final_chance')::boolean, false) AS is_final_chance
+        FROM recruit_interviews li
+       WHERE li.applicant_id = a.id
+         -- A re-book link that was withdrawn ("they did attend") or ran out is
+         -- not the interview to show: the one it was offered for is. Without
+         -- this, correcting a mistaken "Not attended" would leave the row
+         -- reading "Cancelled" instead of "Attended". No re-book rows, no
+         -- change.
+         AND NOT (li.status = 'cancelled' AND to_jsonb(li) ->> 'rebook_of_interview_id' IS NOT NULL)
+       ORDER BY li.created_at DESC LIMIT 1
     ) i ON true
    WHERE ($1::recruit_status IS NULL OR a.status = $1)
      AND ($2::recruit_role  IS NULL OR a.role = $2)
@@ -152,6 +168,31 @@ const SUMMARY = `
     SELECT status FROM recruit_interviews
      WHERE applicant_id = a.id ORDER BY created_at DESC LIMIT 1
   ) i ON true
+`;
+
+/**
+ * Final re-book links that are out and not yet used -- the "Re-books pending"
+ * figure, and the banner for the ones about to run out.
+ *
+ * Whole pipeline, like SUMMARY, not the filtered page. Only an accepted
+ * applicant whose LATEST interview is the unbooked final chance counts: once
+ * they book, or the link expires and the sweep closes the application, it is
+ * no longer pending. Through to_jsonb, like every new read.
+ */
+const REBOOKS = `
+  SELECT a.id, a.full_name, a.email, i.token_expires_at
+    FROM recruit_applicants a
+    JOIN LATERAL (
+      SELECT li.status, li.token_expires_at,
+             COALESCE((to_jsonb(li) ->> 'is_final_chance')::boolean, false) AS is_final_chance
+        FROM recruit_interviews li
+       WHERE li.applicant_id = a.id ORDER BY li.created_at DESC LIMIT 1
+    ) i ON true
+   WHERE a.status = 'accepted'
+     AND i.status = 'invited'
+     AND i.is_final_chance
+     AND i.token_expires_at > now()
+   ORDER BY i.token_expires_at
 `;
 
 export function createAdminRouter() {
@@ -617,7 +658,13 @@ export function createAdminRouter() {
         return res.status(503).json({ ok: false, error: 'No availability is configured.' });
       }
 
-      return res.json({ ok: true, interviewerId: rows[0].id, ...calendar });
+      return res.json({
+        ok: true,
+        interviewerId: rows[0].id,
+        // The popup offers "Mark attended" / "Not attended" only when it is on.
+        noShowRebook: await isEnabled('recruitment_noshow_rebook'),
+        ...calendar,
+      });
     } catch (error) {
       if (error.status === 400) return res.status(400).json({ ok: false, error: error.message });
       console.error('[fac-recruit] calendar failed:', error.message);
@@ -698,12 +745,16 @@ export function createAdminRouter() {
     const aiLevel = AI_LEVELS.has(req.query.ai) ? req.query.ai : null;
 
     try {
-      const [list, count, summary, tabs] = await Promise.all([
+      const noShowRebook = await isEnabled('recruitment_noshow_rebook');
+      const [list, count, summary, tabs, rebooks] = await Promise.all([
         pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE, from, to, aiLevel, sort]),
         pool.query(COUNT, [status, role, search, from, to, aiLevel]),
         pool.query(SUMMARY),
         pool.query(TAB_COUNTS, [role, search, from, to, aiLevel]),
+        // Not asked at all while the feature is off: there is nothing to show.
+        noShowRebook ? pool.query(REBOOKS) : Promise.resolve({ rows: [] }),
       ]);
+      const warnBefore = Date.now() + REBOOK_WARN_HOURS * 3_600_000;
 
       return res.json({
         ok: true,
@@ -715,6 +766,18 @@ export function createAdminRouter() {
         // Beside the status filters. Separate from `summary`, which stays the
         // whole pipeline however the screen is filtered.
         tabs: tabs.rows[0],
+        // Whether the no-show re-book is switched on. The dashboard shows its
+        // button, chips, tile and banner only when it is -- off, the screen is
+        // exactly as it was.
+        noShowRebook,
+        rebooks: noShowRebook
+          ? {
+              pending: rebooks.rows.length,
+              expiringSoon: rebooks.rows
+                .filter((r) => new Date(r.token_expires_at).getTime() <= warnBefore)
+                .map((r) => ({ id: r.id, fullName: r.full_name, email: r.email, expiresAt: r.token_expires_at })),
+            }
+          : null,
         // Whether a decision actually reaches the candidate. The confirmation
         // dialog says so in as many words, and it must not claim an email that
         // is only being written to a file — or none at all.
@@ -1190,6 +1253,44 @@ export function createAdminRouter() {
         // email too, or an apology reaches someone who was there all along.
         if (status === 'attended') {
           await cancelPendingFor(client, interview.id, 'they attended after all');
+
+          /*
+           * ...and a final re-book offered for it must go too (plan section 8c).
+           * Cancelling the queued email above is not enough: the re-book
+           * interview and its 7-day link would stay live, so the candidate
+           * could book a "final" interview they never needed -- or, if the
+           * email had already gone, be left holding a working link while
+           * recorded as having attended. Only an UNBOOKED re-book: once they
+           * have booked it, that booking is the interview this button marks.
+           *
+           * Matched through to_jsonb so this, on a button used every day,
+           * cannot break on a database without recruit_015. With no re-book
+           * rows (the switch never used) it changes nothing.
+           */
+          const { rows: withdrawn } = await client.query(
+            `UPDATE recruit_interviews r
+                SET status = 'cancelled', updated_at = now()
+              WHERE to_jsonb(r) ->> 'rebook_of_interview_id' = $1::text
+                AND r.status = 'invited'
+            RETURNING r.id`,
+            [interview.id],
+          );
+          for (const rebook of withdrawn) {
+            await cancelPendingFor(client, rebook.id, 'they attended after all');
+            await client.query(
+              `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
+               VALUES ($1, $2, 'rebook_withdrawn', $3)`,
+              [
+                req.params.id,
+                req.admin.email,
+                JSON.stringify({
+                  withdrawnBy: req.admin.email,
+                  rebookInterviewId: rebook.id,
+                  missedInterviewId: interview.id,
+                }),
+              ],
+            );
+          }
         }
 
         await client.query('COMMIT');
@@ -1222,6 +1323,32 @@ export function createAdminRouter() {
    * The rules and the work live in lib/rebookPolicy.js and lib/notAttended.js;
    * this only translates their result into a response.
    */
+  /**
+   * What "Not attended" would do for this applicant, without doing it: whether
+   * it is allowed, which path, and the exact email -- for the confirm dialog on
+   * the dashboard and the calendar. Read-only. 404 while switched off.
+   */
+  router.get('/applications/:id/not-attended', async (req, res) => {
+    if (!(await isEnabled('recruitment_noshow_rebook'))) {
+      return res.status(404).json({ ok: false, error: 'Not found.' });
+    }
+    try {
+      const preview = await previewNotAttended({ applicantId: req.params.id });
+      if (!preview.ok) {
+        return res.status(preview.status).json({ ok: false, code: preview.code, error: preview.message });
+      }
+      return res.json({
+        ...preview,
+        // Asked now, not when the list loaded: the dialog must not promise an
+        // email that is only going to a file, or hide one that really goes.
+        emailLive: (await isEnabled('recruitment_alerts')) && mailMode() === 'smtp',
+      });
+    } catch (error) {
+      console.error('[fac-recruit] not attended preview failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not check that just now.' });
+    }
+  });
+
   router.post('/applications/:id/not-attended', async (req, res) => {
     if (!(await isEnabled('recruitment_noshow_rebook'))) {
       return res.status(404).json({ ok: false, error: 'Not found.' });
