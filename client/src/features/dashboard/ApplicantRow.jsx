@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -116,8 +116,26 @@ export function ApplicantRow({
   onReissue,
   onAttendance,
   fastSubmitSeconds = 240,
+  focus = false,
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(focus);
+  const rowRef = useRef(null);
+
+  /*
+   * Opens this row when something asks for it -- today, the calendar's "Open
+   * in applicants" button, which lands here with this applicant's id.
+   *
+   * An effect as well as the initial state, because the list loads in two
+   * passes: the unfiltered page first, then the page narrowed to this person.
+   * If they were already on the first page their row mounted closed, and a
+   * `useState(focus)` alone would never reopen it. It only ever OPENS -- a
+   * manager who then closes the row is not overruled.
+   */
+  useEffect(() => {
+    if (!focus) return;
+    setOpen(true);
+    rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focus]);
   const [detail, setDetail] = useState(null);
   const [emails, setEmails] = useState(null);
   const [mailMode, setMailMode] = useState(null);
@@ -211,7 +229,7 @@ export function ApplicantRow({
 
   return (
     <>
-      <tr className="border-b border-line align-top last:border-0 hover:bg-lav-soft/40">
+      <tr ref={rowRef} className="border-b border-line align-top last:border-0 hover:bg-lav-soft/40">
         {/* Name, with the role underneath it rather than beside — the column
             is the narrowest thing on the row and a chip would push it wider. */}
         <td className={cn('px-3 py-4', COL.name)}>

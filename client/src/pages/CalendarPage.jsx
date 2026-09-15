@@ -491,12 +491,38 @@ export function CalendarPage() {
                   <dt className="text-muted">Email</dt>
                   <dd className="truncate font-semibold text-ink">{chosen.slot.interview.email}</dd>
                 </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Meeting link</dt>
+                  <dd className="min-w-0 truncate font-semibold">
+                    {chosen.slot.interview.meetLink ? (
+                      // A new tab: opening it here would navigate away from the
+                      // calendar and lose the popup the manager is reading.
+                      <a
+                        href={chosen.slot.interview.meetLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-violet underline underline-offset-2 hover:text-violet-deep"
+                      >
+                        {chosen.slot.interview.meetLink.replace(/^https?:\/\//, '')}
+                      </a>
+                    ) : (
+                      // Said plainly rather than left blank: an empty row reads
+                      // as a display fault, not as "no link exists yet".
+                      <span className="font-normal text-muted">Not created yet</span>
+                    )}
+                  </dd>
+                </div>
               </dl>
               <div className="mt-6 flex justify-end gap-2">
                 <Button variant="secondary" onClick={() => setChosen(null)}>
                   Close
                 </Button>
-                <Button to="/admin">Open in applicants</Button>
+                {/* The id, never the email: a query string ends up in browser
+                    history and proxy logs, and an id there says nothing about
+                    who the person is. The dashboard looks the rest up. */}
+                <Button to={`/admin?applicant=${encodeURIComponent(chosen.slot.interview.applicantId)}`}>
+                  Open in applicants
+                </Button>
               </div>
             </>
           ) : chosen.slot.state === 'blocked' ? (

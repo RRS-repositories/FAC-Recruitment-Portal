@@ -147,6 +147,9 @@ export async function buildCalendar({ interviewerId, from, to, now = new Date() 
                 status: interview.status,
                 localTime: formatTimeIn(interview.starts_at, interview.candidate_tz),
                 candidateTz: interview.candidate_tz,
+                // Already selected above and never passed on, so the calendar
+                // showed everything about a booking except how to join it.
+                meetLink: interview.meet_link ?? null,
               },
             }
           : {}),
