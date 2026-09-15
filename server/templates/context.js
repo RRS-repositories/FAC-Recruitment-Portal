@@ -24,6 +24,14 @@ const ONE = `
          i.id            AS interview_id,
          i.starts_at, i.ends_at, i.status AS interview_status,
          i.meet_link, i.reschedule_count,
+         -- Read through to_jsonb rather than as i.is_final_chance, and that is
+         -- deliberate. EVERY email resolves its fields through this query, and
+         -- the column arrives with recruit_015. Named directly, code deployed a
+         -- minute before that migration would stop every candidate email --
+         -- the exact shape of the 11 Sep outage, where new code met an old
+         -- schema. Through to_jsonb a missing column reads as NULL, so the
+         -- order of deploy and migration cannot take email down.
+         COALESCE((to_jsonb(i) ->> 'is_final_chance')::boolean, false) AS is_final_chance,
          iv.full_name    AS interviewer_name,
          iv.email        AS interviewer_email,
          iv.personal_timezone AS interviewer_tz
@@ -71,6 +79,9 @@ export async function loadContext(row, db) {
     interviewStatus: record.interview_status,
     rescheduleCount: record.reschedule_count ?? 0,
     meetLink: record.meet_link ?? null,
+    // True only for a re-book offered after a no-show. The booking confirmation
+    // adds one line when it is.
+    isFinalChance: record.is_final_chance === true,
 
     // The decline reason as a finished sentence, or null. Resolved here, at
     // SEND time, like everything else — so a reason corrected in the minute
