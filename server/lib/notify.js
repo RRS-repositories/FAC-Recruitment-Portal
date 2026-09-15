@@ -248,3 +248,48 @@ export const notifyNoShow = (client, { applicant, interviewId, bookingToken }) =
     vars: { token: bookingToken },
     dedupeKey: dedupeKey('noshow', interviewId),
   });
+
+/**
+ * "Not attended" -- the firm, final re-book email (recruit.noshow.rebook).
+ *
+ * The row points at the MISSED interview, not the new one. The email names the
+ * time they missed ("{{interviewer_name}} was waiting for you at ..."), and the
+ * live lookup resolves times from the interview on the row -- the new re-book
+ * interview has no time yet, so pointing there would print "a time still to be
+ * chosen" where the missed slot belongs. The new booking token travels in
+ * `vars`, exactly as `notifyNoShow` carries its token.
+ *
+ * Must be queued AFTER `cancelPendingFor(missedInterviewId)`, which calls off
+ * the missed interview's remaining reminders. Queued before it, this email
+ * would be the first thing cancelled.
+ *
+ * Keyed on the missed interview alone: however the press is retried, one
+ * missed interview produces one of these.
+ */
+export const notifyNoShowRebook = (client, { applicant, missedInterviewId, bookingToken }) =>
+  enqueue(client, {
+    template: 'recruit.noshow.rebook',
+    toEmail: applicant.email,
+    toName: applicant.full_name,
+    applicantId: applicant.id,
+    interviewId: missedInterviewId,
+    vars: { token: bookingToken },
+    dedupeKey: dedupeKey('noshow-rebook', missedInterviewId),
+  });
+
+/**
+ * They missed the final chance too (recruit.noshow.final).
+ *
+ * This is the ONLY email a final no-show sends. The ordinary decline email is
+ * deliberately not queued alongside it: two emails about one ending, saying it
+ * two different ways, is worse than either.
+ */
+export const notifyNoShowFinal = (client, { applicant, interviewId }) =>
+  enqueue(client, {
+    template: 'recruit.noshow.final',
+    toEmail: applicant.email,
+    toName: applicant.full_name,
+    applicantId: applicant.id,
+    interviewId,
+    dedupeKey: dedupeKey('noshow-final', interviewId),
+  });

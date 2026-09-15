@@ -20,6 +20,7 @@ import { isEnabled, requireFlag } from '../lib/flags.js';
 import { mailMode } from '../lib/mailer.js';
 import { verifyCaptcha } from '../lib/captcha.js';
 import { queueReview } from '../lib/llmReview.js';
+import { SYSTEM_DNR_ACTOR, reappliedReason } from '../lib/rebookPolicy.js';
 
 /**
  * Application intake.
@@ -54,6 +55,26 @@ const INSERT_APPLICANT = `
   -- candidate with exactly what was stored, rather than a second copy of the
   -- request body that could have been normalised differently.
   RETURNING id, created_at, full_name, email
+`;
+
+/*
+ * Is this address on the do-not-rehire list? Any earlier application from the
+ * same email, for either role.
+ *
+ * THROUGH to_jsonb, NOT BY COLUMN NAME -- and on this route that matters more
+ * than anywhere. Every application anybody submits runs this query. Naming a
+ * column that recruit_015 adds would make EVERY submission fail if the code
+ * reached production a minute before that migration: the exact shape of the
+ * 11 Sep outage, which lost real applications. Through to_jsonb a missing
+ * column reads as "not barred", and applications carry on.
+ */
+const BARRED = `
+  SELECT to_jsonb(a) ->> 'do_not_rehire_reason' AS reason
+    FROM recruit_applicants a
+   WHERE a.email = $1
+     AND COALESCE((to_jsonb(a) ->> 'do_not_rehire')::boolean, false)
+   ORDER BY a.created_at DESC
+   LIMIT 1
 `;
 
 const hashIp = (ip, salt) => (ip && salt ? createHash('sha256').update(`${salt}:${ip}`).digest('hex') : null);
@@ -172,6 +193,9 @@ export function createApplicationsRouter({ ipSalt }) {
     try {
       await client.query('BEGIN');
 
+      const { rows: barred } = await client.query(BARRED, [details.email]);
+      const bar = barred[0] ?? null;
+
       const { rows } = await client.query(INSERT_APPLICANT, [
         role.apiKey,
         details.fullName,
@@ -220,17 +244,44 @@ export function createApplicationsRouter({ ipSalt }) {
         );
       }
 
-      // Queued, not sent. Inside the transaction, so the acknowledgement and
-      // the application it acknowledges commit together — a candidate can
-      // never be told we have their application when we do not.
-      await notifyApplicationReceived(client, applicant);
+      if (bar) {
+        /*
+         * An address on the do-not-rehire list (decided 15 Sep).
+         *
+         * The application is kept -- nothing tells the candidate they were
+         * blocked -- and declined at once, carrying the bar forward so the
+         * dashboard shows why. NO email of any kind is queued: not the
+         * acknowledgement, nothing. No AI review either: there is no decision
+         * left for it to inform.
+         *
+         * Everything else about the submission (the CV, the audit row, the
+         * session) is exactly as for anyone else, so what the candidate sees
+         * does not differ -- see the response below.
+         */
+        await client.query(
+          `UPDATE recruit_applicants
+              SET status = 'declined', decided_by_email = $2, decided_at = now(),
+                  do_not_rehire = true, do_not_rehire_reason = $3, do_not_rehire_at = now()
+            WHERE id = $1`,
+          [applicant.id, SYSTEM_DNR_ACTOR, reappliedReason(bar.reason)],
+        );
+        await client.query(
+          `INSERT INTO recruit_audit (applicant_id, action, payload) VALUES ($1, 'auto_declined_dnr', $2)`,
+          [applicant.id, JSON.stringify({ reason: reappliedReason(bar.reason) })],
+        );
+      } else {
+        // Queued, not sent. Inside the transaction, so the acknowledgement and
+        // the application it acknowledges commit together — a candidate can
+        // never be told we have their application when we do not.
+        await notifyApplicationReceived(client, applicant);
 
-      // Queued in the same transaction, for the same reason: a review that
-      // exists for an application that rolled back would be a review of
-      // nothing. The worker picks it up on its own schedule, and if the model
-      // is off, unreachable or switched off by flag, the row simply waits —
-      // no candidate is ever delayed by it.
-      await queueReview(client, applicant.id);
+        // Queued in the same transaction, for the same reason: a review that
+        // exists for an application that rolled back would be a review of
+        // nothing. The worker picks it up on its own schedule, and if the model
+        // is off, unreachable or switched off by flag, the row simply waits —
+        // no candidate is ever delayed by it.
+        await queueReview(client, applicant.id);
+      }
 
       await client.query('COMMIT');
 
@@ -243,7 +294,12 @@ export function createApplicationsRouter({ ipSalt }) {
        * the sort that is only discovered by somebody waiting for an email that
        * was never coming.
        */
-      const acknowledged = (await isEnabled('recruitment_alerts')) && mailMode() === 'smtp';
+      // False for a barred address, because no acknowledgement is sent: the
+      // success screen then says "we have your application" without claiming a
+      // confirmation email -- the same words anyone sees whenever email is off,
+      // so it neither lies nor reveals the block.
+      const acknowledged = !bar && (await isEnabled('recruitment_alerts')) && mailMode() === 'smtp';
+      if (bar) console.log(`[fac-recruit] application ${applicant.id} from a do-not-rehire address declined, nothing sent`);
 
       // Nothing about the score or the AI verdict goes back to the candidate.
       return res.status(201).json({ ok: true, id: applicant.id, acknowledged });

@@ -3,6 +3,8 @@ import { buildIcs } from '../lib/ics.js';
 import { loadContext, publicBaseUrl, SIGN_OFF, joinLine, whenLine } from './context.js';
 import { declineReapply, declineSentence } from '../../shared/declineReasons.js';
 import { shell, p, greeting, callout, button, bodyBoth, esc } from './layout.js';
+import { fill, loadSupplied } from './supplied.js';
+import { REBOOK_EXPIRY_DAYS } from '../lib/rebookPolicy.js';
 
 /**
  * Every email the portal sends.
@@ -345,7 +347,7 @@ registerTemplate({
   when: 'When a candidate chooses their slot.',
   description:
     'Confirms the time in both zones and attaches a calendar file they can add to their own diary. Once stage 7 creates the Google event, this also carries the Meet link — no change needed here.',
-  mergeFields: ['firstName', 'localDay', 'localTime', 'ukTime', 'interviewerName', 'meetLink'],
+  mergeFields: ['firstName', 'localDay', 'localTime', 'ukTime', 'interviewerName', 'meetLink', 'isFinalChance'],
   sample: SAMPLE,
   load,
   render: (data) => ({
@@ -359,6 +361,12 @@ registerTemplate({
       '',
       `Your interview with ${data.interviewerName} is booked for ${whenLine(data)}.`,
       '',
+      // Only on a re-book offered after a no-show. Worded as the spec gives it,
+      // and the ONLY difference from an ordinary confirmation -- the rest of
+      // this email is untouched, so a first booking reads exactly as before.
+      ...(data.isFinalChance
+        ? ['This is your final scheduled interview. Please ensure you attend.', '']
+        : []),
       'It lasts about 30 minutes and takes place on video.',
       '',
       joinLine(data),
@@ -637,6 +645,97 @@ registerTemplate({
       '',
       'If we do not hear from you we will assume you would rather not go ahead, and we will close your application.',
     
+      ],
+    }),
+  }),
+});
+
+// ── "Not attended" ─────────────────────────────────────────────────────────
+
+/*
+ * The final re-book email, used EXACTLY as supplied (decided 15 Sep) -- design
+ * and wording both. The file lives, byte for byte, at
+ * server/templates/supplied/email-noshow-rebook.html; supplied.js fills it in.
+ */
+const NOSHOW_REBOOK = loadSupplied('email-noshow-rebook.html');
+
+/**
+ * The supplied file's merge fields, from the live data.
+ *
+ * The queued row points at the MISSED interview (see notifyNoShowRebook), so
+ * localDay / localTime / ukTime are the slot they missed, and `token` -- from
+ * the row's vars -- is the NEW booking link.
+ */
+function noshowRebookValues(data) {
+  // A re-book email without a working link is the one version worse than none.
+  if (!data.token) throw new Error('recruit.noshow.rebook has no booking token to send');
+  return {
+    first_name: data.firstName,
+    role_title: data.roleTitle,
+    missed_time_local:
+      data.localDay && data.localTime ? `${data.localTime} on ${data.localDay}` : 'your booked time',
+    missed_time_uk: data.ukTime ?? '—',
+    interviewer_name: data.interviewerName,
+    booking_url: bookingUrl(data.token),
+    expiry_days: String(REBOOK_EXPIRY_DAYS),
+    // The opt-in "strong warning" paragraph (plan §6.4) is not built. Filled
+    // with nothing, so the email reads exactly as supplied with it switched off.
+    strong_warning: '',
+  };
+}
+
+registerTemplate({
+  key: 'recruit.noshow.rebook',
+  title: 'Not attended — final re-book',
+  when: 'When a manager marks a booked interview "Not attended" for the first time.',
+  description:
+    'Supplied as finished HTML and sent exactly as supplied. Offers one final re-book, valid for ' +
+    `${REBOOK_EXPIRY_DAYS} days. Missing that interview, or not re-booking in time, closes the application.`,
+  mergeFields: ['firstName', 'roleTitle', 'localDay', 'localTime', 'ukTime', 'interviewerName', 'token'],
+  sample: SAMPLE,
+  load,
+  render: (data) => {
+    const values = noshowRebookValues(data);
+    return {
+      subject: NOSHOW_REBOOK.subject,
+      text: fill(NOSHOW_REBOOK.text, values),
+      html: fill(NOSHOW_REBOOK.html, values, { html: true }),
+    };
+  },
+});
+
+/*
+ * They missed the final chance too. No design or wording was supplied for this
+ * one, so it is written in the shared layout, short and factual, and says what
+ * the re-book email already told them would happen -- nothing more.
+ *
+ * DRAFT: needs approval on this screen before the switch goes on.
+ */
+registerTemplate({
+  key: 'recruit.noshow.final',
+  title: 'Not attended — application closed (DRAFT)',
+  when: 'When a manager marks a final-chance interview "Not attended".',
+  description:
+    'DRAFT — no wording was supplied, so this needs approval before the feature is switched on. ' +
+    'Short and factual: states the missed final interview and that the application is closed, as the re-book email said it would be. ' +
+    'It is the only email sent: the ordinary decline email is not sent as well.',
+  mergeFields: ['firstName', 'roleTitle', 'localDay', 'localTime', 'ukTime'],
+  sample: SAMPLE,
+  load,
+  render: (data) => ({
+    subject: 'Fast Action Claims — your application has been closed',
+    ...bodyBoth({
+      heading: 'Your application has been closed',
+      preview: 'You did not attend your final interview.',
+      signOff: SIGN_OFF,
+      lines: [
+        `Dear ${data.firstName},`,
+        '',
+        `You did not attend your final interview for the ${data.roleTitle}, booked for ${whenLine(data)}.`,
+        '',
+        'As we explained when we offered you a final opportunity to re-book, your application has now been closed, and you will not be considered for any future internship or role with Fast Action Claims, Rowan Rose Ltd, Beacon Legal Group or Atlas Recruitment.',
+        '',
+        'We will not contact you again about this application.',
       ],
     }),
   }),

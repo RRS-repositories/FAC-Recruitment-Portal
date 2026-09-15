@@ -6,7 +6,8 @@ import { buildAvailability, isSlotBookable } from '../lib/availability.js';
 import { formatDayIn, formatTimeIn } from '../lib/zonedTime.js';
 import { notifyBooked, notifyCancelled } from '../lib/notify.js';
 import { blackoutsFor } from '../lib/blackouts.js';
-import { requireFlag } from '../lib/flags.js';
+import { isEnabled, requireFlag } from '../lib/flags.js';
+import { cancelGuard } from '../lib/rebookPolicy.js';
 import { attachMeetLink, moveMeetLink, cancelMeetLink } from '../lib/meetLink.js';
 
 /**
@@ -30,6 +31,10 @@ const LOCK_NAMESPACE = 4711;
 const FIND_BY_TOKEN = `
   SELECT i.id, i.status, i.starts_at, i.ends_at, i.reschedule_count, i.token_expires_at,
          i.meet_link, i.interviewer_id,
+         -- Through to_jsonb, not by name: every booking page load runs this, and
+         -- naming a column recruit_015 adds would break booking outright if the
+         -- code reached production before that migration.
+         COALESCE((to_jsonb(i) ->> 'is_final_chance')::boolean, false) AS is_final_chance,
          a.id AS applicant_id, a.full_name, a.email, a.role, a.candidate_tz,
          iv.full_name AS interviewer_name
     FROM recruit_interviews i
@@ -50,9 +55,17 @@ const TAKEN_FOR = `
 const MAX_RESCHEDULES = 2;
 const RESCHEDULE_CUTOFF_MS = 2 * 3_600_000;
 
-/** Everything the booking page shows about who they are meeting. */
-const publicInterview = (row) => ({
+/**
+ * Everything the booking page shows about who they are meeting.
+ *
+ * `canCancel` defaults to true, so any caller that does not pass it gets the
+ * page exactly as it was. It is false only for a final chance while the
+ * no-show re-book is switched on -- the page then hides the button, and the
+ * cancel route refuses it regardless of what the page shows.
+ */
+const publicInterview = (row, { canCancel = true } = {}) => ({
   firstName: (row.full_name ?? '').split(' ')[0],
+  canCancel,
   role: row.role,
   interviewerName: row.interviewer_name,
   status: row.status,
@@ -145,7 +158,9 @@ export function createBookingRouter() {
 
       return res.json({
         ok: true,
-        interview: publicInterview(row),
+        interview: publicInterview(row, {
+          canCancel: !cancelGuard({ flagOn: await isEnabled('recruitment_noshow_rebook'), interview: row }),
+        }),
         timezone: row.candidate_tz,
         days,
         // The page explains why there is a gap in the middle of the day. It
@@ -289,6 +304,12 @@ export function createBookingRouter() {
     try {
       const { row, error } = await loadByToken(req.params.token);
       if (error) return res.status(error.status).json(error.body);
+
+      // A final chance cannot be cancelled online (decided 15 Sep). Checked
+      // here, not only by hiding the button, because a request can be sent
+      // without the page. Switch off: cancelling works exactly as before.
+      const blocked = cancelGuard({ flagOn: await isEnabled('recruitment_noshow_rebook'), interview: row });
+      if (blocked) return res.status(409).json({ ok: false, code: blocked.code, error: blocked.message });
 
       // The slot is deliberately kept on the row. "They cancelled twice, and
       // when" is a question worth being able to answer later.

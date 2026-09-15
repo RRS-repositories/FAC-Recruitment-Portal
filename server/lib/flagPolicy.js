@@ -21,6 +21,9 @@ export const FLAGS = [
   'recruitment_ai_review',
   'recruitment_auto_meet',
   'recruitment_auto_noshow',
+  // "Not attended" -> one final re-book (recruit_015). Off until the email
+  // wording has been approved on the templates screen.
+  'recruitment_noshow_rebook',
 ];
 
 export const flagKey = (name) => `flags.${name}`;

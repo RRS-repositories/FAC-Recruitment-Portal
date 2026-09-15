@@ -43,6 +43,10 @@ const CLAIM = `
    WHERE i.status = 'booked'
      AND i.ends_at IS NOT NULL
      AND i.ends_at < now() - ($1 || ' minutes')::interval
+     -- Never a final chance. Missing one closes the application, and that is a
+     -- manager's decision (15 Sep), never a sweep's. Read through to_jsonb so
+     -- this query cannot break if it reaches a database before recruit_015.
+     AND COALESCE((to_jsonb(i) ->> 'is_final_chance')::boolean, false) = false
    ORDER BY i.ends_at
    LIMIT $2
      FOR UPDATE SKIP LOCKED

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
@@ -116,8 +116,26 @@ export function ApplicantRow({
   onReissue,
   onAttendance,
   fastSubmitSeconds = 240,
+  focus = false,
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(focus);
+  const rowRef = useRef(null);
+
+  /*
+   * Opens this row when something asks for it -- today, the calendar's "Open
+   * in applicants" button, which lands here with this applicant's id.
+   *
+   * An effect as well as the initial state, because the list loads in two
+   * passes: the unfiltered page first, then the page narrowed to this person.
+   * If they were already on the first page their row mounted closed, and a
+   * `useState(focus)` alone would never reopen it. It only ever OPENS -- a
+   * manager who then closes the row is not overruled.
+   */
+  useEffect(() => {
+    if (!focus) return;
+    setOpen(true);
+    rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focus]);
   const [detail, setDetail] = useState(null);
   const [emails, setEmails] = useState(null);
   const [mailMode, setMailMode] = useState(null);
@@ -211,7 +229,7 @@ export function ApplicantRow({
 
   return (
     <>
-      <tr className="border-b border-line align-top last:border-0 hover:bg-lav-soft/40">
+      <tr ref={rowRef} className="border-b border-line align-top last:border-0 hover:bg-lav-soft/40">
         {/* Name, with the role underneath it rather than beside — the column
             is the narrowest thing on the row and a chip would push it wider. */}
         <td className={cn('px-3 py-4', COL.name)}>
@@ -280,7 +298,22 @@ export function ApplicantRow({
         </td>
 
         <td className={cn('px-3 py-4', COL.decision)}>
-          {applicant.status === 'pending' ? (
+          {/* On the do-not-rehire list: a grey chip in place of the accept and
+              decline buttons (decided 15 Sep). Checked first, because a barred
+              application is already declined and there is nothing to decide. */}
+          {applicant.doNotRehire ? (
+            // Two lines, a little tighter than a normal badge: the column is
+            // narrow, and on one line the chip ran into the expand arrow. The `!`
+            // is needed because cn() joins classes rather than merging them, so
+            // Badge's own nowrap / pill shape would otherwise win.
+            <Badge
+              tone="quiet"
+              title={applicant.doNotRehireReason ?? undefined}
+              className="!whitespace-normal !rounded-control !px-2 !tracking-normal leading-tight"
+            >
+              Do not rehire
+            </Badge>
+          ) : applicant.status === 'pending' ? (
             <div className="flex gap-1.5">
               <button
                 type="button"

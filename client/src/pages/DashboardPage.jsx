@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { AdminShell } from '@/components/layout/AdminShell';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
@@ -14,6 +15,7 @@ import { ROLES } from '@/data/roles';
 import usePageMeta from '@/hooks/usePageMeta';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
 import {
+  adminApplication,
   adminApplications,
   adminDecide,
   adminMarkAttendance,
@@ -211,6 +213,56 @@ export function DashboardPage() {
   useEffect(() => {
     if (signedIn) load();
   }, [signedIn, load]);
+
+  /*
+   * Arriving with `?applicant=<id>` -- the calendar's "Open in applicants".
+   *
+   * The id is looked up rather than trusted to be on the current page: the
+   * list is paged and filtered, so the person may be on page four, or hidden
+   * by whatever tab was last chosen. So the filters are reset and the search
+   * is narrowed to them, which also shows the manager plainly WHY the list now
+   * holds one row -- their name is in the search box, and clearing it restores
+   * the full list.
+   *
+   * The search box is filled with their EMAIL, looked up here -- never carried
+   * in the URL, where it would end up in browser history and proxy logs. It is
+   * the address rather than the name because two applicants can share a name
+   * but not an address. The parameter is then removed, so a refresh or a later
+   * click is not stuck narrowed to somebody the manager has moved on from.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [focusId, setFocusId] = useState(null);
+
+  useEffect(() => {
+    const wanted = searchParams.get('applicant');
+    if (!signedIn || !wanted) return undefined;
+
+    let cancelled = false;
+    adminApplication(wanted)
+      .then((result) => {
+        if (cancelled) return;
+        const found = result?.application;
+        if (!found) return;
+        setStatus('all');
+        setRole('all');
+        setAiLevel('all');
+        setFrom('');
+        setTo('');
+        setPage(1);
+        setQuery(found.email ?? found.full_name ?? '');
+        setFocusId(found.id);
+      })
+      .catch(() => {
+        if (!cancelled) setActionError('That application could not be found.');
+      })
+      .finally(() => {
+        if (!cancelled) setSearchParams({}, { replace: true });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, searchParams, setSearchParams]);
 
   /**
    * Opens the decision confirmation, re-checking whether email actually leaves.
@@ -638,6 +690,7 @@ export function DashboardPage() {
                     onDecide={askToDecide}
                     onReissue={reissue}
                     onAttendance={markAttendance}
+                    focus={applicant.id === focusId}
                   />
                 ))}
               </tbody>

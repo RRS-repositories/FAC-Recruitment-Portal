@@ -26,6 +26,8 @@ import { EMAIL, FIELD_LIMITS } from '../lib/validate.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
 import { dueForDeletion, retentionMonths, setRetentionMonths } from '../lib/retention.js';
 import { buildCalendar } from '../lib/calendar.js';
+import { markNotAttended } from '../lib/notAttended.js';
+import { attendanceGuard, reissueGuard } from '../lib/rebookPolicy.js';
 
 /**
  * The manager's view: read applications, accept or decline them.
@@ -55,6 +57,10 @@ const LIST = `
          a.rule_score, a.final_score, a.status, a.duration_sec,
          a.ai_use_level, a.ai_use_score, a.ai_use_reasons,
          a.decided_by_email, a.decided_at, a.cv_filename, a.cv_deleted_at,
+         -- Through to_jsonb, not by name, so the applicant list -- the page
+         -- managers live on -- cannot break if code lands before recruit_015.
+         COALESCE((to_jsonb(a) ->> 'do_not_rehire')::boolean, false) AS do_not_rehire,
+         to_jsonb(a) ->> 'do_not_rehire_reason' AS do_not_rehire_reason,
          i.status AS interview_status, i.starts_at AS interview_at
     FROM recruit_applicants a
     LEFT JOIN LATERAL (
@@ -917,8 +923,10 @@ export function createAdminRouter() {
       }
 
       const { rows: existing } = await client.query(
-        `SELECT id, status FROM recruit_interviews
-          WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        `SELECT i.id, i.status,
+                COALESCE((to_jsonb(i) ->> 'is_final_chance')::boolean, false) AS is_final_chance
+           FROM recruit_interviews i
+          WHERE i.applicant_id = $1 ORDER BY i.created_at DESC LIMIT 1`,
         [req.params.id],
       );
       const latest = existing[0];
@@ -931,6 +939,18 @@ export function createAdminRouter() {
           ok: false,
           error: 'That interview has already taken place.',
         });
+      }
+
+      // While the no-show re-book is switched on, a final chance cannot be
+      // reissued or extended, and a missed interview is re-offered only through
+      // "Not attended". Off-switch: everything below runs exactly as before.
+      const linkGuard = reissueGuard({
+        flagOn: await isEnabled('recruitment_noshow_rebook'),
+        latest,
+      });
+      if (linkGuard) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ ok: false, code: linkGuard.code, error: linkGuard.message });
       }
 
       // A no-show is the one case where a fresh link IS the point — the spec
@@ -1116,10 +1136,16 @@ export function createAdminRouter() {
       // The most recent interview that actually HAS a time, not simply the
       // most recent row. Offering a rebook creates a new, unbooked interview,
       // and a mis-clicked no-show still has to be correctable afterwards.
+      //
+      // is_final_chance is read through to_jsonb, not by name: this button is
+      // used every day, and naming a column recruit_015 adds would break it
+      // outright if the code ever reached production before that migration.
       const { rows } = await pool.query(
-        `SELECT id, status, starts_at FROM recruit_interviews
-          WHERE applicant_id = $1 AND starts_at IS NOT NULL
-          ORDER BY created_at DESC LIMIT 1`,
+        `SELECT i.id, i.status, i.starts_at,
+                COALESCE((to_jsonb(i) ->> 'is_final_chance')::boolean, false) AS is_final_chance
+           FROM recruit_interviews i
+          WHERE i.applicant_id = $1 AND i.starts_at IS NOT NULL
+          ORDER BY i.created_at DESC LIMIT 1`,
         [req.params.id],
       );
       const interview = rows[0];
@@ -1134,6 +1160,17 @@ export function createAdminRouter() {
       // anything — it is a guess, and one that would quietly become wrong.
       if (new Date(interview.starts_at) > new Date()) {
         return res.status(409).json({ ok: false, error: 'That interview has not happened yet.' });
+      }
+
+      // A missed FINAL chance must go through "Not attended — final", the only
+      // path that also closes the application. Off-switch: unchanged behaviour.
+      const finalGuard = attendanceGuard({
+        flagOn: await isEnabled('recruitment_noshow_rebook'),
+        interview,
+        status,
+      });
+      if (finalGuard) {
+        return res.status(409).json({ ok: false, code: finalGuard.code, error: finalGuard.message });
       }
 
       const client = await pool.connect();
@@ -1167,6 +1204,43 @@ export function createAdminRouter() {
     } catch (error) {
       console.error('[fac-recruit] attendance update failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not record that.' });
+    }
+  });
+
+  /**
+   * "Not attended" -- mark a missed interview and offer ONE final re-book, or,
+   * if the missed interview was already that final chance, end the application.
+   *
+   * Beside the attendance endpoint above, not instead of it: that one still
+   * records attended or no-show and sends nothing, exactly as before. This one
+   * does the whole job in one press.
+   *
+   * Behind `recruitment_noshow_rebook`. Off, it answers 404 -- as though it did
+   * not exist -- so nothing about the dashboard changes until it is switched on
+   * deliberately, after the email wording has been approved.
+   *
+   * The rules and the work live in lib/rebookPolicy.js and lib/notAttended.js;
+   * this only translates their result into a response.
+   */
+  router.post('/applications/:id/not-attended', async (req, res) => {
+    if (!(await isEnabled('recruitment_noshow_rebook'))) {
+      return res.status(404).json({ ok: false, error: 'Not found.' });
+    }
+
+    try {
+      const result = await markNotAttended({ applicantId: req.params.id, actorEmail: req.admin.email });
+
+      if (!result.ok) {
+        return res.status(result.status).json({ ok: false, code: result.code, error: result.message });
+      }
+
+      console.log(
+        `[fac-recruit] ${req.admin.email} marked ${req.params.id} not attended (${result.path})`,
+      );
+      return res.json({ ...result, emailQueued: true });
+    } catch (error) {
+      console.error('[fac-recruit] not attended failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not record that. Nothing was changed.' });
     }
   });
 
