@@ -27,6 +27,7 @@ import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js'
 import { dueForDeletion, retentionMonths, setRetentionMonths } from '../lib/retention.js';
 import { buildCalendar } from '../lib/calendar.js';
 import { markNotAttended } from '../lib/notAttended.js';
+import { attendanceGuard, reissueGuard } from '../lib/rebookPolicy.js';
 
 /**
  * The manager's view: read applications, accept or decline them.
@@ -918,8 +919,10 @@ export function createAdminRouter() {
       }
 
       const { rows: existing } = await client.query(
-        `SELECT id, status FROM recruit_interviews
-          WHERE applicant_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        `SELECT i.id, i.status,
+                COALESCE((to_jsonb(i) ->> 'is_final_chance')::boolean, false) AS is_final_chance
+           FROM recruit_interviews i
+          WHERE i.applicant_id = $1 ORDER BY i.created_at DESC LIMIT 1`,
         [req.params.id],
       );
       const latest = existing[0];
@@ -932,6 +935,18 @@ export function createAdminRouter() {
           ok: false,
           error: 'That interview has already taken place.',
         });
+      }
+
+      // While the no-show re-book is switched on, a final chance cannot be
+      // reissued or extended, and a missed interview is re-offered only through
+      // "Not attended". Off-switch: everything below runs exactly as before.
+      const linkGuard = reissueGuard({
+        flagOn: await isEnabled('recruitment_noshow_rebook'),
+        latest,
+      });
+      if (linkGuard) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ ok: false, code: linkGuard.code, error: linkGuard.message });
       }
 
       // A no-show is the one case where a fresh link IS the point — the spec
@@ -1117,10 +1132,16 @@ export function createAdminRouter() {
       // The most recent interview that actually HAS a time, not simply the
       // most recent row. Offering a rebook creates a new, unbooked interview,
       // and a mis-clicked no-show still has to be correctable afterwards.
+      //
+      // is_final_chance is read through to_jsonb, not by name: this button is
+      // used every day, and naming a column recruit_015 adds would break it
+      // outright if the code ever reached production before that migration.
       const { rows } = await pool.query(
-        `SELECT id, status, starts_at FROM recruit_interviews
-          WHERE applicant_id = $1 AND starts_at IS NOT NULL
-          ORDER BY created_at DESC LIMIT 1`,
+        `SELECT i.id, i.status, i.starts_at,
+                COALESCE((to_jsonb(i) ->> 'is_final_chance')::boolean, false) AS is_final_chance
+           FROM recruit_interviews i
+          WHERE i.applicant_id = $1 AND i.starts_at IS NOT NULL
+          ORDER BY i.created_at DESC LIMIT 1`,
         [req.params.id],
       );
       const interview = rows[0];
@@ -1135,6 +1156,17 @@ export function createAdminRouter() {
       // anything — it is a guess, and one that would quietly become wrong.
       if (new Date(interview.starts_at) > new Date()) {
         return res.status(409).json({ ok: false, error: 'That interview has not happened yet.' });
+      }
+
+      // A missed FINAL chance must go through "Not attended — final", the only
+      // path that also closes the application. Off-switch: unchanged behaviour.
+      const finalGuard = attendanceGuard({
+        flagOn: await isEnabled('recruitment_noshow_rebook'),
+        interview,
+        status,
+      });
+      if (finalGuard) {
+        return res.status(409).json({ ok: false, code: finalGuard.code, error: finalGuard.message });
       }
 
       const client = await pool.connect();

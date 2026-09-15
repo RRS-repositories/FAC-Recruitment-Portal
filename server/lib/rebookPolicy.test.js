@@ -6,8 +6,10 @@ import {
   PATHS,
   REBOOK_EXPIRY_DAYS,
   SYSTEM_NOSHOW_ACTOR,
+  attendanceGuard,
   notAttendedDecision,
   notAttendedLabel,
+  reissueGuard,
 } from './rebookPolicy.js';
 
 /**
@@ -159,4 +161,58 @@ test('do-not-rehire reasons fit the database limit', () => {
   for (const reason of Object.values(DNR_REASON)) {
     assert.ok(reason.trim().length > 0 && reason.length <= 300, reason);
   }
+});
+
+/* ── Phase 4: no other way round the final chance ────────────────────────── */
+
+const finalBooked = { status: 'booked', is_final_chance: true };
+const finalInvited = { status: 'invited', is_final_chance: true };
+const ordinary = { status: 'booked', is_final_chance: false };
+
+test('the old attendance button cannot record a missed final chance', () => {
+  const r = attendanceGuard({ flagOn: true, interview: finalBooked, status: 'no_show' });
+  assert.equal(r.code, 'final_use_not_attended');
+  assert.match(r.message, /Not attended — final/);
+});
+
+test('it can still record a final chance as ATTENDED', () => {
+  // Good news is not a way round anything.
+  assert.equal(attendanceGuard({ flagOn: true, interview: finalBooked, status: 'attended' }), null);
+});
+
+test('it still records ordinary no-shows exactly as before', () => {
+  assert.equal(attendanceGuard({ flagOn: true, interview: ordinary, status: 'no_show' }), null);
+});
+
+test('reissue cannot extend or rotate a final-chance link, in any state', () => {
+  // invited (7 days -> 14 with the wrong email), booked, and cancelled (which
+  // would otherwise start a brand-new non-final booking) are all refused.
+  for (const latest of [finalInvited, finalBooked, { status: 'cancelled', is_final_chance: true }]) {
+    assert.equal(reissueGuard({ flagOn: true, latest }).code, 'final_no_reissue', latest.status);
+  }
+});
+
+test('reissue on a missed interview points to "Not attended" instead', () => {
+  const r = reissueGuard({ flagOn: true, latest: { status: 'no_show', is_final_chance: false } });
+  assert.equal(r.code, 'no_show_use_not_attended');
+  assert.match(r.message, /Not attended/);
+});
+
+test('reissue on an ordinary invited or booked link is unchanged', () => {
+  for (const latest of [{ status: 'invited', is_final_chance: false }, ordinary]) {
+    assert.equal(reissueGuard({ flagOn: true, latest }), null, latest.status);
+  }
+  assert.equal(reissueGuard({ flagOn: true, latest: null }), null, 'no interview yet');
+});
+
+test('with the switch OFF, no guard applies — every existing button behaves as before', () => {
+  assert.equal(attendanceGuard({ flagOn: false, interview: finalBooked, status: 'no_show' }), null);
+  for (const latest of [finalInvited, finalBooked, { status: 'no_show', is_final_chance: false }]) {
+    assert.equal(reissueGuard({ flagOn: false, latest }), null);
+  }
+});
+
+test('only a strict true counts as a final chance in the guards too', () => {
+  assert.equal(attendanceGuard({ flagOn: true, interview: { status: 'booked', is_final_chance: 'true' }, status: 'no_show' }), null);
+  assert.equal(reissueGuard({ flagOn: true, latest: { status: 'invited', is_final_chance: 1 } }), null);
 });

@@ -105,3 +105,55 @@ export function notAttendedLabel(decision) {
   if (!decision?.ok) return null;
   return decision.path === PATHS.final ? 'Not attended — final' : 'Not attended';
 }
+
+/* ── Closing every other way round the final chance (phase 4) ───────────────
+ *
+ * "Not attended — final" is the ONLY way a final chance can end in a no-show,
+ * because it is the only path that also declines the application and records
+ * the bar. Each guard below closes one existing route that would otherwise
+ * reach the same outcome while skipping that -- leaving a candidate who missed
+ * their final chance still accepted, or holding a fresh ordinary link.
+ *
+ * All of them apply ONLY while recruitment_noshow_rebook is on. With it off,
+ * every existing button behaves exactly as it did before this feature.
+ */
+
+const GUARD = Object.freeze({
+  final_use_not_attended:
+    "This was the candidate's final chance. Use \"Not attended — final\", which records it and closes the application.",
+  final_no_reissue:
+    'This candidate is on their final chance, so their link cannot be reissued or extended.',
+  no_show_use_not_attended:
+    'This interview was missed. Use "Not attended", which offers the one final re-book.',
+});
+
+const guard = (code) => ({ ok: false, code, message: GUARD[code] });
+
+/**
+ * The existing attendance button, recording `status` on `interview`.
+ *
+ * Marking a final chance "attended" is fine and stays open -- that is good
+ * news, not a way round anything. Marking it "no_show" here would record the
+ * miss without the decline, so it is refused and pointed at the right button.
+ */
+export function attendanceGuard({ flagOn, interview, status }) {
+  if (!flagOn) return null;
+  if (status === 'no_show' && interview?.is_final_chance === true) return guard('final_use_not_attended');
+  return null;
+}
+
+/**
+ * The existing "reissue link" button, acting on the applicant's latest interview.
+ *
+ * Without this, reissuing a final-chance link rotates it and extends it from 7
+ * days to 14 with the ordinary "shortlisted" email -- breaking what the re-book
+ * email promised. On a cancelled final chance it would start a brand-new,
+ * non-final booking. And on a missed interview it would send the soft "we
+ * missed you" re-book alongside, or instead of, the final one.
+ */
+export function reissueGuard({ flagOn, latest }) {
+  if (!flagOn || !latest) return null;
+  if (latest.is_final_chance === true) return guard('final_no_reissue');
+  if (latest.status === 'no_show') return guard('no_show_use_not_attended');
+  return null;
+}
