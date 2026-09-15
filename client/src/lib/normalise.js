@@ -73,6 +73,10 @@ export function normaliseApplicant(row) {
     // survives so the row can say what is gone rather than show nothing.
     cvDeletedAt: row.cv_deleted_at ?? null,
     decidedByEmail: row.decided_by_email ?? null,
+    // On the do-not-rehire list. Strictly true only: anything else, including
+    // a server that does not send the field, reads as not barred.
+    doNotRehire: row.do_not_rehire === true,
+    doNotRehireReason: row.do_not_rehire_reason ?? null,
     decidedAt: row.decided_at ?? null,
 
     // Detail only.

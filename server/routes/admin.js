@@ -57,6 +57,10 @@ const LIST = `
          a.rule_score, a.final_score, a.status, a.duration_sec,
          a.ai_use_level, a.ai_use_score, a.ai_use_reasons,
          a.decided_by_email, a.decided_at, a.cv_filename, a.cv_deleted_at,
+         -- Through to_jsonb, not by name, so the applicant list -- the page
+         -- managers live on -- cannot break if code lands before recruit_015.
+         COALESCE((to_jsonb(a) ->> 'do_not_rehire')::boolean, false) AS do_not_rehire,
+         to_jsonb(a) ->> 'do_not_rehire_reason' AS do_not_rehire_reason,
          i.status AS interview_status, i.starts_at AS interview_at
     FROM recruit_applicants a
     LEFT JOIN LATERAL (

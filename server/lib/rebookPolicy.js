@@ -157,3 +157,39 @@ export function reissueGuard({ flagOn, latest }) {
   if (latest.status === 'no_show') return guard('no_show_use_not_attended');
   return null;
 }
+
+/* ── Phase 5: cancelling a final chance, and reapplying while barred ─────── */
+
+/**
+ * The candidate's own "Cancel interview" on the booking page (decided 15 Sep).
+ *
+ * A final chance cannot be cancelled online: cancelling it would leave them
+ * accepted, with no working link, and nothing further would ever happen. They
+ * can still MOVE it (the reschedule limit is unchanged), and the re-book email
+ * already asks them to reply if something genuinely prevents attending.
+ *
+ * Worded for the candidate, not the manager. Switch off: cancelling works as before.
+ */
+export function cancelGuard({ flagOn, interview }) {
+  if (!flagOn || interview?.is_final_chance !== true) return null;
+  return {
+    ok: false,
+    code: 'final_no_cancel',
+    message:
+      "This is your final interview, so it can't be cancelled online. You can still change the time, or reply to your email if something prevents you from attending.",
+  };
+}
+
+/**
+ * Who records the automatic decline of an application from a barred address.
+ *
+ * Unlike a final no-show -- which a manager presses -- nobody decides this one:
+ * it follows from the list. So a named system actor, never a person's address.
+ */
+export const SYSTEM_DNR_ACTOR = 'system:do-not-rehire';
+
+/** The reason carried onto the new application, from the bar it matched. */
+export function reappliedReason(existingReason) {
+  const base = String(existingReason ?? '').trim();
+  return (base || 'On the do-not-rehire list').slice(0, 300);
+}

@@ -298,7 +298,22 @@ export function ApplicantRow({
         </td>
 
         <td className={cn('px-3 py-4', COL.decision)}>
-          {applicant.status === 'pending' ? (
+          {/* On the do-not-rehire list: a grey chip in place of the accept and
+              decline buttons (decided 15 Sep). Checked first, because a barred
+              application is already declined and there is nothing to decide. */}
+          {applicant.doNotRehire ? (
+            // Two lines, a little tighter than a normal badge: the column is
+            // narrow, and on one line the chip ran into the expand arrow. The `!`
+            // is needed because cn() joins classes rather than merging them, so
+            // Badge's own nowrap / pill shape would otherwise win.
+            <Badge
+              tone="quiet"
+              title={applicant.doNotRehireReason ?? undefined}
+              className="!whitespace-normal !rounded-control !px-2 !tracking-normal leading-tight"
+            >
+              Do not rehire
+            </Badge>
+          ) : applicant.status === 'pending' ? (
             <div className="flex gap-1.5">
               <button
                 type="button"

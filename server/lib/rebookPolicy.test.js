@@ -6,9 +6,12 @@ import {
   PATHS,
   REBOOK_EXPIRY_DAYS,
   SYSTEM_NOSHOW_ACTOR,
+  SYSTEM_DNR_ACTOR,
   attendanceGuard,
+  cancelGuard,
   notAttendedDecision,
   notAttendedLabel,
+  reappliedReason,
   reissueGuard,
 } from './rebookPolicy.js';
 
@@ -215,4 +218,39 @@ test('with the switch OFF, no guard applies — every existing button behaves as
 test('only a strict true counts as a final chance in the guards too', () => {
   assert.equal(attendanceGuard({ flagOn: true, interview: { status: 'booked', is_final_chance: 'true' }, status: 'no_show' }), null);
   assert.equal(reissueGuard({ flagOn: true, latest: { status: 'invited', is_final_chance: 1 } }), null);
+});
+
+/* ── Phase 5: cancelling a final chance, and reapplying while barred ─────── */
+
+test('a candidate cannot cancel their final chance online', () => {
+  const r = cancelGuard({ flagOn: true, interview: { status: 'booked', is_final_chance: true } });
+  assert.equal(r.code, 'final_no_cancel');
+  // Worded for the candidate, and it tells them what they CAN do.
+  assert.match(r.message, /can still change the time/);
+  assert.match(r.message, /reply to your email/);
+  assert.doesNotMatch(r.message, /manager|flag|final_no_cancel/i);
+});
+
+test('an ordinary booking can still be cancelled', () => {
+  assert.equal(cancelGuard({ flagOn: true, interview: { status: 'booked', is_final_chance: false } }), null);
+});
+
+test('with the switch OFF, cancelling works exactly as before', () => {
+  assert.equal(cancelGuard({ flagOn: false, interview: { status: 'booked', is_final_chance: true } }), null);
+});
+
+test('the automatic decline of a barred address is recorded against the system, not a person', () => {
+  assert.doesNotMatch(SYSTEM_DNR_ACTOR, /@/);
+  assert.match(SYSTEM_DNR_ACTOR, /^system:/);
+  assert.notEqual(SYSTEM_DNR_ACTOR, SYSTEM_NOSHOW_ACTOR, 'the two rules are told apart in the audit trail');
+});
+
+test('a reapplication carries the original reason forward, within the database limit', () => {
+  assert.equal(reappliedReason('Two interview no-shows'), 'Two interview no-shows');
+  assert.equal(reappliedReason('  padded  '), 'padded');
+  // The CHECK constraint refuses a blank reason, so there is always one.
+  for (const nothing of [null, undefined, '', '   ']) {
+    assert.equal(reappliedReason(nothing), 'On the do-not-rehire list');
+  }
+  assert.equal(reappliedReason('x'.repeat(1000)).length, 300);
 });

@@ -322,10 +322,23 @@ export function BookingPage() {
                 Change my time
               </Button>
             ) : null}
-            <Button variant="danger" onClick={() => setConfirmingCancel(true)}>
-              Cancel interview
-            </Button>
+            {/* Hidden only when the server says so. A missing value (an older
+                server) keeps the button, so this page never loses it by accident. */}
+            {interview.canCancel !== false ? (
+              <Button variant="danger" onClick={() => setConfirmingCancel(true)}>
+                Cancel interview
+              </Button>
+            ) : null}
           </div>
+
+          {interview.canCancel === false ? (
+            <p className="mt-4 text-[0.84rem] leading-relaxed text-body">
+              This is your final interview, so it can&rsquo;t be cancelled online.{' '}
+              {tooLate
+                ? 'Reply to your email if something prevents you from attending.'
+                : 'You can still change the time, or reply to your email if something prevents you from attending.'}
+            </p>
+          ) : null}
 
           <p className="mt-4 text-[0.8rem] leading-relaxed text-muted">
             {tooLate
