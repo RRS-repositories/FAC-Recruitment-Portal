@@ -21,6 +21,10 @@ export const REBOOK_EXPIRY_DAYS = 7;
  * (decided_fields_together), and inventing a person there would put words in
  * somebody's mouth in the audit trail. A named system actor says plainly that
  * the decline followed from a rule, and which rule.
+ *
+ * Used ONLY where no person decides: an unused re-book link expiring. Missing
+ * a final chance is recorded against the MANAGER who pressed "Not attended —
+ * final", because they confirmed a dialog saying the application would end.
  */
 export const SYSTEM_NOSHOW_ACTOR = 'system:no-show';
 

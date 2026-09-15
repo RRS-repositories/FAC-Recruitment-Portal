@@ -26,6 +26,7 @@ import { EMAIL, FIELD_LIMITS } from '../lib/validate.js';
 import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js';
 import { dueForDeletion, retentionMonths, setRetentionMonths } from '../lib/retention.js';
 import { buildCalendar } from '../lib/calendar.js';
+import { markNotAttended } from '../lib/notAttended.js';
 
 /**
  * The manager's view: read applications, accept or decline them.
@@ -1167,6 +1168,43 @@ export function createAdminRouter() {
     } catch (error) {
       console.error('[fac-recruit] attendance update failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not record that.' });
+    }
+  });
+
+  /**
+   * "Not attended" -- mark a missed interview and offer ONE final re-book, or,
+   * if the missed interview was already that final chance, end the application.
+   *
+   * Beside the attendance endpoint above, not instead of it: that one still
+   * records attended or no-show and sends nothing, exactly as before. This one
+   * does the whole job in one press.
+   *
+   * Behind `recruitment_noshow_rebook`. Off, it answers 404 -- as though it did
+   * not exist -- so nothing about the dashboard changes until it is switched on
+   * deliberately, after the email wording has been approved.
+   *
+   * The rules and the work live in lib/rebookPolicy.js and lib/notAttended.js;
+   * this only translates their result into a response.
+   */
+  router.post('/applications/:id/not-attended', async (req, res) => {
+    if (!(await isEnabled('recruitment_noshow_rebook'))) {
+      return res.status(404).json({ ok: false, error: 'Not found.' });
+    }
+
+    try {
+      const result = await markNotAttended({ applicantId: req.params.id, actorEmail: req.admin.email });
+
+      if (!result.ok) {
+        return res.status(result.status).json({ ok: false, code: result.code, error: result.message });
+      }
+
+      console.log(
+        `[fac-recruit] ${req.admin.email} marked ${req.params.id} not attended (${result.path})`,
+      );
+      return res.json({ ...result, emailQueued: true });
+    } catch (error) {
+      console.error('[fac-recruit] not attended failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not record that. Nothing was changed.' });
     }
   });
 
