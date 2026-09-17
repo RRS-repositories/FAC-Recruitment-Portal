@@ -6,6 +6,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 import { useTelemetry } from '@/hooks/useTelemetry';
 import { fetchRole, startApplication, submitApplication } from '@/lib/api';
+import { NOT_SENT_MESSAGE, noResponse, sendWithRetry } from '@/lib/submitRetry';
 import { DetailsStep, validateDetails } from './steps/DetailsStep';
 import { WrittenStep } from './steps/WrittenStep';
 import { AssessmentStep } from './steps/AssessmentStep';
@@ -114,17 +115,23 @@ export function ApplicationFlow({ role, onExit }) {
     setSubmitError('');
     setSubmitting(true);
     try {
-      const result = await submitApplication({
-        role: role.key,
-        details,
-        written,
-        answers,
-        telemetry: telemetry.snapshot(),
-        sessionId,
-        cv: file,
-        source: role.source,
-        captchaToken,
-      });
+      // Sent again if the connection drops before any reply -- and only then.
+      // Safe because the server recognises a resend from this session.
+      const result = await sendWithRetry(
+        () =>
+          submitApplication({
+            role: role.key,
+            details,
+            written,
+            answers,
+            telemetry: telemetry.snapshot(),
+            sessionId,
+            cv: file,
+            source: role.source,
+            captchaToken,
+          }),
+        { canRetry: Boolean(sessionId) },
+      );
       setAcknowledged(result?.acknowledged === true);
       setDone(true);
     } catch (error) {
@@ -141,7 +148,10 @@ export function ApplicationFlow({ role, onExit }) {
             'Some of your answers were not accepted. Please check them and try again.',
           );
       } else {
-        setSubmitError(error.message);
+        // No reply at all, even after retrying: say what the candidate can do,
+        // rather than the generic "could not reach our servers". Every answer
+        // the server gave is still shown in its own words, as before.
+        setSubmitError(noResponse(error) ? NOT_SENT_MESSAGE : error.message);
       }
     } finally {
       setSubmitting(false);
