@@ -77,6 +77,49 @@ const BARRED = `
    LIMIT 1
 `;
 
+/*
+ * The application this form session has ALREADY submitted, if any.
+ *
+ * A phone that loses its connection while sending the application cannot tell
+ * "it never arrived" from "it arrived and the reply was lost", so the form
+ * sends it again. Without this, the second case would be told "You already
+ * have an application with us" about the application it just made.
+ *
+ * Deliberately narrow: only a session that has completed, and only for the
+ * same email and role it completed with. Anything else -- no session, a
+ * different address, a new session -- goes through exactly as before.
+ */
+const SESSION_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const SESSION_SUBMITTED = `
+  SELECT a.id, a.email, a.role, a.decided_by_email
+    FROM recruit_sessions s
+    JOIN recruit_applicants a ON a.id = s.applicant_id
+   WHERE s.id = $1 AND s.completed_at IS NOT NULL
+`;
+
+async function alreadySubmitted(sessionId, email, roleKey) {
+  if (typeof sessionId !== 'string' || !SESSION_UUID.test(sessionId) || !email) return null;
+  // A failed lookup is not a reason to refuse an application: it falls
+  // through to the normal path, which is what happened before this existed.
+  const { rows } = await pool.query(SESSION_SUBMITTED, [sessionId]).catch(() => ({ rows: [] }));
+  const found = rows[0];
+  if (!found || found.role !== roleKey) return null;
+  if (String(found.email).trim().toLowerCase() !== String(email).trim().toLowerCase()) return null;
+  return found;
+}
+
+/** The reply the first submission would have had. */
+const resentReply = async (found) => ({
+  ok: true,
+  id: found.id,
+  // Same rule as a first submission: a do-not-rehire decline was sent nothing.
+  acknowledged:
+    found.decided_by_email !== SYSTEM_DNR_ACTOR &&
+    (await isEnabled('recruitment_alerts')) &&
+    mailMode() === 'smtp',
+});
+
 const hashIp = (ip, salt) => (ip && salt ? createHash('sha256').update(`${salt}:${ip}`).digest('hex') : null);
 
 export function createApplicationsRouter({ ipSalt }) {
@@ -122,6 +165,16 @@ export function createApplicationsRouter({ ipSalt }) {
   router.post('/', limiter, upload.single('cv'), async (req, res) => {
     const role = roleBySlug(req.body?.role);
     if (!role) return res.status(400).json({ ok: false, error: 'Unknown role.' });
+
+    // A resend of an application this session already made (the reply to the
+    // first was lost): answer as the first would have been answered, and store
+    // nothing twice. Before the captcha, because its token is single-use and
+    // the first request has already spent it.
+    const resent = await alreadySubmitted(req.body?.sessionId, normaliseDetails(req.body).email, role.apiKey);
+    if (resent) {
+      console.log(`[fac-recruit] application ${resent.id} sent again by the same session; answered as before, nothing stored`);
+      return res.status(201).json(await resentReply(resent));
+    }
 
     // Checked before anything is parsed, scored or written to disk: the point
     // of a captcha is that the work never starts. Skipped entirely when no
@@ -316,6 +369,11 @@ export function createApplicationsRouter({ ipSalt }) {
       // blocked and never sees this; the wording says "already with us"
       // rather than "already applied" so it stays true for them too.
       if (error.code === '23505') {
+        // Two copies of the same submission racing (a resend while the first
+        // was still being saved): the first won, so this one is answered as a
+        // success for that application, not as "already applied".
+        const racedWith = await alreadySubmitted(req.body?.sessionId, details.email, role.apiKey);
+        if (racedWith) return res.status(201).json(await resentReply(racedWith));
         return res.status(409).json({
           ok: false,
           error:
