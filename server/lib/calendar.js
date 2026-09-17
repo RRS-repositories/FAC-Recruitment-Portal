@@ -62,6 +62,66 @@ const BLACKOUTS = `
 const overlaps = (aStart, aEnd, bStart, bEnd) => aStart < bEnd && bStart < aEnd;
 
 /**
+ * The calendar's own grid, separate from the booking hours.
+ *
+ * It used to be built from the booking rule itself -- day_start to day_end in
+ * steps of slot_minutes -- so changing the booking hours in Settings squeezed
+ * the calendar, and an interview booked under the old hours dropped off it.
+ * Decided 17 Sep: the calendar is always 09:00-18:00 in 30-minute rows,
+ * stretched only as far as needed to show booking hours or an interview that
+ * fall outside it. The booking hours decide which rows are bookable; they no
+ * longer decide which rows exist. Candidates' slots are untouched -- they come
+ * from the availability engine, not from this.
+ */
+export const GRID = Object.freeze({ start: 9 * 60, end: 18 * 60, step: 30 });
+
+const floorTo = (minute, step) => Math.floor(minute / step) * step;
+const ceilTo = (minute, step) => Math.ceil(minute / step) * step;
+
+/**
+ * First and last minute of the grid, the same for every day in the range so
+ * the rows line up across the week.
+ *
+ * @param spans minutes-of-day, `{ from, to }`, for every interview in range
+ */
+export function gridBounds({ dayStart, dayEnd, spans = [] }) {
+  let start = Math.min(GRID.start, floorTo(dayStart, GRID.step));
+  let end = Math.max(GRID.end, ceilTo(dayEnd, GRID.step));
+  for (const { from, to } of spans) {
+    start = Math.min(start, floorTo(from, GRID.step));
+    end = Math.max(end, ceilTo(to, GRID.step));
+  }
+  return { start: Math.max(0, start), end: Math.min(24 * 60, end) };
+}
+
+/**
+ * What one 30-minute row is.
+ *
+ * Same order of precedence as before -- a booked interview first, so it is
+ * visible whatever else is true of its time -- with one new state: a row on a
+ * working day that the booking hours do not cover is `outside`. It is shown,
+ * not bookable, and not blockable (there is nothing to block).
+ */
+export function rowState({ minute, working, dayStart, dayEnd, block, interview, blackout, startsAt, earliest }) {
+  if (interview) return 'booked';
+  if (blackout) return 'blocked';
+  if (!working) return 'closed';
+  if (minute < dayStart || minute + GRID.step > dayEnd) return 'outside';
+  if (block) return 'break';
+  if (startsAt < earliest) return 'past';
+  return 'free';
+}
+
+/** An interview's start and end as minutes past midnight in `zone`. */
+export function minutesOfDay(startsAt, endsAt, zone) {
+  const from = parseClock(formatTimeIn(new Date(startsAt), zone)) % (24 * 60);
+  let to = parseClock(formatTimeIn(new Date(endsAt), zone)) % (24 * 60);
+  // Ends at or past midnight: run the grid to the end of the day.
+  if (to <= from) to = 24 * 60;
+  return { from, to };
+}
+
+/**
  * Builds the grid for a date range.
  *
  * Dates come in as plain `YYYY-MM-DD` because that is what a calendar is: the
@@ -88,7 +148,12 @@ export async function buildCalendar({ interviewerId, from, to, now = new Date() 
 
   const dayStart = parseClock(rule.day_start);
   const dayEnd = parseClock(rule.day_end);
-  const step = rule.slot_minutes;
+  const step = GRID.step;
+  const grid = gridBounds({
+    dayStart,
+    dayEnd,
+    spans: interviews.map((i) => minutesOfDay(i.starts_at, i.ends_at, zone)),
+  });
   const weekdays = new Set(rule.weekdays);
   const blocks = (rule.blocks ?? []).map((b) => ({
     start: parseClock(b.start),
@@ -113,7 +178,7 @@ export async function buildCalendar({ interviewerId, from, to, now = new Date() 
     const working = weekdays.has(weekday);
 
     const slots = [];
-    for (let minute = dayStart; minute + step <= dayEnd; minute += step) {
+    for (let minute = grid.start; minute + step <= grid.end; minute += step) {
       const startsAt = zonedTimeToInstant(
         { ...cursor, hour: Math.floor(minute / 60), minute: minute % 60 },
         zone,
@@ -121,23 +186,33 @@ export async function buildCalendar({ interviewerId, from, to, now = new Date() 
       const endsAt = new Date(startsAt.getTime() + step * 60_000);
 
       const block = blocks.find((b) => minute < b.end && b.start < minute + step);
-      const interview = interviews.find((i) =>
+      // An interview that STARTS in this row wins over one still running into
+      // it, so back-to-back interviews that share a row (09:00-09:45 then
+      // 09:45-10:30) each get a row that shows their name.
+      const touching = interviews.filter((i) =>
         overlaps(startsAt, endsAt, new Date(i.starts_at), new Date(i.ends_at)),
       );
+      const interview =
+        touching.find((i) => new Date(i.starts_at) >= startsAt) ?? touching[0];
       const blackout = blackouts.find((b) =>
         overlaps(startsAt, endsAt, new Date(b.starts_at), new Date(b.ends_at)),
       );
 
       // Order matters: a booked interview is the most important thing a cell
-      // can say, and it stays visible even if the day was later blocked.
-      let state = 'free';
-      if (interview) state = 'booked';
-      else if (blackout) state = 'blocked';
-      // Closed beats the lunch break: on a Saturday the whole day is shut, and
-      // drawing a lunch hour inside it suggests the rest of it is open.
-      else if (!working) state = 'closed';
-      else if (block) state = 'break';
-      else if (startsAt < earliest) state = 'past';
+      // can say, and it stays visible even if the day was later blocked -- or
+      // the booking hours later moved away from it. Closed beats the lunch
+      // break: on a Saturday the whole day is shut. See rowState.
+      const state = rowState({
+        minute,
+        working,
+        dayStart,
+        dayEnd,
+        block,
+        interview,
+        blackout,
+        startsAt,
+        earliest,
+      });
 
       slots.push({
         startsAt: startsAt.toISOString(),
@@ -164,6 +239,9 @@ export async function buildCalendar({ interviewerId, from, to, now = new Date() 
                 startsAt: new Date(interview.starts_at).toISOString(),
                 isFinalChance: interview.is_final_chance === true,
                 isLatest: interview.is_latest === true,
+                // An interview longer than one 30-minute row covers several;
+                // only the row it starts in carries the name.
+                continued: new Date(interview.starts_at) < startsAt,
               },
             }
           : {}),
@@ -176,7 +254,9 @@ export async function buildCalendar({ interviewerId, from, to, now = new Date() 
       working,
       slots,
       // Counted here so the month view does not have to walk every slot.
-      booked: slots.filter((s) => s.state === 'booked').length,
+      // Interviews, not rows: one 45-minute interview fills two rows but is
+      // one booking.
+      booked: new Set(slots.filter((s) => s.state === 'booked').map((s) => s.interview.id)).size,
       blocked: slots.filter((s) => s.state === 'blocked').length,
       free: slots.filter((s) => s.state === 'free').length,
     });

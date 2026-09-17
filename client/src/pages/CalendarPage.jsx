@@ -93,6 +93,13 @@ const STATE = {
     cell: 'bg-slate-200/70 text-slate-400 border-line',
     dot: 'bg-slate-300',
   },
+  // Inside the calendar's fixed 09:00-18:00 but outside the booking hours set
+  // in Settings: shown so the day keeps its shape, never bookable.
+  outside: {
+    label: 'Outside booking hours',
+    cell: 'bg-slate-100 text-slate-400 border-line [background-image:repeating-linear-gradient(135deg,transparent,transparent_6px,rgba(100,116,139,0.10)_6px,rgba(100,116,139,0.10)_7px)]',
+    dot: 'bg-slate-100 ring-1 ring-slate-300',
+  },
 };
 
 /**
@@ -481,7 +488,9 @@ export function CalendarPage() {
                                 look.cell,
                               )}
                             >
-                              {slot.state === 'booked' ? (
+                              {/* The name only in the row the interview starts in;
+                                  rows it runs on into stay coloured and clickable. */}
+                              {slot.state === 'booked' && !slot.interview.continued ? (
                                 <>
                                   <span className="block text-[0.62rem] uppercase tracking-wide text-white/70">
                                     {rebookOn && look !== STATE.booked ? look.label : 'Interview with'}
@@ -514,7 +523,17 @@ export function CalendarPage() {
           </Card>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[0.8rem] text-muted">
-            {['booked', 'free', 'blocked', 'break', 'past', 'closed'].map((key) => (
+            {[
+              'booked',
+              'free',
+              'blocked',
+              'break',
+              'past',
+              'closed',
+              // Only when the week actually has such rows, so the key stays as
+              // it was while the booking hours match the calendar.
+              ...(data.days.some((d) => d.slots.some((s) => s.state === 'outside')) ? ['outside'] : []),
+            ].map((key) => (
               <span key={key} className="inline-flex items-center gap-1.5">
                 <span aria-hidden="true" className={cn('h-3 w-3 rounded-sm', STATE[key].dot)} />
                 {STATE[key].label}
