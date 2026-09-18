@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { buildPrompt, parseReview, foldAiOpinion, PROMPT_VERSION } from './llmReview.js';
-import { questionsFor } from './roles.js';
+import { questionsFor, writtenQuestionsFor, ROLE_BY_API_KEY, WRITTEN_QUESTIONS } from './roles.js';
 
 /**
  * The parts that decide something, tested without a model or a database.
@@ -106,4 +106,71 @@ test('anything other than "likely" changes nothing at all', () => {
 
 test('the prompt version is a number, so a stored review can be traced to its wording', () => {
   assert.equal(typeof PROMPT_VERSION, 'number');
+});
+
+/*
+ * The prompt builder as it was before per-role written questions, copied
+ * verbatim. The two original roles must still get exactly this, byte for
+ * byte: PROMPT_VERSION did not move, so a review before and after the Sales
+ * role was added has to have been asked the same thing.
+ */
+function promptBeforeSales({ role, writtenAnswers, mcqAnswers, cvText }) {
+  const roleMeta = ROLE_BY_API_KEY[role] ?? null;
+  const questions = questionsFor(role) ?? [];
+
+  const written = WRITTEN_QUESTIONS.map((q) => {
+    const answer = String(writtenAnswers?.[q.id] ?? '').trim();
+    return `Q: ${q.label}\nA: ${answer || '(left blank)'}`;
+  }).join('\n\n');
+
+  const mcq = questions
+    .map((q) => {
+      const given = mcqAnswers?.[q.id];
+      const picked = (Array.isArray(given) ? given : [given])
+        .filter((i) => i !== undefined && i !== null)
+        .map((i) => q.options?.[i]?.label)
+        .filter(Boolean);
+      return `Q: ${q.question}\nChose: ${picked.length ? picked.join('; ') : '(no answer)'}`;
+    })
+    .join('\n\n');
+
+  return `ROLE: ${roleMeta?.title ?? role}${roleMeta?.country ? ` (remote, ${roleMeta.country})` : ''}
+
+--- THEIR CV ---
+${cvText || '(no CV text was available — judge on the answers alone, and say so in the summary)'}
+
+--- WRITTEN ANSWERS ---
+${written}
+
+--- MULTIPLE CHOICE ---
+${mcq}`;
+}
+
+test('the two original roles get a byte-identical prompt to before', () => {
+  const inputs = [
+    { writtenAnswers: ANSWERS, mcqAnswers: { q1: 0, q2: [0, 1] }, cvText: 'CV text here' },
+    { writtenAnswers: {}, mcqAnswers: {}, cvText: '' },
+    { writtenAnswers: { w1: '  padded  ', w9: 'not asked' }, mcqAnswers: { q1: 99 }, cvText: 'x' },
+  ];
+  for (const role of ['india_intern', 'sa_paralegal']) {
+    for (const input of inputs) {
+      assert.equal(buildPrompt({ role, ...input }), promptBeforeSales({ role, ...input }), role);
+    }
+  }
+});
+
+test('sales answers are labelled with the sales written questions', () => {
+  const questions = writtenQuestionsFor('sa_sales');
+  assert.ok(questions.length > 0, 'the sales role has written questions');
+  const answers = Object.fromEntries(questions.map((q, i) => [q.id, `answer number ${i + 1}`]));
+  const prompt = buildPrompt({ role: 'sa_sales', writtenAnswers: answers, mcqAnswers: {}, cvText: '' });
+
+  for (const [i, q] of questions.entries()) {
+    assert.ok(prompt.includes(`Q: ${q.label}\nA: answer number ${i + 1}`), `${q.id} is labelled`);
+  }
+  // None of the paralegal written questions leak into a sales prompt.
+  for (const q of WRITTEN_QUESTIONS) {
+    if (!questions.some((s) => s.label === q.label)) assert.ok(!prompt.includes(q.label));
+  }
+  assert.doesNotMatch(prompt, /paralegal/i);
 });

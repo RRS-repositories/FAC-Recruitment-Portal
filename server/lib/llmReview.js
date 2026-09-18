@@ -30,7 +30,7 @@ import { pool } from './db.js';
 import { askForJson, LlmError, llmMode, llmModel } from './llm.js';
 import { extractCvText, CvTextError } from './cvText.js';
 import { resolveCv } from './storage.js';
-import { ROLE_BY_API_KEY, questionsFor, WRITTEN_QUESTIONS } from './roles.js';
+import { ROLE_BY_API_KEY, questionsFor, writtenQuestionsFor } from './roles.js';
 import { isEnabled } from './flags.js';
 import { aiTuning } from './aiTuning.js';
 import { DEFAULT_TUNING, detectAiUse, levelFor } from '../../shared/aiDetect.js';
@@ -86,7 +86,10 @@ export function buildPrompt({ role, writtenAnswers, mcqAnswers, cvText }) {
   const roleMeta = ROLE_BY_API_KEY[role] ?? null;
   const questions = questionsFor(role) ?? [];
 
-  const written = WRITTEN_QUESTIONS.map((q) => {
+  // The questions THIS role was asked. For the two original roles that is the
+  // shared set, so their prompt is byte for byte what it always was -- and
+  // PROMPT_VERSION does not move. Sales answers are labelled with its own.
+  const written = writtenQuestionsFor(role).map((q) => {
     const answer = String(writtenAnswers?.[q.id] ?? '').trim();
     return `Q: ${q.label}\nA: ${answer || '(left blank)'}`;
   }).join('\n\n');

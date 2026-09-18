@@ -87,6 +87,64 @@ export function normaliseApplicant(row) {
     // Detail only.
     written: row.written_answers ?? null,
     answers: row.mcq_answers ?? null,
+
+    ...salesExtras(row),
+  };
+}
+
+/**
+ * Sales only: `profile` and `voice`, added to the object only when the row
+ * actually carries them. An intern or paralegal row -- which has neither, or
+ * has the columns but all null -- normalises to exactly the object it always
+ * did, with no new keys at all. Readers use `applicant.profile ?? null`.
+ */
+function salesExtras(row) {
+  const extras = {};
+  const profile = profileOf(row.profile);
+  if (profile) extras.profile = profile;
+  const voice = voiceOf(row);
+  if (voice) extras.voice = voice;
+  return extras;
+}
+
+/** The sales applicant's extra details. Only a plain object counts. */
+function profileOf(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
+}
+
+/**
+ * The voice note's metadata, or null when the row has none -- no voice column
+ * present with a value. A deleted note keeps its metadata and has `deletedAt`
+ * set; `present` is false then, because there is nothing to play.
+ */
+const VOICE_COLUMNS = [
+  'voice_object_key',
+  'voice_filename',
+  'voice_mime',
+  'voice_size_bytes',
+  'voice_duration_sec',
+  'voice_source',
+  'voice_deleted_at',
+];
+
+function voiceOf(row) {
+  if (!VOICE_COLUMNS.some((column) => row[column] !== undefined && row[column] !== null)) {
+    return null;
+  }
+  const deletedAt = row.voice_deleted_at ?? null;
+  const hasFile = Boolean(row.voice_object_key || row.voice_filename);
+  const numberOrNull = (value) => {
+    const n = typeof value === 'string' ? Number(value) : value;
+    return typeof n === 'number' && Number.isFinite(n) ? n : null;
+  };
+  return {
+    filename: row.voice_filename ?? null,
+    mime: row.voice_mime ?? null,
+    sizeBytes: numberOrNull(row.voice_size_bytes),
+    durationSec: numberOrNull(row.voice_duration_sec),
+    source: row.voice_source === 'recorded' || row.voice_source === 'uploaded' ? row.voice_source : null,
+    deletedAt,
+    present: hasFile && !deletedAt,
   };
 }
 

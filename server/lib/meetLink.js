@@ -45,7 +45,11 @@ const CONTEXT = `
    WHERE i.id = $1
 `;
 
-const ROLE_TITLE = { india_intern: 'Paralegal Internship', sa_paralegal: 'Paralegal' };
+const ROLE_TITLE = {
+  india_intern: 'Paralegal Internship',
+  sa_paralegal: 'Paralegal',
+  sa_sales: 'Sales & Customer Service',
+};
 
 /** True when a link should be created at all. Both switches, as ever. */
 export async function autoMeetOn() {

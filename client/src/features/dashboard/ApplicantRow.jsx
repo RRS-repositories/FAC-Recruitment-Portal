@@ -12,6 +12,8 @@ import { adminApplication, adminDownloadCv, adminSendMeetingLink } from '@/lib/a
 import { normaliseApplicant } from '@/lib/normalise';
 import { formatDate, formatDateTime, formatDuration } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { SalesApplicantDetails } from '@/features/sales/dashboard/SalesApplicantDetails';
+import { isSalesApplicant } from '@/features/sales/dashboard/salesDetail';
 
 const STATUS_TONE = { pending: 'warn', accepted: 'ok', declined: 'danger' };
 
@@ -48,6 +50,8 @@ const EMAIL_LABEL = {
   'recruit.sa.accept': 'Shortlisted, with booking link',
   'recruit.india.decline': 'Not successful',
   'recruit.sa.decline': 'Not successful',
+  'recruit.sales.accept': 'Shortlisted, with booking link',
+  'recruit.sales.decline': 'Not successful',
   'recruit.booking.confirmed': 'Interview booked',
   'recruit.rescheduled': 'Interview moved',
   'recruit.cancelled': 'Interview cancelled',
@@ -165,6 +169,9 @@ export function ApplicantRow({
   // arrive with the detail, so neither costs a request of its own.
   const [review, setReview] = useState(null);
   const [ruleScore, setRuleScore] = useState(null);
+  // Sales only: the questions this applicant was asked, from the detail
+  // response. Not cleared on a refetch, like the rest of the row's context.
+  const [salesQuestions, setSalesQuestions] = useState(null);
   const [detailError, setDetailError] = useState('');
   const [downloadError, setDownloadError] = useState('');
   const [busy, setBusy] = useState('');
@@ -194,6 +201,10 @@ export function ApplicantRow({
         setMailMode(result.mailMode ?? null);
         setReview(result.review ?? null);
         setRuleScore(result.ruleScore ?? null);
+        setSalesQuestions({
+          writtenQuestions: result.writtenQuestions ?? null,
+          assessment: result.assessment ?? null,
+        });
       })
       .catch((failure) => {
         if (!cancelled) setDetailError(failure.message);
@@ -512,6 +523,17 @@ export function ApplicantRow({
             </p>
           ) : null}
 
+          {/* Sales asks different questions; its answers, voice note and
+              assessment are drawn by the sales feature. Every other role gets
+              the block below, unchanged. */}
+          {isSalesApplicant(applicant) ? (
+            <SalesApplicantDetails
+              applicant={applicant}
+              detail={detail}
+              writtenQuestions={salesQuestions?.writtenQuestions}
+              assessment={salesQuestions?.assessment}
+            />
+          ) : (
           <div className="mt-5 grid gap-4">
             {WRITTEN_QUESTIONS.map((question) => (
               <div key={question.id}>
@@ -531,6 +553,7 @@ export function ApplicantRow({
               </div>
             ))}
           </div>
+          )}
 
           {!full.written ? (
             <p role="status" className="sr-only">

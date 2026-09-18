@@ -3,7 +3,7 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { createHash } from 'node:crypto';
 import { pool } from '../lib/db.js';
-import { questionsFor, roleBySlug, WRITTEN_QUESTIONS } from '../lib/roles.js';
+import { questionsFor, roleBySlug, writtenQuestionsFor } from '../lib/roles.js';
 import {
   hasErrors,
   normaliseDetails,
@@ -21,6 +21,19 @@ import { mailMode } from '../lib/mailer.js';
 import { verifyCaptcha } from '../lib/captcha.js';
 import { queueReview } from '../lib/llmReview.js';
 import { SYSTEM_DNR_ACTOR, reappliedReason } from '../lib/rebookPolicy.js';
+import {
+  SALES_LIMITS,
+  VOICE_MESSAGES,
+  checkVoiceFile,
+  deleteVoice,
+  isSalesRole,
+  normaliseProfile,
+  profileForStorage,
+  scoreSales,
+  storeVoice,
+  validateProfile,
+  validateVoiceMeta,
+} from '../lib/sales/index.js';
 
 /**
  * Application intake.
@@ -28,6 +41,12 @@ import { SYSTEM_DNR_ACTOR, reappliedReason } from '../lib/rebookPolicy.js';
  * Two endpoints: one opens a session when the form is first shown, one accepts
  * the finished application. The session exists so the elapsed time recorded
  * against an application is measured by us, not claimed by the browser.
+ *
+ * The sales role accepts its finished application at `/sales` instead, because
+ * it carries a second file -- the voice note -- and a larger CV. Everything
+ * after the upload (resend recognition, captcha, the do-not-rehire bar, AI
+ * detection, the audit row, the acknowledgement, the model review) is the one
+ * shared path below, so a sales candidate is treated exactly as anyone else.
  */
 
 // Held in memory, then written once we know it is valid and have an applicant
@@ -37,6 +56,77 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: CV_LIMITS.maxBytes, files: 1 },
 });
+
+/*
+ * The sales form's upload: a CV and a voice note, each at most once.
+ *
+ * A separate multer, not a loosened `upload`: the intern and paralegal route
+ * keeps its 5 MB, one-file limit exactly. Multer's fileSize is per file and
+ * cannot differ by field, so it is set to the larger (voice) ceiling; the
+ * CV's own 10 MB is enforced by storeCv, and the voice note's again by
+ * checkVoiceFile and storeVoice. Still memory storage, for the same reason.
+ */
+const salesMulter = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: SALES_LIMITS.voiceMaxBytes, files: 2 },
+}).fields([
+  { name: 'cv', maxCount: 1 },
+  { name: 'voice', maxCount: 1 },
+]);
+
+const MB = 1024 * 1024;
+
+/**
+ * Runs the sales upload and turns its refusals into answers the form can show.
+ *
+ * A multer error otherwise travels to the host application's error handler
+ * and comes back as a 500 "something went wrong" -- which, for a candidate
+ * whose recording is simply too big, is both untrue and unhelpful. Each one
+ * is reported against the file it concerns, so the form can put it under the
+ * right step. Anything that is not a multer refusal still goes to the host.
+ */
+function salesUpload(req, res, next) {
+  salesMulter(req, res, (error) => {
+    if (!error) return next();
+    if (!(error instanceof multer.MulterError)) return next(error);
+
+    const field = error.field === 'voice' || error.field === 'cv' ? error.field : null;
+    let message = null;
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      message =
+        field === 'voice'
+          ? VOICE_MESSAGES.tooLarge
+          : `That file is larger than ${SALES_LIMITS.cvMaxBytes / MB} MB.`;
+    } else if (error.code === 'LIMIT_UNEXPECTED_FILE' && field) {
+      // A known field sent twice. The form never does that; one file per box.
+      message = field === 'voice' ? 'Please add just one voice note.' : 'Please attach just one CV.';
+    }
+
+    if (field && message) return res.status(400).json({ ok: false, errors: { [field]: message } });
+    // A file under a name the form never uses, too many parts, an oversized
+    // field: nothing a candidate did, so nothing to point them at.
+    return res.status(400).json({ ok: false, error: 'Could not read that submission.' });
+  });
+}
+
+/*
+ * The sales role's extra columns (recruit_016), written after INSERT_APPLICANT
+ * in the same transaction. A separate statement rather than more columns on
+ * the shared insert, so the intern and paralegal insert is byte-for-byte the
+ * statement it was -- and cannot start failing because of a column only this
+ * role needs.
+ */
+const UPDATE_SALES = `
+  UPDATE recruit_applicants
+     SET profile = $2,
+         voice_object_key = $3,
+         voice_filename = $4,
+         voice_mime = $5,
+         voice_size_bytes = $6,
+         voice_duration_sec = $7,
+         voice_source = $8
+   WHERE id = $1
+`;
 
 const INSERT_SESSION = `
   INSERT INTO recruit_sessions (role, ip_hash, user_agent)
@@ -164,8 +254,33 @@ export function createApplicationsRouter({ ipSalt }) {
 
   router.post('/', limiter, upload.single('cv'), async (req, res) => {
     const role = roleBySlug(req.body?.role);
-    if (!role) return res.status(400).json({ ok: false, error: 'Unknown role.' });
+    // The sales role is refused here as an unknown one: its application
+    // includes a voice note this route has nowhere to put, and accepting it
+    // without one would store an application the manager cannot assess.
+    if (!role || isSalesRole(role)) return res.status(400).json({ ok: false, error: 'Unknown role.' });
+    return submitApplication(req, res, role, { cv: req.file });
+  });
 
+  /** The sales role's application: the same path, plus a voice note. */
+  router.post('/sales', limiter, salesUpload, async (req, res) => {
+    const role = roleBySlug(req.body?.role);
+    if (!isSalesRole(role)) return res.status(400).json({ ok: false, error: 'Unknown role.' });
+    return submitApplication(req, res, role, {
+      cv: req.files?.cv?.[0],
+      voice: req.files?.voice?.[0],
+      sales: true,
+    });
+  });
+
+  /**
+   * Everything after the upload, for every role.
+   *
+   * One function rather than a copy per route, so a fix to resend handling,
+   * the captcha, the do-not-rehire bar or the acknowledgement reaches every
+   * candidate at once. Where the sales role differs it says `if (sales)`, and
+   * every such branch is skipped entirely for the other two.
+   */
+  async function submitApplication(req, res, role, { cv, voice = null, sales = false }) {
     // A resend of an application this session already made (the reply to the
     // first was lost): answer as the first would have been answered, and store
     // nothing twice. Before the captcha, because its token is single-use and
@@ -208,17 +323,38 @@ export function createApplicationsRouter({ ipSalt }) {
     }
 
     const details = normaliseDetails(req.body);
+    const profile = sales ? normaliseProfile(req.body) : null;
     const errors = {
       ...validateDetails(details),
-      ...validateWritten(written, WRITTEN_QUESTIONS.map((q) => q.id)),
+      ...(sales ? validateProfile(profile) : {}),
+      ...validateWritten(written, writtenQuestionsFor(role.apiKey).map((q) => q.id)),
       ...validateAnswers(answers, questions),
     };
+
+    // The sales form reports its two files alongside everything else, so a
+    // candidate missing both a CV and a voice note hears about both at once.
+    // The voice note's own checks (size, real audio, a believable duration)
+    // run here, before anything touches the database.
+    let voiceMeta = null;
+    if (sales) {
+      if (!cv) errors.cv = 'Please attach your CV.';
+      const voiceProblem = checkVoiceFile(voice);
+      if (voiceProblem) {
+        errors.voice = voiceProblem;
+      } else {
+        voiceMeta = validateVoiceMeta({ duration: req.body.voiceDuration, source: req.body.voiceSource });
+        if (voiceMeta.error) errors.voice = voiceMeta.error;
+      }
+    }
+
     if (hasErrors(errors)) return res.status(400).json({ ok: false, errors });
-    if (!req.file) return res.status(400).json({ ok: false, errors: { cv: 'Please attach your CV.' } });
+    if (!cv) return res.status(400).json({ ok: false, errors: { cv: 'Please attach your CV.' } });
 
     // Scored here, from the weights the client never received. §4: never trust
     // a score that arrived over the wire.
-    const ruleScore = scoreApplication(questions, answers);
+    // The sales assessment has negative weights and its own rule for them --
+    // see lib/sales/scoring.js for why it is not shared/scoring.js.
+    const ruleScore = sales ? scoreSales(answers) : scoreApplication(questions, answers);
     // §13.3: the tuning comes from recruit_settings rather than from the
     // constants, so a threshold that turns out to be wrong for this candidate
     // pool is an edit and not a deploy. Cached, and it falls back to the
@@ -242,6 +378,7 @@ export function createApplicationsRouter({ ipSalt }) {
     }
 
     let stored = null;
+    let storedVoice = null;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -264,7 +401,7 @@ export function createApplicationsRouter({ ipSalt }) {
         startedAt,
         durationSec,
         null, // cv key, set below once we have the id to file it under
-        req.file.originalname.slice(0, 255),
+        cv.originalname.slice(0, 255),
         role.timezone,
         (req.body.source || 'direct').slice(0, 60),
         hashIp(req.ip, ipSalt),
@@ -276,14 +413,36 @@ export function createApplicationsRouter({ ipSalt }) {
       // orphan CV on disk, and a failed write rolls the row back.
       stored = await storeCv({
         applicantId: applicant.id,
-        originalName: req.file.originalname,
-        buffer: req.file.buffer,
+        originalName: cv.originalname,
+        buffer: cv.buffer,
+        ...(sales ? { maxBytes: SALES_LIMITS.cvMaxBytes } : {}),
       });
 
       await client.query('UPDATE recruit_applicants SET cv_object_key = $2 WHERE id = $1', [
         applicant.id,
         stored.key,
       ]);
+
+      if (sales) {
+        // Same reasoning as the CV: written inside the transaction, so a
+        // failure anywhere after this rolls the row back and removes the file.
+        storedVoice = await storeVoice({
+          applicantId: applicant.id,
+          originalName: voice.originalname,
+          buffer: voice.buffer,
+        });
+        await client.query(UPDATE_SALES, [
+          applicant.id,
+          JSON.stringify(profileForStorage(profile)),
+          storedVoice.key,
+          storedVoice.filename,
+          // What the bytes are, not what the browser said they were.
+          storedVoice.contentType,
+          storedVoice.bytes,
+          voiceMeta.durationSec,
+          voiceMeta.source,
+        ]);
+      }
 
       await client.query(
         `INSERT INTO recruit_audit (applicant_id, action, payload) VALUES ($1, 'submitted', $2)`,
@@ -359,9 +518,12 @@ export function createApplicationsRouter({ ipSalt }) {
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
       if (stored) await deleteCv(stored.key);
+      if (storedVoice) await deleteVoice(storedVoice.key);
 
       if (error instanceof UploadError) {
-        return res.status(400).json({ ok: false, errors: { cv: error.message } });
+        // A voice-note refusal carries `field: 'voice'`; a CV's carries none,
+        // and is reported under `cv` exactly as it always was.
+        return res.status(400).json({ ok: false, errors: { [error.field ?? 'cv']: error.message } });
       }
       // 23505 = unique_violation, which here can only be (email, role) — and
       // since recruit_012 that index is partial, so it fires only when there
@@ -389,7 +551,7 @@ export function createApplicationsRouter({ ipSalt }) {
     } finally {
       client.release();
     }
-  });
+  }
 
   return router;
 }

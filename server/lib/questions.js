@@ -17,6 +17,9 @@
  * a deploy (build spec §4). The shape is the same either way.
  */
 
+import { SALES_QUESTIONS, SALES_WRITTEN_QUESTIONS } from './sales/questions.js';
+import { SALES_ROLE_KEY } from './sales/limits.js';
+
 export const WRITTEN_QUESTIONS = [
   {
     id: 'w1',
@@ -166,7 +169,23 @@ const ROLE_QUESTIONS = {
       ],
     },
   ],
+
+  // The sales role's assessment lives with the rest of that role, in
+  // ./sales/questions.js. Registered here so questionsFor, publicQuestionsFor
+  // and the model review reach it the same way they reach the other two.
+  [SALES_ROLE_KEY]: SALES_QUESTIONS,
 };
+
+/**
+ * The written questions a role asks.
+ *
+ * The intern and paralegal forms share WRITTEN_QUESTIONS and still get exactly
+ * that array -- the same object, not a copy -- so nothing that reads it for
+ * them changes. Only the sales role has its own six, with word minimums.
+ */
+export function writtenQuestionsFor(apiKey) {
+  return apiKey === SALES_ROLE_KEY ? SALES_WRITTEN_QUESTIONS : WRITTEN_QUESTIONS;
+}
 
 /** Full questions, weights included. Server use only. */
 export function questionsFor(apiKey) {

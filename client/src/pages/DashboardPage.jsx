@@ -494,7 +494,7 @@ export function DashboardPage() {
               "Applicants", and a second heading saying the same thing gives a
               screen reader two names for one screen. */}
           <p className="mt-1 text-[1.4rem] font-black leading-tight tracking-[-0.03em] sm:text-[1.6rem]">
-            Paralegal applicants — India &amp; South Africa
+            Applicants — India &amp; South Africa
           </p>
           {summary.pending > 0 ? (
             <p className="mt-3 inline-flex items-center rounded-full border border-white/[0.22] bg-white/10 px-3.5 py-1.5 text-[0.82rem] font-semibold backdrop-blur">

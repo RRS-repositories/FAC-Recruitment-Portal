@@ -337,6 +337,34 @@ export async function adminDownloadCv(id, filename) {
   link.remove();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * A sales applicant's voice note, as a Blob.
+ *
+ * Like the CV it needs the auth header, so it cannot be a plain <audio src>:
+ * the caller turns the Blob into an object URL. 404 means none was attached,
+ * 410 that it was deleted under the retention policy -- the status is kept on
+ * the error so the caller can say which.
+ */
+export async function adminVoiceNote(id) {
+  let response;
+  try {
+    response = await fetch(`/api/recruit/admin/applications/${id}/voice`, { headers: withAuth() });
+  } catch {
+    throw new ApiError(FRIENDLY[0], { status: 0 });
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const fallback =
+      response.status === 404
+        ? 'No voice note on file.'
+        : response.status === 410
+          ? 'This voice note was deleted under the retention policy.'
+          : 'Could not load that voice note.';
+    throw new ApiError(payload.error || fallback, { status: response.status, payload });
+  }
+  return response.blob();
+}
 export const apiHealth = () => request('/health');
 
 export default request;

@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { HomePage } from '@/pages/HomePage';
 import { RoleLandingPage } from '@/pages/RoleLandingPage';
 import { ScrollToTop } from '@/components/layout/ScrollToTop';
+import { SALES_PATH, SALES_REDIRECTS } from '@/features/sales/paths';
 
 // The application flow, dashboard and booking page are each reached
 // deliberately rather than browsed to, so they are split out and never weigh
@@ -15,6 +16,9 @@ const CalendarPage = lazy(() => import('@/pages/CalendarPage'));
 const BookingPage = lazy(() => import('@/pages/BookingPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
+// Sales & Customer Service (South Africa) has its own page, form and
+// stylesheet, all in features/sales/ and all in this one chunk.
+const SalesPage = lazy(() => import('@/features/sales/SalesPage'));
 
 /** Holds the fold while a split chunk arrives, so nothing jumps. */
 function RouteFallback() {
@@ -39,6 +43,14 @@ export default function App() {
             on the main site: /recruitment/intern and /recruitment/paralegal. */}
         {/* Before the :roleKey route, or "privacy" would be read as a role. */}
         <Route path="/recruitment/privacy" element={split(PrivacyPage)} />
+        {/* Also before :roleKey and apply/:roleKey: sales has its own page.
+            Its URL lives only in features/sales/paths.js; the redirects keep
+            /recruitment/apply/sales (and the old address, should the URL ever
+            move) from reaching the other roles' page and form. */}
+        <Route path={SALES_PATH} element={split(SalesPage)} />
+        {SALES_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={SALES_PATH} replace />} />
+        ))}
         <Route path="/recruitment/:roleKey" element={<RoleLandingPage />} />
         <Route path="/recruitment/apply/:roleKey" element={split(ApplyPage)} />
 

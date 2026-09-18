@@ -7,7 +7,9 @@ import { deleteCv } from './storage.js';
  * This is the only code in the portal that destroys anything on purpose, so
  * it is written to be boring and to be checkable before it runs:
  *
- *   · It only ever touches DECLINED applicants, and only their CV file.
+ *   · It only ever touches DECLINED applicants, and only their CV file —
+ *     plus, for a Sales applicant, the voice note that came with it, which
+ *     is the same kind of personal data and goes at the same moment.
  *   · The application row survives — decision, score, audit trail. Answering
  *     a data-protection duty by erasing the record of how someone was treated
  *     would be the wrong obligation entirely.
@@ -38,14 +40,23 @@ export async function setRetentionMonths(months) {
   return value;
 }
 
+/*
+ * The voice-note columns are read through to_jsonb, not by name: this query
+ * runs for every role, and recruit_016 adds them. Named directly, a deploy
+ * that reached the server before its migration would stop CV deletion too.
+ * Through to_jsonb a missing column is NULL, and a NULL key means "no voice
+ * note", which is exactly true of a database that has never had one.
+ */
 const DUE = `
-  SELECT id, email, cv_object_key, cv_filename, decided_at
-    FROM recruit_applicants
-   WHERE status = 'declined'
-     AND cv_object_key IS NOT NULL
-     AND cv_deleted_at IS NULL
-     AND decided_at < now() - ($1 || ' months')::interval
-   ORDER BY decided_at
+  SELECT a.id, a.email, a.cv_object_key, a.cv_filename, a.decided_at,
+         to_jsonb(a) ->> 'voice_object_key' AS voice_object_key,
+         to_jsonb(a) ->> 'voice_filename'   AS voice_filename
+    FROM recruit_applicants a
+   WHERE a.status = 'declined'
+     AND a.cv_object_key IS NOT NULL
+     AND a.cv_deleted_at IS NULL
+     AND a.decided_at < now() - ($1 || ' months')::interval
+   ORDER BY a.decided_at
    LIMIT 500
 `;
 
@@ -66,10 +77,17 @@ export async function dueForDeletion() {
  * that says the CV is gone while the file survives — visible, and cleaned up
  * by the next sweep of the same key. The other order would leave a row
  * offering a download of a file that no longer exists.
+ *
+ * A voice note, where there is one, follows its CV through exactly the same
+ * steps in the same transaction. Its UPDATE names the new columns directly,
+ * and that is safe: it only runs for a row whose voice key was read back
+ * non-null, which a database without those columns cannot produce.
  */
 export async function sweepExpiredCvs({ dryRun = false } = {}) {
   const { months, due } = await dueForDeletion();
   const summary = { months, considered: due.length, deleted: 0, missing: 0, dryRun };
+  // Counted apart from the CVs, so the CV numbers mean what they always have.
+  const voice = { deleted: 0, missing: 0 };
 
   if (months === 0 || due.length === 0) return summary;
   if (dryRun) return summary;
@@ -84,13 +102,32 @@ export async function sweepExpiredCvs({ dryRun = false } = {}) {
         [row.id],
       );
 
+      if (row.voice_object_key) {
+        await client.query(
+          `UPDATE recruit_applicants
+              SET voice_deleted_at = now(), voice_object_key = NULL
+            WHERE id = $1`,
+          [row.id],
+        );
+      }
+
       // Written before the file goes, so the record of the deletion cannot be
       // lost by a crash a moment later. `actor_email` stays null: this is the
       // system acting on a policy, not a person making a decision.
       await client.query(
         `INSERT INTO recruit_audit (applicant_id, action, payload)
          VALUES ($1, 'cv_deleted', $2)`,
-        [row.id, JSON.stringify({ reason: 'retention', months, filename: row.cv_filename })],
+        [
+          row.id,
+          JSON.stringify({
+            reason: 'retention',
+            months,
+            filename: row.cv_filename,
+            // Present only when a voice note went too, so a CV-only deletion
+            // is recorded exactly as it always has been.
+            ...(row.voice_object_key ? { voiceFilename: row.voice_filename ?? null } : {}),
+          }),
+        ],
       );
 
       await client.query('COMMIT');
@@ -105,12 +142,27 @@ export async function sweepExpiredCvs({ dryRun = false } = {}) {
     const removed = await deleteCv(row.cv_object_key);
     if (removed) summary.deleted += 1;
     else summary.missing += 1;
+
+    if (row.voice_object_key) {
+      // deleteCv removes any key under the private root; the voice note lives
+      // beside the CV, so the same guarded unlink serves both.
+      if (await deleteCv(row.voice_object_key)) voice.deleted += 1;
+      else voice.missing += 1;
+    }
   }
 
   console.log(
     `[fac-recruit] retention: deleted ${summary.deleted} CV(s) declined over ${months} months ago` +
       (summary.missing ? `, ${summary.missing} already gone from disk` : ''),
   );
+  if (voice.deleted || voice.missing) {
+    summary.voiceDeleted = voice.deleted;
+    summary.voiceMissing = voice.missing;
+    console.log(
+      `[fac-recruit] retention: deleted ${voice.deleted} voice note(s) with them` +
+        (voice.missing ? `, ${voice.missing} already gone from disk` : ''),
+    );
+  }
   return summary;
 }
 

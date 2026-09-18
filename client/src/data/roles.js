@@ -1,5 +1,7 @@
 import indiaPhoto from '@/assets/role-india.jpg';
 import southAfricaPhoto from '@/assets/role-south-africa.jpg';
+import salesPhoto from '@/features/sales/assets/sales-hero.jpg';
+import { SALES_PATH } from '@/features/sales/paths';
 
 /**
  * Role marketing content — and nothing else.
@@ -91,6 +93,49 @@ export const ROLES = {
       { value: '£12M+', label: 'Recovered for clients' },
       { value: '7 days', label: 'Average time to interview' },
       { value: '100%', label: 'Remote' },
+    ],
+  },
+
+  // Sales has its own page and form (features/sales/) — a voice note, a
+  // different submit endpoint and its own design — so it does NOT use
+  // RoleLandingPage or ApplyPage. `path` is where the home page card links;
+  // App.jsx sends /recruitment/apply/sales there too. The copy below is the
+  // sales design's own words, kept in the same shape as the entries above so
+  // anything iterating ROLES (home cards, dashboard filter) reads it the same.
+  sales: {
+    key: 'sales',
+    apiKey: 'sa_sales',
+    path: SALES_PATH,
+    country: 'South Africa',
+    countryCode: 'ZA',
+    timezone: 'Africa/Johannesburg',
+    tzLabel: 'SAST',
+    short: 'South Africa · Sales',
+    title: 'Sales & Customer Service',
+    location: 'Cape Town / Johannesburg / remote SA',
+    contractType: 'Permanent, full-time role',
+    source: 'Direct',
+    photo: salesPhoto,
+    // Where the sales design crops it on a phone: both faces stay in frame.
+    photoPosition: '38% 30%',
+    pill: 'Now hiring · Cape Town / Johannesburg / remote SA',
+    headline: ['Sales & customer service.', 'South Africa.'],
+    sub: "Join one of the UK's fastest-growing law firms. You'll speak to people who may have been treated unfairly by lenders and bookmakers — and help them do something about it.",
+    whyHeading: 'What the role is',
+    why: "You'll call people who've enquired about a claim, explain in plain English who we are and how it works, and sign up the ones we can genuinely help. You'll also look after existing clients — answering questions, keeping them updated and making sure nobody feels forgotten.",
+    contract:
+      "We're an SRA-regulated law firm. That means honesty on every call, no pressure tactics and no promises we can't keep. If you're good at talking to people and you like a target, you'll do well here.",
+    need: [
+      'Permanent, full-time role',
+      'UK hours: 9:00 AM – 6:00 PM UK time',
+      '45-min lunch plus a 15-min afternoon break',
+      'Full training on our claims and scripts',
+    ],
+    stats: [
+      { value: '£12m+', label: 'recovered for clients' },
+      { value: '120+', label: 'staff across UK, SA & India' },
+      { value: 'R13k', label: 'on-target monthly earnings' },
+      { value: 'UK hrs', label: '9am – 6pm, Mon–Fri' },
     ],
   },
 };

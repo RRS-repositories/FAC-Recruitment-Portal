@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { pool } from '../lib/db.js';
 import {
   ROLES,
@@ -12,6 +13,9 @@ import {
   usingBootstrap,
 } from '../lib/adminAuth.js';
 import { resolveCv, cvExists } from '../lib/storage.js';
+import { writtenQuestionsFor } from '../lib/roles.js';
+import { publicQuestionsFor } from '../lib/questions.js';
+import { parseRange, voiceContentType, voiceFilename } from '../lib/voiceDownload.js';
 import { generateBookingToken, tokenExpiry } from '../lib/bookingToken.js';
 import { notifyDecision, notifyMeetingLink, notifyNoShow } from '../lib/notify.js';
 import { isDeclineReason, NO_REASON } from '../../shared/declineReasons.js';
@@ -720,7 +724,7 @@ export function createAdminRouter() {
 
   router.get('/applications', async (req, res) => {
     const status = STATUSES.has(req.query.status) ? req.query.status : null;
-    const role = ['india_intern', 'sa_paralegal'].includes(req.query.role) ? req.query.role : null;
+    const role = ['india_intern', 'sa_paralegal', 'sa_sales'].includes(req.query.role) ? req.query.role : null;
     const search =
       typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim().slice(0, 100) : null;
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -835,6 +839,11 @@ export function createAdminRouter() {
         // Shown beside the model's number so a manager can see the two
         // disagree, which is the only reason to keep both.
         ruleScore: rows[0].rule_score,
+        // The questions this applicant was actually asked, so the dashboard
+        // can label their answers without holding its own copy per role.
+        // Weights stripped, as on the public form.
+        writtenQuestions: writtenQuestionsFor(rows[0].role),
+        assessment: publicQuestionsFor(rows[0].role),
       });
     } catch (error) {
       console.error('[fac-recruit] admin detail failed:', error.message);
@@ -1401,6 +1410,78 @@ export function createAdminRouter() {
       return undefined;
     } catch (error) {
       console.error('[fac-recruit] cv download failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not fetch that file.' });
+    }
+  });
+
+  /**
+   * Streams the voice note (Sales applicants). Modelled on the CV route above,
+   * and for the same reasons: not a public URL, every fetch logged against the
+   * manager who made it.
+   *
+   * The columns are read through to_jsonb, not by name. The route is
+   * registered on every deploy, and a database without recruit_016 must
+   * answer "no voice note" rather than 500 -- through to_jsonb a missing
+   * column simply reads as NULL.
+   */
+  router.get('/applications/:id/voice', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT to_jsonb(a) ->> 'voice_object_key' AS voice_object_key,
+                to_jsonb(a) ->> 'voice_filename'   AS voice_filename,
+                to_jsonb(a) ->> 'voice_mime'       AS voice_mime,
+                to_jsonb(a) ->> 'voice_deleted_at' AS voice_deleted_at
+           FROM recruit_applicants a WHERE a.id = $1`,
+        [req.params.id],
+      );
+      const row = rows[0];
+      if (row?.voice_deleted_at) {
+        // Deleted on purpose, and saying so is the honest answer -- as for CVs.
+        return res.status(410).json({
+          ok: false,
+          error: 'That voice note was deleted under our retention policy.',
+        });
+      }
+      if (!row?.voice_object_key) {
+        return res.status(404).json({ ok: false, error: 'No voice note on file.' });
+      }
+      if (!(await cvExists(row.voice_object_key))) {
+        return res.status(404).json({ ok: false, error: 'That file is missing from storage.' });
+      }
+
+      const file = resolveCv(row.voice_object_key);
+      const { size } = await stat(file);
+
+      console.log(`[fac-recruit] ${req.admin.email} fetched voice note for ${req.params.id}`);
+
+      // `attachment`, and the stored type echoed back only when it is audio.
+      // Anything else -- or nothing -- goes out as opaque bytes, never as
+      // something a browser might decide to render.
+      res.set('Content-Disposition', `attachment; filename="${voiceFilename(row.voice_filename)}"`);
+      res.set('Content-Type', voiceContentType(row.voice_mime));
+      res.set('X-Content-Type-Options', 'nosniff');
+      res.set('Accept-Ranges', 'bytes');
+
+      // One byte range, so an <audio> element pointed straight here can seek.
+      // A range we cannot satisfy is 416; no range, several ranges or anything
+      // we do not parse gets the whole file, which is always a correct answer.
+      const range = parseRange(req.headers.range, size);
+      if (range === 'unsatisfiable') {
+        res.set('Content-Range', `bytes */${size}`);
+        return res.status(416).end();
+      }
+      if (range) {
+        res.status(206);
+        res.set('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+        res.set('Content-Length', String(range.end - range.start + 1));
+        createReadStream(file, range).pipe(res);
+        return undefined;
+      }
+      res.set('Content-Length', String(size));
+      createReadStream(file).pipe(res);
+      return undefined;
+    } catch (error) {
+      console.error('[fac-recruit] voice download failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not fetch that file.' });
     }
   });

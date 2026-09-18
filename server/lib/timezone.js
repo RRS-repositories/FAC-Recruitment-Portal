@@ -15,6 +15,7 @@ export const INTERVIEW_TZ = process.env.INTERVIEW_TIMEZONE || 'Europe/London';
 export const CANDIDATE_TZ = {
   india_intern: 'Asia/Kolkata',
   sa_paralegal: 'Africa/Johannesburg',
+  sa_sales: 'Africa/Johannesburg',
 };
 
 /** Formats an instant as HH:mm in the given zone. */
