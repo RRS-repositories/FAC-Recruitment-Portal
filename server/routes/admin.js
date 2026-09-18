@@ -157,7 +157,9 @@ const TAB_COUNTS = `
 
 // The summary counts every application, not just the filtered page: it is the
 // state of the pipeline, and a figure that moved when you typed in the search
-// box would be worse than no figure at all.
+// box would be worse than no figure at all. $1 is the page's scope: null on
+// /admin (the whole pipeline, as it always was), one role on that role's own
+// page, where the pipeline in question is that role's.
 const SUMMARY = `
   SELECT
     count(*)::int                                              AS total,
@@ -172,6 +174,7 @@ const SUMMARY = `
     SELECT status FROM recruit_interviews
      WHERE applicant_id = a.id ORDER BY created_at DESC LIMIT 1
   ) i ON true
+  WHERE ($1::recruit_role IS NULL OR a.role = $1)
 `;
 
 /**
@@ -181,7 +184,8 @@ const SUMMARY = `
  * Whole pipeline, like SUMMARY, not the filtered page. Only an accepted
  * applicant whose LATEST interview is the unbooked final chance counts: once
  * they book, or the link expires and the sweep closes the application, it is
- * no longer pending. Through to_jsonb, like every new read.
+ * no longer pending. Through to_jsonb, like every new read. $1 is the page's
+ * scope, as for SUMMARY.
  */
 const REBOOKS = `
   SELECT a.id, a.full_name, a.email, i.token_expires_at
@@ -192,7 +196,8 @@ const REBOOKS = `
         FROM recruit_interviews li
        WHERE li.applicant_id = a.id ORDER BY li.created_at DESC LIMIT 1
     ) i ON true
-   WHERE a.status = 'accepted'
+   WHERE ($1::recruit_role IS NULL OR a.role = $1)
+     AND a.status = 'accepted'
      AND i.status = 'invited'
      AND i.is_final_chance
      AND i.token_expires_at > now()
@@ -724,7 +729,12 @@ export function createAdminRouter() {
 
   router.get('/applications', async (req, res) => {
     const status = STATUSES.has(req.query.status) ? req.query.status : null;
-    const role = ['india_intern', 'sa_paralegal', 'sa_sales', 'india_aidev'].includes(req.query.role) ? req.query.role : null;
+    const ROLE_KEYS = ['india_intern', 'sa_paralegal', 'sa_sales', 'india_aidev'];
+    const role = ROLE_KEYS.includes(req.query.role) ? req.query.role : null;
+    // The page's scope, separate from the role filter: a role's own page sends
+    // it so the tiles and re-book figures are that role's. /admin never sends
+    // it, and its tiles stay the whole pipeline whichever role button is on.
+    const scope = ROLE_KEYS.includes(req.query.scope) ? req.query.scope : null;
     const search =
       typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim().slice(0, 100) : null;
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -753,10 +763,10 @@ export function createAdminRouter() {
       const [list, count, summary, tabs, rebooks] = await Promise.all([
         pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE, from, to, aiLevel, sort]),
         pool.query(COUNT, [status, role, search, from, to, aiLevel]),
-        pool.query(SUMMARY),
+        pool.query(SUMMARY, [scope]),
         pool.query(TAB_COUNTS, [role, search, from, to, aiLevel]),
         // Not asked at all while the feature is off: there is nothing to show.
-        noShowRebook ? pool.query(REBOOKS) : Promise.resolve({ rows: [] }),
+        noShowRebook ? pool.query(REBOOKS, [scope]) : Promise.resolve({ rows: [] }),
       ]);
       const warnBefore = Date.now() + REBOOK_WARN_HOURS * 3_600_000;
 
@@ -768,7 +778,7 @@ export function createAdminRouter() {
         total: count.rows[0].total,
         summary: summary.rows[0],
         // Beside the status filters. Separate from `summary`, which stays the
-        // whole pipeline however the screen is filtered.
+        // whole pipeline (or the page's role) however the screen is filtered.
         tabs: tabs.rows[0],
         // Whether the no-show re-book is switched on. The dashboard shows its
         // button, chips, tile and banner only when it is -- off, the screen is

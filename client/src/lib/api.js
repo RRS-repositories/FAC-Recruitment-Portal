@@ -155,10 +155,12 @@ export const adminSignOut = () => setAdminToken(null);
 /** Who the held token belongs to. Also the cheapest way to test it is still valid. */
 export const adminMe = () => request('/recruit/admin/me', { headers: withAuth() });
 
-export function adminApplications({ status, role, q, page = 1, from, to, sort, ai } = {}) {
+export function adminApplications({ status, role, q, page = 1, from, to, sort, ai, scope } = {}) {
   const params = new URLSearchParams();
   if (status && status !== 'all') params.set('status', status);
   if (role && role !== 'all') params.set('role', role);
+  // A role's own page: the summary figures are that role's. Absent on /admin.
+  if (scope) params.set('scope', scope);
   if (q) params.set('q', q);
   // Both are left off when they mean "no narrowing", so the request says only
   // what was actually asked for. The server ignores anything it does not

@@ -3,6 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { Logo } from '@/components/ui/Logo';
 import { Spinner } from '@/components/ui/Spinner';
+import { ROLES } from '@/data/roles';
+import { roleNavItems } from '@/features/dashboard/roleNav';
 import { adminMe } from '@/lib/api';
 import { cn } from '@/lib/cn';
 
@@ -20,7 +22,10 @@ import { cn } from '@/lib/cn';
  */
 
 const NAV = [
-  { key: 'applicants', to: '/admin', label: 'Applicants', icon: 'users' },
+  // Under Applicants, one link per role: the same list with that role's
+  // filter applied, at /admin/applicants/<role>. Built from ROLES, so a new
+  // role appears here on its own.
+  { key: 'applicants', to: '/admin', label: 'Applicants', icon: 'users', children: roleNavItems(ROLES) },
   { key: 'calendar', to: '/admin/calendar', label: 'Calendar', icon: 'calendar' },
   { key: 'templates', to: '/admin/templates', label: 'Emails', icon: 'mail' },
   { key: 'settings', to: '/admin/settings', label: 'Settings', icon: 'settings' },
@@ -46,6 +51,8 @@ const initialsOf = (value = '') => {
 
 export function AdminShell({
   current,
+  // Which of `current`'s sub-links is open — the role on /admin/applicants/<role>.
+  currentRole,
   title,
   subtitle,
   actions,
@@ -155,11 +162,13 @@ export function AdminShell({
     <ul className="grid gap-1 px-3">
       {NAV.map((item) => {
         const active = item.key === current;
+        const subActive = active && item.children?.some((sub) => sub.key === currentRole);
         return (
           <li key={item.key}>
             <Link
               to={item.to}
-              aria-current={active ? 'page' : undefined}
+              // Still highlighted on a sub-page, but that sub-link is the page.
+              aria-current={active ? (subActive ? 'true' : 'page') : undefined}
               // The label is the accessible name whether or not it is visible,
               // so a collapsed rail is still navigable by screen reader.
               aria-label={item.label}
@@ -184,6 +193,47 @@ export function AdminShell({
               <Icon name={item.icon} size={19} className="flex-shrink-0" />
               <span className={cn('truncate', collapsed && 'lg:hidden')}>{item.label}</span>
             </Link>
+
+            {/* Indented under their parent, on a guide line that starts below
+                its icon. Hidden when the rail is collapsed to icons: four
+                entries with no icon of their own would be unreadable there,
+                and the parent's bar still says which section you are in. */}
+            {item.children?.length ? (
+              <ul
+                aria-label={`${item.label} by role`}
+                className={cn(
+                  'ml-[1.3rem] mt-0.5 grid gap-0.5 border-l border-white/15',
+                  collapsed && 'lg:hidden',
+                )}
+              >
+                {item.children.map((sub) => {
+                  const on = active && sub.key === currentRole;
+                  return (
+                    <li key={sub.key}>
+                      <Link
+                        to={sub.to}
+                        aria-current={on ? 'page' : undefined}
+                        className={cn(
+                          'relative flex items-center rounded-r-control py-2 pl-[1.3rem] pr-3 text-[0.84rem] font-medium transition-colors',
+                          on
+                            ? 'bg-white/[0.08] text-white'
+                            : 'text-white/55 hover:bg-white/[0.06] hover:text-white',
+                        )}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'absolute -left-px top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-r bg-violet-hi transition-opacity',
+                            on ? 'opacity-100' : 'opacity-0',
+                          )}
+                        />
+                        <span className="truncate">{sub.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
           </li>
         );
       })}

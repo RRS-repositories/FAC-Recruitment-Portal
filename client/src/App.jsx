@@ -17,6 +17,7 @@ import {
   AIDEV_PATH,
   AIDEV_REDIRECTS,
 } from '@/features/aidev/paths';
+import { APPLICANTS_PATH, ROLE_APPLICANTS_BASE } from '@/features/dashboard/roleNav';
 
 // The application flow, dashboard and booking page are each reached
 // deliberately rather than browsed to, so they are split out and never weigh
@@ -97,6 +98,11 @@ export default function App() {
         <Route path="/book/:token" element={split(BookingPage)} />
         <Route path="/recruitment/book/:token" element={split(BookingPage)} />
         <Route path="/admin" element={split(DashboardPage)} />
+        {/* The same applicants page, one role at a time — the per-role links in
+            the admin menu. The page reads the role from the URL; an unknown
+            one goes back to /admin. The bare prefix has no page of its own. */}
+        <Route path={`${ROLE_APPLICANTS_BASE}/:roleKey`} element={split(DashboardPage)} />
+        <Route path={ROLE_APPLICANTS_BASE} element={<Navigate to={APPLICANTS_PATH} replace />} />
         <Route path="/admin/templates" element={split(TemplatesPage)} />
         <Route path="/admin/calendar" element={split(CalendarPage)} />
         <Route path="/admin/settings" element={split(SettingsPage)} />

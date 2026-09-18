@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AdminShell } from '@/components/layout/AdminShell';
 import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
@@ -13,6 +13,12 @@ import { ApplicantRow } from '@/features/dashboard/ApplicantRow';
 import { AdminSignIn } from '@/features/dashboard/AdminSignIn';
 import { NotAttendedModal } from '@/features/dashboard/NotAttendedModal';
 import { ROLES } from '@/data/roles';
+import {
+  APPLICANTS_PATH,
+  roleHeading,
+  roleNavLabel,
+  routeRoleKey,
+} from '@/features/dashboard/roleNav';
 import usePageMeta from '@/hooks/usePageMeta';
 import useDebouncedValue from '@/hooks/useDebouncedValue';
 import {
@@ -122,8 +128,20 @@ function SortButton({ label, column, sort, onToggle }) {
 }
 
 export function DashboardPage() {
+  /*
+   * One role, from the URL: /admin/applicants/<role> is this same page with
+   * that role's filter applied. On /admin there is none and everything below
+   * behaves as it always has. An unknown key is null here and is sent back to
+   * /admin further down, never read as a filter.
+   */
+  const { roleKey } = useParams();
+  const routeRole = routeRoleKey(ROLES, roleKey);
+  const navigate = useNavigate();
+
   usePageMeta({
-    title: 'Applicants — Fast Action Claims',
+    title: routeRole
+      ? `Applicants: ${roleNavLabel(ROLES[routeRole])} — Fast Action Claims`
+      : 'Applicants — Fast Action Claims',
     description: 'Internal recruitment dashboard.',
     // Personal data. Never indexed, regardless of what stands in front of it.
     robots: 'noindex, nofollow',
@@ -178,7 +196,22 @@ export function DashboardPage() {
   // Filtering happens server-side — the list is paged, so filtering the
   // twenty-five rows in hand would silently ignore every match on page two.
   const search = useDebouncedValue(query, 300);
-  const apiRole = role === 'all' ? 'all' : (ROLES[role]?.apiKey ?? 'all');
+  /*
+   * On a role's own address the URL is the role filter, and the role buttons
+   * navigate rather than set it — so the address and the list can never
+   * disagree. Arriving at a different address (a menu link, back, forward)
+   * clears the page's own choice and goes back to page one, as any filter
+   * change does. Adjusted during render rather than in an effect, so the
+   * change costs one request, not two.
+   */
+  const [roleFromUrl, setRoleFromUrl] = useState(routeRole);
+  if (roleFromUrl !== routeRole) {
+    setRoleFromUrl(routeRole);
+    setRole('all');
+    setPage(1);
+  }
+  const activeRole = routeRole ?? role;
+  const apiRole = activeRole === 'all' ? 'all' : (ROLES[activeRole]?.apiKey ?? 'all');
 
   const signOut = useCallback(() => {
     adminSignOut();
@@ -200,6 +233,8 @@ export function DashboardPage() {
         to,
         sort,
         ai: aiLevel,
+        // On a role's own page the tiles are that role's too.
+        scope: routeRole ? apiRole : undefined,
       });
       setApplicants(result.applications.map(normaliseApplicant));
       setSummary(normaliseSummary(result.summary));
@@ -217,7 +252,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, apiRole, search, page, from, to, sort, aiLevel, signOut]);
+  }, [status, apiRole, routeRole, search, page, from, to, sort, aiLevel, signOut]);
 
   useEffect(() => {
     if (signedIn) load();
@@ -244,7 +279,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     const wanted = searchParams.get('applicant');
-    if (!signedIn || !wanted) return undefined;
+    if (!signedIn || !wanted || routeRole) return undefined;
 
     let cancelled = false;
     adminApplication(wanted)
@@ -271,7 +306,15 @@ export function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [signedIn, searchParams, setSearchParams]);
+  }, [signedIn, searchParams, setSearchParams, routeRole]);
+
+  // The lookup above resets every filter, the role included, so on a role's
+  // address it is handed to /admin, where that reset is true of the URL too.
+  useEffect(() => {
+    if (routeRole && searchParams.has('applicant')) {
+      navigate({ pathname: APPLICANTS_PATH, search: `?${searchParams}` }, { replace: true });
+    }
+  }, [routeRole, searchParams, navigate]);
 
   /**
    * Opens the decision confirmation, re-checking whether email actually leaves.
@@ -352,7 +395,11 @@ export function DashboardPage() {
       current === `${column}_desc` ? `${column}_asc` : current === `${column}_asc` ? null : `${column}_desc`,
     );
   };
+  // The role buttons exist only on /admin; a role's own page has no role
+  // filter to choose or clear — the address is the role, and clearing the
+  // other filters leaves it where it is.
   const chooseRole = applyFilter(setRole);
+  const clearRole = () => setRole('all');
   const changeQuery = applyFilter(setQuery);
 
   /**
@@ -456,6 +503,9 @@ export function DashboardPage() {
     }
   };
 
+  // /admin/applicants/<something that is not a role>.
+  if (roleKey && !routeRole) return <Navigate to={APPLICANTS_PATH} replace />;
+
   if (!signedIn) {
     return (
       <AdminSignIn
@@ -468,11 +518,12 @@ export function DashboardPage() {
   }
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
-  const filtered = status !== 'all' || role !== 'all' || Boolean(search);
+  const filtered = status !== 'all' || (!routeRole && role !== 'all') || Boolean(search);
 
   return (
     <AdminShell
       current="applicants"
+      currentRole={routeRole}
       title="Applicants"
       subtitle="Review, accept or decline. Accepting creates the candidate's booking link."
       email={adminEmail}
@@ -494,7 +545,7 @@ export function DashboardPage() {
               "Applicants", and a second heading saying the same thing gives a
               screen reader two names for one screen. */}
           <p className="mt-1 text-[1.4rem] font-black leading-tight tracking-[-0.03em] sm:text-[1.6rem]">
-            Applicants — India &amp; South Africa
+            {routeRole ? roleHeading(ROLES[routeRole]) : <>Applicants — India &amp; South Africa</>}
           </p>
           {summary.pending > 0 ? (
             <p className="mt-3 inline-flex items-center rounded-full border border-white/[0.22] bg-white/10 px-3.5 py-1.5 text-[0.82rem] font-semibold backdrop-blur">
@@ -548,7 +599,7 @@ export function DashboardPage() {
                   onClick={() => {
                     setPage(1);
                     setStatus('all');
-                    setRole('all');
+                    clearRole();
                     setAiLevel('all');
                     setFrom('');
                     setTo('');
@@ -635,38 +686,41 @@ export function DashboardPage() {
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by role">
-              <button
-                type="button"
-                onClick={() => chooseRole('all')}
-                aria-pressed={role === 'all'}
-                className={cn(
-                  'rounded-control px-3.5 py-2 text-[0.85rem] font-semibold transition-colors',
-                  role === 'all'
-                    ? 'border-[1.5px] border-violet bg-white text-violet-deep'
-                    : 'border-[1.5px] border-line bg-white text-ink hover:border-violet',
-                )}
-              >
-                All roles
-              </button>
-              {Object.values(ROLES).map((r) => (
+            {/* Not on a role's own page: the page is already one role. */}
+            {routeRole ? null : (
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by role">
                 <button
-                  key={r.key}
                   type="button"
-                  onClick={() => chooseRole(r.key)}
-                  aria-pressed={role === r.key}
+                  onClick={() => chooseRole('all')}
+                  aria-pressed={activeRole === 'all'}
                   className={cn(
-                    'inline-flex items-center gap-2 rounded-control px-3.5 py-2 text-[0.85rem] font-semibold transition-colors',
-                    role === r.key
+                    'rounded-control px-3.5 py-2 text-[0.85rem] font-semibold transition-colors',
+                    activeRole === 'all'
                       ? 'border-[1.5px] border-violet bg-white text-violet-deep'
                       : 'border-[1.5px] border-line bg-white text-ink hover:border-violet',
                   )}
                 >
-                  <Flag country={r.countryCode} className="h-2.5 w-[15px] flex-shrink-0 rounded-[1px]" />
-                  {r.short}
+                  All roles
                 </button>
-              ))}
-            </div>
+                {Object.values(ROLES).map((r) => (
+                  <button
+                    key={r.key}
+                    type="button"
+                    onClick={() => chooseRole(r.key)}
+                    aria-pressed={activeRole === r.key}
+                    className={cn(
+                      'inline-flex items-center gap-2 rounded-control px-3.5 py-2 text-[0.85rem] font-semibold transition-colors',
+                      activeRole === r.key
+                        ? 'border-[1.5px] border-violet bg-white text-violet-deep'
+                        : 'border-[1.5px] border-line bg-white text-ink hover:border-violet',
+                    )}
+                  >
+                    <Flag country={r.countryCode} className="h-2.5 w-[15px] flex-shrink-0 rounded-[1px]" />
+                    {r.short}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Sort, and the AI band. Placed before the search box so the ml-auto
                 on that box still pushes it to the right-hand end. */}
@@ -777,14 +831,18 @@ export function DashboardPage() {
         ) : filtered ? (
           <EmptyState
             title="No applicants match those filters"
-            body="Try clearing the search or switching back to all roles."
+            body={
+              routeRole
+                ? 'Try clearing the search or the other filters.'
+                : 'Try clearing the search or switching back to all roles.'
+            }
             action={
               <Button
                 variant="secondary"
                 onClick={() => {
                   setPage(1);
                   setStatus('all');
-                  setRole('all');
+                  clearRole();
                   setQuery('');
                   setAiLevel('all');
                   setSort(null);
