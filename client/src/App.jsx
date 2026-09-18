@@ -3,7 +3,13 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { HomePage } from '@/pages/HomePage';
 import { RoleLandingPage } from '@/pages/RoleLandingPage';
 import { ScrollToTop } from '@/components/layout/ScrollToTop';
-import { SALES_PATH, SALES_REDIRECTS } from '@/features/sales/paths';
+import {
+  SALES_APPLY_PATH,
+  SALES_APPLY_REDIRECTS,
+  SALES_APPLY_SEGMENT,
+  SALES_PATH,
+  SALES_REDIRECTS,
+} from '@/features/sales/paths';
 
 // The application flow, dashboard and booking page are each reached
 // deliberately rather than browsed to, so they are split out and never weigh
@@ -47,9 +53,17 @@ export default function App() {
             Its URL lives only in features/sales/paths.js; the redirects keep
             /recruitment/apply/sales (and the old address, should the URL ever
             move) from reaching the other roles' page and form. */}
-        <Route path={SALES_PATH} element={split(SalesPage)} />
+        {/* The landing and the form share one SalesPage, which stays mounted
+            between them (the children render nothing of their own). */}
+        <Route path={SALES_PATH} element={split(SalesPage)}>
+          <Route index element={null} />
+          <Route path={SALES_APPLY_SEGMENT} element={null} />
+        </Route>
         {SALES_REDIRECTS.map((path) => (
           <Route key={path} path={path} element={<Navigate to={SALES_PATH} replace />} />
+        ))}
+        {SALES_APPLY_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={SALES_APPLY_PATH} replace />} />
         ))}
         <Route path="/recruitment/:roleKey" element={<RoleLandingPage />} />
         <Route path="/recruitment/apply/:roleKey" element={split(ApplyPage)} />

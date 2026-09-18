@@ -13,7 +13,6 @@ import {
 } from './content';
 import { stepForServerErrors } from './helpers';
 import { FormShell, ErrorLine, StepRow } from './FormShell';
-import { SalesLanding } from './SalesLanding';
 import { DetailsStep } from './steps/DetailsStep';
 import { WrittenStep } from './steps/WrittenStep';
 import { AssessmentStep } from './steps/AssessmentStep';
@@ -35,7 +34,7 @@ const LOAD_FAILED = 'We could not load the application form. Please refresh and 
  * Nothing is scored here. The questions arrive with their weights stripped and
  * the server does the scoring — see data/roles.js for why.
  */
-export function SalesApplication({ onHome }) {
+export function SalesApplication({ onHome, onExit }) {
   const [page, setPage] = useState(FORM_PAGES[0]);
   const [details, setDetails] = useState(EMPTY_DETAILS);
   const [written, setWritten] = useState({});
@@ -123,7 +122,9 @@ export function SalesApplication({ onHome }) {
 
   const goTo = (target) => setPage(target);
   const pageIndex = FORM_PAGES.indexOf(page);
-  const back = () => goTo(pageIndex > 0 ? FORM_PAGES[pageIndex - 1] : 'welcome');
+  // Back from the first step leaves for the landing page (its own address);
+  // this component stays mounted there, so nothing typed is lost.
+  const back = () => (pageIndex > 0 ? goTo(FORM_PAGES[pageIndex - 1]) : onExit?.());
   const next = () => {
     setStepMessages((m) => (m[page] ? { ...m, [page]: '' } : m));
     goTo(FORM_PAGES[Math.min(pageIndex + 1, FORM_PAGES.length - 1)]);
@@ -170,8 +171,6 @@ export function SalesApplication({ onHome }) {
       setSubmitting(false);
     }
   }, [details, written, answers, telemetry, sessionId, captchaToken, cv, voice]);
-
-  if (page === 'welcome') return <SalesLanding onStart={() => goTo(FORM_PAGES[0])} />;
 
   if (page === 'thanks') {
     return (

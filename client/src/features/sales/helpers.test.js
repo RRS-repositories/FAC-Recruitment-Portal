@@ -18,7 +18,7 @@ import {
   wordCount,
 } from './helpers.js';
 import { buildSalesFormData } from './formData.js';
-import { SALES_PATH, SALES_REDIRECTS } from './paths.js';
+import { SALES_APPLY_PATH, SALES_APPLY_REDIRECTS, SALES_PATH, SALES_REDIRECTS } from './paths.js';
 
 const MB = 1024 * 1024;
 const LIMITS = { minSeconds: 10, maxSeconds: 420 };
@@ -149,8 +149,12 @@ test('a server refusal is sent back to the step that owns it', () => {
 
 test('the sales URL is written once, and the redirects never loop onto it', () => {
   assert.equal(SALES_PATH, '/recruitment/sales');
-  assert.ok(SALES_REDIRECTS.includes('/recruitment/apply/sales'));
+  assert.equal(SALES_APPLY_PATH, '/recruitment/sales/apply');
+  // The generic apply address must reach the sales FORM, never the paralegal one.
+  assert.ok(SALES_APPLY_REDIRECTS.includes('/recruitment/apply/sales'));
+  // Nothing redirects to itself.
   assert.ok(!SALES_REDIRECTS.includes(SALES_PATH));
+  assert.ok(!SALES_APPLY_REDIRECTS.includes(SALES_APPLY_PATH));
 });
 
 test('the multipart body carries exactly the agreed fields', async () => {
