@@ -1,4 +1,5 @@
 import { ROLE_BY_API_KEY } from '../lib/roles.js';
+import { extendedRole } from '../lib/extendedRoles.js';
 import { formatDayIn, formatTimeIn } from '../lib/zonedTime.js';
 import { declineReapply, declineSentence } from '../../shared/declineReasons.js';
 
@@ -67,6 +68,11 @@ export async function loadContext(row, db) {
     email: record.email,
 
     roleTitle: role?.title ?? 'the role',
+    // The role as the "Application received" email names it. "the Paralegal
+    // Internship" reads whole; "the Sales & Customer Service" does not, so the
+    // extended roles say "position". The original roles are the title alone,
+    // exactly as that email has always read.
+    roleApplied: extendedRole(record.role) ? `${role?.title ?? 'the role'} position` : (role?.title ?? 'the role'),
     roleCountry: role?.country ?? '',
     roleSlug: role?.slug ?? '',
 
