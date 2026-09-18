@@ -6,12 +6,9 @@ import { TEMPLATE_COUNT } from './index.js';
 import { notifyDecision } from '../lib/notify.js';
 
 /**
- * The Sales & Customer Service decision emails.
- *
- * Their wording is on hold, so what is pinned is not the words but the three
- * things that must hold whatever the words become: each renders its own
- * preview, neither borrows the paralegal copy, and both say on the templates
- * screen that they are drafts. Plus the routing: a Sales decision queues a
+ * The Sales & Customer Service decision emails: the South Africa template word
+ * for word, with the role changed (decided 18 Sep). Pinned line by line
+ * against the South Africa emails. Plus the routing: a Sales decision queues a
  * Sales email, and the two original roles still queue exactly theirs.
  */
 
@@ -38,12 +35,42 @@ for (const key of SALES) {
     assert.match(out.text, /Sales & Customer Service position/);
   });
 
-  test(`${key} is labelled a draft on the templates screen`, () => {
+  test(`${key} is no longer marked a draft`, () => {
     const tpl = getTemplate(key);
-    assert.match(tpl.title, /\(DRAFT — wording on hold\)/);
-    assert.match(tpl.description, /DRAFT — wording on hold/);
+    assert.doesNotMatch(`${tpl.title} ${tpl.description}`, /DRAFT/);
+    assert.match(tpl.description, /^Wording and layout supplied by the client, in the South Africa template/);
   });
 }
+
+test('each is the South Africa email word for word, only the role line changed', () => {
+  const pairs = [
+    ['recruit.sa.accept', 'recruit.sales.accept', 'Thank you for applying for the full-time Sales & Customer Service position at Fast Action Claims.'],
+    ['recruit.sa.decline', 'recruit.sales.decline', 'Thank you for taking the time to apply for the full-time Sales & Customer Service position at Fast Action Claims.'],
+  ];
+  for (const [sa, sales, roleLine] of pairs) {
+    const data = { ...getTemplate(sa).sample, token: 'T', declineSentence: 'R.', declineReapply: 'A.' };
+    const a = getTemplate(sa).render(data);
+    const b = getTemplate(sales).render(data);
+    assert.equal(b.subject, a.subject, sales);
+    const la = a.text.split('\n');
+    const lb = b.text.split('\n');
+    assert.equal(lb.length, la.length, sales);
+    const differing = la.map((line, i) => (line === lb[i] ? null : i)).filter((i) => i !== null);
+    assert.deepEqual(differing.map((i) => lb[i]), [roleLine], sales);
+  }
+});
+
+test('"Application received" says "position" for the new roles only', () => {
+  const ack = getTemplate('recruit.ack');
+  // As the original roles reach it: roleApplied is the title alone.
+  const intern = ack.render({ ...ack.sample, roleTitle: 'Paralegal Internship', roleApplied: 'Paralegal Internship' });
+  assert.match(intern.text, /for the Paralegal Internship at Fast Action Claims\./);
+  // A context with no roleApplied at all (an email queued before this change) still reads as before.
+  const older = ack.render({ ...ack.sample, roleTitle: 'Paralegal — Full-time', roleApplied: undefined });
+  assert.match(older.text, /for the Paralegal — Full-time at Fast Action Claims\./);
+  const sales = ack.render({ ...ack.sample, roleTitle: 'Sales & Customer Service', roleApplied: 'Sales & Customer Service position' });
+  assert.match(sales.text, /for the Sales & Customer Service position at Fast Action Claims\./);
+});
 
 test('the sales accept email still carries the booking link', () => {
   const tpl = getTemplate('recruit.sales.accept');

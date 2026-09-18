@@ -137,15 +137,15 @@ export function TemplatesPage() {
         <div className="grid gap-5 lg:grid-cols-[19rem_1fr] lg:items-start">
           {/* The list. Grouped by when each email happens, which is how a
                 manager looks for one — not alphabetically by key. */}
-          <nav aria-label="Templates" className="grid gap-4">
+          <nav aria-label="Templates" className="grid min-w-0 gap-4">
             {stages.map(({ stage, items }) => (
-              <div key={stage}>
+              <div key={stage} className="min-w-0">
                 <h2 className="mb-1.5 text-[0.72rem] font-bold uppercase tracking-wide text-muted">
                   {stage}
                 </h2>
                 <ul className="grid gap-1">
                   {items.map((template) => (
-                    <li key={template.key}>
+                    <li key={template.key} className="min-w-0">
                       <button
                         type="button"
                         onClick={() => setSelected(template.key)}
@@ -160,7 +160,7 @@ export function TemplatesPage() {
                         {template.error ? (
                           <Icon name="alert" size={15} className="flex-shrink-0 text-danger" />
                         ) : null}
-                        <span className="min-w-0 flex-1 truncate">{template.title}</span>
+                        <span className="min-w-0 flex-1 break-words leading-snug">{template.title}</span>
                       </button>
                     </li>
                   ))}

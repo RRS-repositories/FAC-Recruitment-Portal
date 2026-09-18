@@ -78,7 +78,7 @@ registerTemplate({
   when: 'Immediately after someone submits an application.',
   description:
     'Confirms we have it and sets the 48-hour expectation, so nobody is left wondering whether it arrived. Repeats the AI-use warning from the form, which is the last chance to say it before their answers are marked.',
-  mergeFields: ['firstName', 'roleTitle'],
+  mergeFields: ['firstName', 'roleApplied'],
   sample: SAMPLE,
   load,
   render: (data) => ({
@@ -90,7 +90,7 @@ registerTemplate({
       lines: [
       `Hi ${data.firstName},`,
       '',
-      `Thank you for applying for the ${data.roleTitle} at Fast Action Claims. Your application and CV have reached us safely.`,
+      `Thank you for applying for the ${data.roleApplied ?? data.roleTitle} at Fast Action Claims. Your application and CV have reached us safely.`,
       '',
       "We review every application ourselves rather than filtering them automatically, so please give us up to 48 hours. You'll hear from us either way — we don't leave people wondering.",
       '',
@@ -113,10 +113,12 @@ const acceptEmail = ({
   timesNote,
   closing,
   // Optional, and only the Sales and AI Developer roles pass them. Left out,
-  // both default to exactly what the four original decision emails have
-  // always had.
+  // they default to exactly what the four original decision emails have
+  // always had. `interview` picks the India or South Africa sentence about
+  // the interview; the India accept has always had the India one.
   description = `Wording and layout supplied by the client, in the ${country} template. Unchanged.`,
   sample = SAMPLE,
+  interview = key === 'recruit.india.accept' ? 'india' : 'sa',
 }) =>
   registerTemplate({
     key,
@@ -136,7 +138,7 @@ const acceptEmail = ({
           '',
           opening,
           '',
-          `${decision} The next step is a ${key === 'recruit.india.accept' ? 'short video interview' : 'video interview'} with ${data.interviewerName}, our Admin Manager, to discuss the role, your experience and ${key === 'recruit.india.accept' ? 'what to expect if you join our team' : 'the terms of the position'}.`,
+          `${decision} The next step is a ${interview === 'india' ? 'short video interview' : 'video interview'} with ${data.interviewerName}, our Admin Manager, to discuss the role, your experience and ${interview === 'india' ? 'what to expect if you join our team' : 'the terms of the position'}.`,
           '',
           `Please choose a date and time that suits you using the link below — you'll only see slots that are still available${timesNote}:`,
           '',
@@ -155,7 +157,7 @@ const acceptEmail = ({
             greeting(data.firstName),
             p(esc(opening)),
             p(
-              `${esc(decision)} The next step is a ${key === 'recruit.india.accept' ? 'short video interview' : 'video interview'} with ${esc(data.interviewerName)}, our Admin Manager, to discuss the role, your experience and ${key === 'recruit.india.accept' ? 'what to expect if you join our team' : 'the terms of the position'}.`,
+              `${esc(decision)} The next step is a ${interview === 'india' ? 'short video interview' : 'video interview'} with ${esc(data.interviewerName)}, our Admin Manager, to discuss the role, your experience and ${interview === 'india' ? 'what to expect if you join our team' : 'the terms of the position'}.`,
             ),
             p(
               `Please choose a date and time that suits you using the button below &mdash; you'll only see slots that are still available${esc(timesNote)}.`,
@@ -296,12 +298,9 @@ declineEmail({
 // ── Decisions — Sales & Customer Service (South Africa) ─────────────────────
 
 /*
- * DRAFT. Unlike the four above, these are NOT the client's words: the business
- * has put the Sales wording on hold, and a Sales candidate still has to be told
- * something when a manager decides. So this is deliberately plain, neutral
- * wording built on the same two layouts, with nothing borrowed from the
- * paralegal copy. The title and description say so on the templates screen,
- * where it will be seen before it is approved.
+ * The South Africa template, word for word, with the role changed: the client
+ * asked for the same wording and layout as the paralegal emails, only the
+ * role different. Both are full-time permanent jobs, so "full-time" stays.
  *
  * The sample is its own invented Sales candidate, so the preview a manager
  * checks is the Sales email and not a paralegal one wearing its key.
@@ -312,49 +311,46 @@ const SALES_SAMPLE = {
   fullName: 'Thandi Example',
   email: 'thandi@example.com',
   roleTitle: 'Sales & Customer Service',
+  roleApplied: 'Sales & Customer Service position',
   roleCountry: 'South Africa',
   timezone: 'Africa/Johannesburg',
   localTime: '15:00',
 };
 
-const SALES_DRAFT_NOTE =
-  'DRAFT — wording on hold. Neutral placeholder wording for the Sales & Customer Service role, '
-  + 'written here rather than supplied by the client; the business has put the final wording on '
-  + 'hold, so this needs sign-off before it reaches a real candidate.';
-
 acceptEmail({
   key: 'recruit.sales.accept',
-  title: 'Shortlisted — Sales & Customer Service (DRAFT — wording on hold)',
+  title: 'Shortlisted — Sales & Customer Service',
   country: 'South Africa',
   heading: 'Interview invitation',
-  opening: 'Thank you for applying for the Sales & Customer Service position at Fast Action Claims.',
+  opening: 'Thank you for applying for the full-time Sales & Customer Service position at Fast Action Claims.',
   decision: "We're pleased to let you know that your application has been shortlisted.",
   timesNote: ', shown in your local time (SAST)',
   closing: 'We look forward to speaking with you.',
-  description: SALES_DRAFT_NOTE,
+  description: 'Wording and layout supplied by the client, in the South Africa template, with the role changed to Sales & Customer Service.',
   sample: SALES_SAMPLE,
 });
 
 declineEmail({
   key: 'recruit.sales.decline',
-  title: 'Not successful — Sales & Customer Service (DRAFT — wording on hold)',
+  title: 'Not successful — Sales & Customer Service',
   country: 'South Africa',
   opening:
-    'Thank you for taking the time to apply for the Sales & Customer Service position at Fast Action Claims.',
-  body: "After careful consideration, we've decided not to take your application further on this occasion.",
+    'Thank you for taking the time to apply for the full-time Sales & Customer Service position at Fast Action Claims.',
+  body: "After careful consideration, we've decided not to take your application further on this occasion. We had a strong field of applicants and the decision was a close one.",
   closing: 'We appreciate your interest in the firm and wish you every success in your career.',
-  description: `${SALES_DRAFT_NOTE} ${DECLINE_MECHANICS}`,
+  description: `Wording and layout supplied by the client, in the South Africa template, with the role changed to Sales & Customer Service. ${DECLINE_MECHANICS}`,
   sample: SALES_SAMPLE,
 });
 
 // ── Decisions — AI Developer (India) ────────────────────────────────────────
 
 /*
- * DRAFT, exactly as the Sales pair above: no supplied wording exists for this
- * role yet, and an AI Developer candidate still has to be told something when
- * a manager decides. Plain, neutral wording on the same two layouts, nothing
- * borrowed from the paralegal copy, and the templates screen says it is a
- * draft. Its own invented sample, so the preview is this role's email.
+ * The India template, word for word, with the role changed -- as the client
+ * asked. One phrase dropped: "via Internshala". AI Developer candidates come
+ * from LinkedIn, Naukri and elsewhere, so it would be untrue for most of them
+ * (decided 18 Sep). The interview is the India one, "a short video interview"
+ * about "what to expect if you join our team". Its own invented sample, so the
+ * preview is this role's email.
  */
 const AIDEV_SAMPLE = {
   ...SAMPLE,
@@ -362,38 +358,35 @@ const AIDEV_SAMPLE = {
   fullName: 'Arjun Example',
   email: 'arjun@example.com',
   roleTitle: 'AI Developer',
+  roleApplied: 'AI Developer position',
   roleCountry: 'India',
   timezone: 'Asia/Kolkata',
   localTime: '18:30',
 };
 
-const AIDEV_DRAFT_NOTE =
-  'DRAFT — wording on hold. Neutral placeholder wording for the AI Developer role, '
-  + 'written here rather than supplied by the client; there is no approved wording yet, '
-  + 'so this needs sign-off before it reaches a real candidate.';
-
 acceptEmail({
   key: 'recruit.aidev.accept',
-  title: 'Shortlisted — AI Developer (DRAFT — wording on hold)',
+  title: 'Shortlisted — AI Developer',
   country: 'India',
-  heading: 'Interview invitation',
+  heading: "You've been shortlisted",
   opening: 'Thank you for applying for the AI Developer position at Fast Action Claims.',
-  decision: "We're pleased to let you know that your application has been shortlisted.",
+  decision: "We're delighted to let you know that your application has been successful.",
   timesNote: ', shown in your local time (IST)',
-  closing: 'We look forward to speaking with you.',
-  description: AIDEV_DRAFT_NOTE,
+  closing: 'Congratulations, and we look forward to speaking with you soon.',
+  interview: 'india',
+  description: 'Wording and layout supplied by the client, in the India template, with the role changed to AI Developer and "via Internshala" left out.',
   sample: AIDEV_SAMPLE,
 });
 
 declineEmail({
   key: 'recruit.aidev.decline',
-  title: 'Not successful — AI Developer (DRAFT — wording on hold)',
+  title: 'Not successful — AI Developer',
   country: 'India',
   opening:
     'Thank you for taking the time to apply for the AI Developer position at Fast Action Claims.',
-  body: "After careful consideration, we've decided not to take your application further on this occasion.",
-  closing: 'We appreciate your interest in the firm and wish you every success in your career.',
-  description: `${AIDEV_DRAFT_NOTE} ${DECLINE_MECHANICS}`,
+  body: "After careful consideration, we've decided not to progress your application on this occasion. This doesn't reflect on your abilities.",
+  closing: 'We appreciate your interest in our firm and wish you every success in your career.',
+  description: `Wording and layout supplied by the client, in the India template, with the role changed to AI Developer and "via Internshala" left out. ${DECLINE_MECHANICS}`,
   sample: AIDEV_SAMPLE,
 });
 
