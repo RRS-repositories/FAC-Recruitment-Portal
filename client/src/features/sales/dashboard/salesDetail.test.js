@@ -1,19 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  chosenLabels,
-  isSalesApplicant,
-  voiceExtension,
-  voiceNoteFilename,
-  wordCount,
-} from './salesDetail.js';
+import { SALES_FIELDS, isSalesApplicant, voiceExtension, voiceNoteFilename } from './salesDetail.js';
 
 test('only sales applicants are sales applicants', () => {
   assert.equal(isSalesApplicant({ role: 'sales' }), true);
   assert.equal(isSalesApplicant({ role: 'sa_sales' }), true);
   assert.equal(isSalesApplicant({ role: 'intern' }), false);
   assert.equal(isSalesApplicant({ role: 'paralegal' }), false);
+  assert.equal(isSalesApplicant({ role: 'ai-developer' }), false);
   assert.equal(isSalesApplicant(null), false);
 });
 
@@ -32,18 +27,16 @@ test('the extension comes from the filename, then the MIME type', () => {
   assert.equal(voiceExtension({}), 'webm');
 });
 
-test('assessment answers are option indexes, single or multi', () => {
-  const question = { id: 'q1', options: [{ label: 'A' }, { label: 'B' }, { label: 'C' }] };
-  assert.deepEqual(chosenLabels(question, 1), ['B']);
-  assert.deepEqual(chosenLabels(question, 0), ['A']);
-  assert.deepEqual(chosenLabels(question, [0, 2]), ['A', 'C']);
-  assert.deepEqual(chosenLabels(question, [7]), []);
-  assert.deepEqual(chosenLabels(question, undefined), []);
-  assert.deepEqual(chosenLabels(question, null), []);
-});
-
-test('words are counted, not characters', () => {
-  assert.equal(wordCount('  one two\nthree  '), 3);
-  assert.equal(wordCount(''), 0);
-  assert.equal(wordCount(undefined), 0);
+test('the sales Details section shows the five profile fields, in order, as text', () => {
+  assert.deepEqual(
+    SALES_FIELDS.map((field) => [field.key, field.label]),
+    [
+      ['city', 'City'],
+      ['qualification', 'Qualification'],
+      ['experience', 'Experience'],
+      ['heardFrom', 'Heard about us'],
+      ['noticePeriod', 'Notice period'],
+    ],
+  );
+  assert.equal(SALES_FIELDS.some((field) => field.kind), false);
 });

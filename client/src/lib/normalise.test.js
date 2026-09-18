@@ -186,6 +186,53 @@ test('a sales row with no voice note and no profile adds nothing', () => {
   assert.equal('voice' in result, false);
 });
 
+/** An AI developer detail row as `SELECT a.*` returns it: voice columns null. */
+const AIDEV_ROW = {
+  ...INTERN_ROW,
+  role: 'india_aidev',
+  profile: {
+    city: 'Pune',
+    qualification: 'B.Tech',
+    experience: '3-5 years',
+    githubUrl: '',
+    employer: '',
+    heardFrom: 'LinkedIn',
+    noticePeriod: '30 days',
+  },
+  telemetry: { pasteChars: 0, typedChars: 900, activeSecs: 300, tabSwitches: 1, writtenSecs: 600, stepTimes: {} },
+  voice_object_key: null,
+  voice_filename: null,
+  voice_mime: null,
+  voice_size_bytes: null,
+  voice_duration_sec: null,
+  voice_source: null,
+  voice_deleted_at: null,
+};
+
+test('an AI developer row gets its profile, empty strings kept, and no voice', () => {
+  const result = normaliseApplicant(AIDEV_ROW);
+  assert.deepStrictEqual(result.profile, AIDEV_ROW.profile);
+  assert.equal('voice' in result, false);
+  // Everything else is as for any other row -- telemetry is not mapped.
+  const { profile, ...rest } = result;
+  assert.deepStrictEqual(rest, { ...INTERN_EXPECTED, role: rest.role });
+});
+
+test('an AI developer row maps to the ai-developer slug once ROLES has it', async () => {
+  const { ROLES } = await import('../data/roles.js');
+  const result = normaliseApplicant(AIDEV_ROW);
+  // Until data/roles.js gains the entry the raw enum passes through, which the
+  // dashboard's panel choice accepts too; afterwards it is the slug.
+  assert.equal(result.role, ROLES['ai-developer'] ? 'ai-developer' : 'india_aidev');
+});
+
+test('an AI developer list row (no profile yet) adds nothing', () => {
+  const { profile, telemetry, written_answers, mcq_answers, ...listRow } = AIDEV_ROW;
+  const result = normaliseApplicant(listRow);
+  assert.equal('profile' in result, false);
+  assert.equal('voice' in result, false);
+});
+
 test('a profile that is not a plain object is ignored', () => {
   assert.equal('profile' in normaliseApplicant({ ...INTERN_ROW, profile: ['x'] }), false);
   assert.equal('profile' in normaliseApplicant({ ...INTERN_ROW, profile: 'x' }), false);

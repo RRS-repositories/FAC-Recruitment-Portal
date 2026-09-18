@@ -15,7 +15,7 @@ import { REBOOK_EXPIRY_DAYS } from '../lib/rebookPolicy.js';
  * uninvited is not a favour. Two changes have since been asked for and made:
  * the India decline no longer claims a high volume of applications, and a
  * decline that names a reason the candidate can act on now carries an
- * invitation to apply again. The other seven are drafted here and need
+ * invitation to apply again. The rest are drafted here and need
  * sign-off before they reach a real candidate.
  *
  * Each template is:
@@ -112,8 +112,9 @@ const acceptEmail = ({
   decision,
   timesNote,
   closing,
-  // Optional, and only the Sales role passes them. Left out, both default to
-  // exactly what the four original decision emails have always had.
+  // Optional, and only the Sales and AI Developer roles pass them. Left out,
+  // both default to exactly what the four original decision emails have
+  // always had.
   description = `Wording and layout supplied by the client, in the ${country} template. Unchanged.`,
   sample = SAMPLE,
 }) =>
@@ -201,7 +202,7 @@ const declineEmail = ({
   opening,
   body,
   closing,
-  // Optional, as for acceptEmail: only the Sales role passes them.
+  // Optional, as for acceptEmail: only the Sales and AI Developer roles pass them.
   description = `Wording and layout supplied by the client, in the ${country} template. ${DECLINE_MECHANICS}`,
   sample = SAMPLE,
 }) =>
@@ -344,6 +345,56 @@ declineEmail({
   closing: 'We appreciate your interest in the firm and wish you every success in your career.',
   description: `${SALES_DRAFT_NOTE} ${DECLINE_MECHANICS}`,
   sample: SALES_SAMPLE,
+});
+
+// ── Decisions — AI Developer (India) ────────────────────────────────────────
+
+/*
+ * DRAFT, exactly as the Sales pair above: no supplied wording exists for this
+ * role yet, and an AI Developer candidate still has to be told something when
+ * a manager decides. Plain, neutral wording on the same two layouts, nothing
+ * borrowed from the paralegal copy, and the templates screen says it is a
+ * draft. Its own invented sample, so the preview is this role's email.
+ */
+const AIDEV_SAMPLE = {
+  ...SAMPLE,
+  firstName: 'Arjun',
+  fullName: 'Arjun Example',
+  email: 'arjun@example.com',
+  roleTitle: 'AI Developer',
+  roleCountry: 'India',
+  timezone: 'Asia/Kolkata',
+  localTime: '18:30',
+};
+
+const AIDEV_DRAFT_NOTE =
+  'DRAFT — wording on hold. Neutral placeholder wording for the AI Developer role, '
+  + 'written here rather than supplied by the client; there is no approved wording yet, '
+  + 'so this needs sign-off before it reaches a real candidate.';
+
+acceptEmail({
+  key: 'recruit.aidev.accept',
+  title: 'Shortlisted — AI Developer (DRAFT — wording on hold)',
+  country: 'India',
+  heading: 'Interview invitation',
+  opening: 'Thank you for applying for the AI Developer position at Fast Action Claims.',
+  decision: "We're pleased to let you know that your application has been shortlisted.",
+  timesNote: ', shown in your local time (IST)',
+  closing: 'We look forward to speaking with you.',
+  description: AIDEV_DRAFT_NOTE,
+  sample: AIDEV_SAMPLE,
+});
+
+declineEmail({
+  key: 'recruit.aidev.decline',
+  title: 'Not successful — AI Developer (DRAFT — wording on hold)',
+  country: 'India',
+  opening:
+    'Thank you for taking the time to apply for the AI Developer position at Fast Action Claims.',
+  body: "After careful consideration, we've decided not to take your application further on this occasion.",
+  closing: 'We appreciate your interest in the firm and wish you every success in your career.',
+  description: `${AIDEV_DRAFT_NOTE} ${DECLINE_MECHANICS}`,
+  sample: AIDEV_SAMPLE,
 });
 
 // ── Sarah's posts to the Mattermost interview channel ───────────────────────
@@ -822,4 +873,4 @@ registerTemplate({
 /** Imported for its side effects; exported so a caller can assert it loaded. */
 // Every registerTemplate() in this file. It had fallen behind (it read 11 while
 // 17 were registered); templates.test.js now pins it to the registry.
-export const TEMPLATE_COUNT = 19;
+export const TEMPLATE_COUNT = 21;

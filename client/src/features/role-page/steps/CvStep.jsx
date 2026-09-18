@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react';
 import { Turnstile, captchaConfigured } from '@/components/ui/Turnstile';
 import { FormShell, ErrorLine, StepRow } from '../FormShell';
+import { useRoleConfig } from '../RoleContext';
 import { readIntoMemory } from '../readIntoMemory';
-import { CV_ACCEPT, checkCvFile, formatMB, wholeMB } from '../helpers';
+import { CV_ACCEPT, checkCvFile, formatMB } from '../helpers';
 import { RECRUIT_EMAIL } from '../content';
 
 /**
- * Step 5 — the CV, the captcha, and Submit.
+ * The last step — the CV, the captcha, and Submit.
  *
  * The CV is copied into memory the moment it is chosen (readIntoMemory.js):
  * a phone can revoke the picked file's handle before Submit, and the upload
@@ -16,6 +17,7 @@ import { RECRUIT_EMAIL } from '../content';
  * roles place it; it renders nothing until a site key is configured.
  */
 export function CvStep({
+  step,
   value,
   onChange,
   limits,
@@ -27,6 +29,7 @@ export function CvStep({
   onSubmit,
   titleRef,
 }) {
+  const { copy } = useRoleConfig();
   const [error, setError] = useState('');
   const [reading, setReading] = useState(false);
   const inputRef = useRef(null);
@@ -54,9 +57,9 @@ export function CvStep({
   return (
     <FormShell
       ref={titleRef}
-      step={4}
+      step={step}
       title="Upload your CV"
-      sub={`Last step. PDF or Word, up to ${wholeMB(limits.cvMaxBytes)} MB.`}
+      sub={copy.cvSub(limits.cvMaxBytes)}
     >
       <button
         type="button"
@@ -105,9 +108,11 @@ export function CvStep({
 
       <Turnstile onToken={onCaptchaToken} className="turnstile-slot" />
 
+      {/* One text run up to the address, as the design's markup has it: split
+          into separate text nodes, the line shapes a pixel differently. */}
       <div className="warn info">
-        By submitting you confirm your answers are your own work and that the information
-        you've given is accurate. We'll email you from {RECRUIT_EMAIL} within 48 hours.
+        {`${copy.cvConfirm} We'll email you from `}
+        {RECRUIT_EMAIL} within 48 hours.
       </div>
 
       <ErrorLine message={error || submitError} />

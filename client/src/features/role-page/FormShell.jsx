@@ -1,13 +1,14 @@
 import { forwardRef } from 'react';
-import { STEP_LABELS } from './content';
+import { useRoleConfig } from './RoleContext';
 
 /** The violet band and brand line shared by the form pages and the thanks screen. */
 export function FormBand({ children, style }) {
+  const { brandLine } = useRoleConfig();
   return (
     <div className="formhead" style={style}>
       <div className="wrap">
         <div className="brand">
-          Fast Action Claims<small>Sales &amp; Customer Service · South Africa</small>
+          Fast Action Claims<small>{brandLine}</small>
         </div>
         {children}
       </div>
@@ -16,18 +17,20 @@ export function FormBand({ children, style }) {
 }
 
 /**
- * The design's FormHead: band, five-step progress, and the white card.
+ * The designs' FormHead: band, the role's step progress, and the white card.
  *
- * The title is the page's <h1> and takes focus (via the forwarded ref) on each
- * step change, so a keyboard or screen-reader user lands on the new step
- * rather than on the button they just pressed.
+ * `step` is the index into the role's steps. The title is the page's <h1> and
+ * takes focus (via the forwarded ref) on each step change, so a keyboard or
+ * screen-reader user lands on the new step rather than on the button they
+ * just pressed.
  */
 export const FormShell = forwardRef(function FormShell({ step, title, sub, children }, titleRef) {
+  const { steps } = useRoleConfig();
   return (
     <div>
       <FormBand>
         <div className="prog" role="list" aria-label="Application progress">
-          {STEP_LABELS.map((label, i) => (
+          {steps.map(({ label }, i) => (
             <div
               key={label}
               role="listitem"
@@ -52,7 +55,7 @@ export const FormShell = forwardRef(function FormShell({ step, title, sub, child
   );
 });
 
-/** The design's red line under a step. Announced when it appears. */
+/** The designs' red line under a step. Announced when it appears. */
 export function ErrorLine({ message }) {
   return message ? (
     <div className="err" role="alert">

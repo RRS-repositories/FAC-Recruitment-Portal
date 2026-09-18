@@ -1,4 +1,4 @@
-import { FIELD_LIMITS } from '../validate.js';
+import { FIELD_LIMITS } from '../fieldLimits.js';
 import { SALES_DETAIL_OPTIONS } from './questions.js';
 
 /**

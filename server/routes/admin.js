@@ -724,7 +724,7 @@ export function createAdminRouter() {
 
   router.get('/applications', async (req, res) => {
     const status = STATUSES.has(req.query.status) ? req.query.status : null;
-    const role = ['india_intern', 'sa_paralegal', 'sa_sales'].includes(req.query.role) ? req.query.role : null;
+    const role = ['india_intern', 'sa_paralegal', 'sa_sales', 'india_aidev'].includes(req.query.role) ? req.query.role : null;
     const search =
       typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim().slice(0, 100) : null;
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);

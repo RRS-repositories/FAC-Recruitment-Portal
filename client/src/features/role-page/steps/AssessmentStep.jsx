@@ -1,18 +1,29 @@
 import { useState } from 'react';
 import { FormShell, ErrorLine, StepRow } from '../FormShell';
-import { countWord, missingAnswersMessage } from '../helpers';
+import { useRoleConfig } from '../RoleContext';
+import { missingAnswersMessage } from '../helpers';
 
 /**
- * Step 3 — the scenario assessment.
+ * The scenario assessment.
  *
  * The questions arrive from the server with every score stripped; the
  * browser only records which option index was picked (an array for a
  * "select all" question), the shape the server scores.
  *
- * Options are real <button>s with aria-pressed — the design's divs could not
- * be reached by keyboard — styled exactly as its `.opt` cards.
+ * Options are real <button>s with aria-pressed — the designs' divs could not
+ * be reached by keyboard — styled exactly as their `.opt` cards.
  */
-export function AssessmentStep({ questions, values, onChange, serverMessage, onBack, onNext, titleRef }) {
+export function AssessmentStep({
+  step,
+  questions,
+  values,
+  onChange,
+  serverMessage,
+  onBack,
+  onNext,
+  titleRef,
+}) {
+  const { idPrefix, copy } = useRoleConfig();
   const [error, setError] = useState('');
 
   const pick = (q, j) => {
@@ -39,17 +50,17 @@ export function AssessmentStep({ questions, values, onChange, serverMessage, onB
   return (
     <FormShell
       ref={titleRef}
-      step={2}
-      title="Scenario assessment"
-      sub={`${countWord(questions.length)} real situations from the job. Pick the answer that's closest to what you'd actually do — there's no time limit.`}
+      step={step}
+      title={copy.assessmentTitle}
+      sub={copy.assessmentSub(questions.length)}
     >
       {questions.map((q, i) => (
-        <div className="q" key={q.id} role="group" aria-labelledby={`sales-${q.id}-t`}>
+        <div className="q" key={q.id} role="group" aria-labelledby={`${idPrefix}-${q.id}-t`}>
           <div className="n">
             Question {i + 1} of {questions.length}
             {q.multi ? ' · select all that apply' : ''}
           </div>
-          <div className="t" id={`sales-${q.id}-t`}>
+          <div className="t" id={`${idPrefix}-${q.id}-t`}>
             {q.question}
           </div>
           {q.options.map((o, j) => {
@@ -73,7 +84,7 @@ export function AssessmentStep({ questions, values, onChange, serverMessage, onB
       <ErrorLine message={error || serverMessage} />
       <StepRow onBack={onBack}>
         <button type="button" className="btn" style={{ flex: 1 }} onClick={next}>
-          Continue to voice note
+          {copy.assessmentNext}
         </button>
       </StepRow>
     </FormShell>

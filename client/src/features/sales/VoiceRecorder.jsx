@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ErrorLine } from './FormShell';
-import { readIntoMemory } from './readIntoMemory';
+import { ErrorLine } from '@/features/role-page/FormShell';
+import { readIntoMemory } from '@/features/role-page/readIntoMemory';
+import { formatMB, wholeMB } from '@/features/role-page/helpers';
 import {
   checkAudioDuration,
   checkAudioFile,
   formatClock,
-  formatMB,
   recordingTooShort,
   voiceFileName,
-  wholeMB,
-} from './helpers';
+} from './voiceHelpers';
 
 /** The recorder's preferred formats, best first. '' lets the browser choose. */
 function pickMimeType() {

@@ -12,8 +12,8 @@ import { adminApplication, adminDownloadCv, adminSendMeetingLink } from '@/lib/a
 import { normaliseApplicant } from '@/lib/normalise';
 import { formatDate, formatDateTime, formatDuration } from '@/lib/format';
 import { cn } from '@/lib/cn';
-import { SalesApplicantDetails } from '@/features/sales/dashboard/SalesApplicantDetails';
-import { isSalesApplicant } from '@/features/sales/dashboard/salesDetail';
+import { RoleApplicantDetails } from '@/features/role-details/RoleApplicantDetails';
+import { hasRoleDetails } from '@/features/role-details/roleDetails';
 
 const STATUS_TONE = { pending: 'warn', accepted: 'ok', declined: 'danger' };
 
@@ -52,6 +52,8 @@ const EMAIL_LABEL = {
   'recruit.sa.decline': 'Not successful',
   'recruit.sales.accept': 'Shortlisted, with booking link',
   'recruit.sales.decline': 'Not successful',
+  'recruit.aidev.accept': 'Shortlisted, with booking link',
+  'recruit.aidev.decline': 'Not successful',
   'recruit.booking.confirmed': 'Interview booked',
   'recruit.rescheduled': 'Interview moved',
   'recruit.cancelled': 'Interview cancelled',
@@ -169,9 +171,10 @@ export function ApplicantRow({
   // arrive with the detail, so neither costs a request of its own.
   const [review, setReview] = useState(null);
   const [ruleScore, setRuleScore] = useState(null);
-  // Sales only: the questions this applicant was asked, from the detail
-  // response. Not cleared on a refetch, like the rest of the row's context.
-  const [salesQuestions, setSalesQuestions] = useState(null);
+  // Sales and AI developer only: the questions this applicant was asked, from
+  // the detail response. Not cleared on a refetch, like the rest of the row's
+  // context.
+  const [roleQuestions, setRoleQuestions] = useState(null);
   const [detailError, setDetailError] = useState('');
   const [downloadError, setDownloadError] = useState('');
   const [busy, setBusy] = useState('');
@@ -201,7 +204,7 @@ export function ApplicantRow({
         setMailMode(result.mailMode ?? null);
         setReview(result.review ?? null);
         setRuleScore(result.ruleScore ?? null);
-        setSalesQuestions({
+        setRoleQuestions({
           writtenQuestions: result.writtenQuestions ?? null,
           assessment: result.assessment ?? null,
         });
@@ -523,15 +526,16 @@ export function ApplicantRow({
             </p>
           ) : null}
 
-          {/* Sales asks different questions; its answers, voice note and
-              assessment are drawn by the sales feature. Every other role gets
-              the block below, unchanged. */}
-          {isSalesApplicant(applicant) ? (
-            <SalesApplicantDetails
+          {/* Sales and AI developer ask different questions; their details,
+              answers and assessment (and the sales voice note) are drawn by
+              features/role-details. Intern and paralegal get the block below,
+              unchanged. */}
+          {hasRoleDetails(applicant) ? (
+            <RoleApplicantDetails
               applicant={applicant}
               detail={detail}
-              writtenQuestions={salesQuestions?.writtenQuestions}
-              assessment={salesQuestions?.assessment}
+              writtenQuestions={roleQuestions?.writtenQuestions}
+              assessment={roleQuestions?.assessment}
             />
           ) : (
           <div className="mt-5 grid gap-4">

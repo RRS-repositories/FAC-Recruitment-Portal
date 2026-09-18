@@ -93,10 +93,11 @@ export function normaliseApplicant(row) {
 }
 
 /**
- * Sales only: `profile` and `voice`, added to the object only when the row
- * actually carries them. An intern or paralegal row -- which has neither, or
- * has the columns but all null -- normalises to exactly the object it always
- * did, with no new keys at all. Readers use `applicant.profile ?? null`.
+ * `profile` (sales and AI developer) and `voice` (sales only), added to the
+ * object only when the row actually carries them. An intern or paralegal row
+ * -- which has neither, or has the columns but all null -- normalises to
+ * exactly the object it always did, with no new keys at all. An AI developer
+ * row gets `profile` and no `voice`. Readers use `applicant.profile ?? null`.
  */
 function salesExtras(row) {
   const extras = {};
@@ -107,7 +108,7 @@ function salesExtras(row) {
   return extras;
 }
 
-/** The sales applicant's extra details. Only a plain object counts. */
+/** The sales or AI developer applicant's extra details. Only a plain object counts. */
 function profileOf(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : null;
 }

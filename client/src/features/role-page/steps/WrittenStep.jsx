@@ -1,15 +1,27 @@
 import { useState } from 'react';
 import { FormShell, ErrorLine, StepRow } from '../FormShell';
+import { useRoleConfig } from '../RoleContext';
 import { shortWrittenMessage, wordCount } from '../helpers';
 
 /**
- * Step 2 — "About you". Questions and word minimums come from the server.
+ * The written answers. Questions and word minimums come from the server.
  *
  * The telemetry handlers are the same pair the other roles attach
  * (see features/application/steps/WrittenStep.jsx): `input`, not `keydown`,
  * because a phone keyboard reports no key; paste is counted, never blocked.
  */
-export function WrittenStep({ questions, values, onChange, telemetry, serverMessage, onBack, onNext, titleRef }) {
+export function WrittenStep({
+  step,
+  questions,
+  values,
+  onChange,
+  telemetry,
+  serverMessage,
+  onBack,
+  onNext,
+  titleRef,
+}) {
+  const { idPrefix, copy } = useRoleConfig();
   const [error, setError] = useState('');
 
   const next = () => {
@@ -19,14 +31,9 @@ export function WrittenStep({ questions, values, onChange, telemetry, serverMess
   };
 
   return (
-    <FormShell
-      ref={titleRef}
-      step={1}
-      title="About you"
-      sub="Short, honest answers in your own words. Minimum word counts are shown — there's no maximum."
-    >
+    <FormShell ref={titleRef} step={step} title={copy.writtenTitle} sub={copy.writtenSub}>
       {questions.map((q, i) => {
-        const id = `sales-${q.id}`;
+        const id = `${idPrefix}-${q.id}`;
         return (
           <div key={q.id}>
             <label className="f" htmlFor={id}>
@@ -40,6 +47,7 @@ export function WrittenStep({ questions, values, onChange, telemetry, serverMess
               onChange={(e) => onChange({ ...values, [q.id]: e.target.value })}
               onPaste={telemetry.onPaste}
               onInput={telemetry.onInput}
+              spellCheck={copy.writtenSpellCheck}
               aria-describedby={`${id}-wc`}
             />
             <div className="wc" id={`${id}-wc`}>

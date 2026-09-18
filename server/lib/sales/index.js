@@ -7,9 +7,11 @@
  * all of that here -- rather than threaded through the shared modules -- is
  * what lets the paralegal and intern paths stay exactly as they were.
  *
- * NOT imported by roles.js or questions.js: they take the plain data modules
- * directly (questions.js, limits.js), because this file reaches validate.js,
- * which imports roles.js, and that would be a cycle.
+ * NOT imported by roles.js or questions.js: they reach this role through the
+ * extended-role registry (../extendedRoles.js → ./role.js), which leaves out
+ * the voice note. This file reaches voice.js and so storage.js, which fixes
+ * CV_STORAGE_DIR as it loads -- too heavy for a module half the server
+ * imports. The application route takes the voice helpers from here.
  */
 import { SALES_ROLE_KEY } from './limits.js';
 

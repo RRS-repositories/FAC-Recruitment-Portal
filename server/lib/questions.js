@@ -17,8 +17,7 @@
  * a deploy (build spec §4). The shape is the same either way.
  */
 
-import { SALES_QUESTIONS, SALES_WRITTEN_QUESTIONS } from './sales/questions.js';
-import { SALES_ROLE_KEY } from './sales/limits.js';
+import { EXTENDED_ROLES, extendedRole } from './extendedRoles.js';
 
 export const WRITTEN_QUESTIONS = [
   {
@@ -170,10 +169,11 @@ const ROLE_QUESTIONS = {
     },
   ],
 
-  // The sales role's assessment lives with the rest of that role, in
-  // ./sales/questions.js. Registered here so questionsFor, publicQuestionsFor
-  // and the model review reach it the same way they reach the other two.
-  [SALES_ROLE_KEY]: SALES_QUESTIONS,
+  // The extended roles' assessments (Sales & Customer Service, AI Developer)
+  // live with the rest of each role, in its own folder -- see
+  // ./extendedRoles.js. Registered here so questionsFor, publicQuestionsFor
+  // and the model review reach them the same way they reach the other two.
+  ...Object.fromEntries(EXTENDED_ROLES.map((role) => [role.apiKey, role.questions])),
 };
 
 /**
@@ -181,10 +181,12 @@ const ROLE_QUESTIONS = {
  *
  * The intern and paralegal forms share WRITTEN_QUESTIONS and still get exactly
  * that array -- the same object, not a copy -- so nothing that reads it for
- * them changes. Only the sales role has its own six, with word minimums.
+ * them changes. Only the extended roles have their own, with word minimums;
+ * anything unknown gets the shared list, as every caller did before this
+ * function existed.
  */
 export function writtenQuestionsFor(apiKey) {
-  return apiKey === SALES_ROLE_KEY ? SALES_WRITTEN_QUESTIONS : WRITTEN_QUESTIONS;
+  return extendedRole(apiKey)?.writtenQuestions ?? WRITTEN_QUESTIONS;
 }
 
 /** Full questions, weights included. Server use only. */

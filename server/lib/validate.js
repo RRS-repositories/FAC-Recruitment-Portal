@@ -1,4 +1,5 @@
 import { ROLE_BY_API_KEY } from './roles.js';
+import { FIELD_LIMITS } from './fieldLimits.js';
 
 /**
  * Server-side validation — the actual trust boundary.
@@ -11,13 +12,10 @@ import { ROLE_BY_API_KEY } from './roles.js';
 
 export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export const FIELD_LIMITS = {
-  fullName: 120,
-  email: 254,
-  phone: 40,
-  city: 120,
-  written: 4000,
-};
+// Defined in ./fieldLimits.js (so the role folders can reach it without
+// importing this module, which imports roles.js) and re-exported here, the
+// same object, for every caller that has always taken it from validate.js.
+export { FIELD_LIMITS };
 
 const TEXT_FIELDS = ['fullName', 'email', 'phone', 'city'];
 

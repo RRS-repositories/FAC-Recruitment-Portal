@@ -1,22 +1,23 @@
 import { useState } from 'react';
-import { FormShell, ErrorLine, StepRow } from '../FormShell';
+import { FormShell, ErrorLine, StepRow } from '@/features/role-page/FormShell';
 import { VoiceRecorder } from '../VoiceRecorder';
-import { minutesLabel } from '../helpers';
+import { minutesLabel } from '../voiceHelpers';
 
 /**
- * Step 4 — the voice note. The design's prompts, then the recorder.
+ * Step 4 — the voice note, sales' own step (the rest are the shared kit's).
+ * The design's prompts, then the recorder.
  *
  * Continue waits for a finished note and is held while a recording is still
  * running, so pressing it mid-take cannot silently carry the previous one
  * forward instead.
  */
-export function VoiceStep({ value, onChange, limits, serverMessage, onBack, onNext, titleRef }) {
+export function VoiceStep({ step, value, onChange, limits, serverMessage, onBack, onNext, titleRef }) {
   const [recording, setRecording] = useState(false);
 
   return (
     <FormShell
       ref={titleRef}
-      step={3}
+      step={step}
       title="Your voice note"
       sub={`This is a phone job, so we want to hear you. Record up to ${minutesLabel(limits.voiceMaxSeconds)} telling us why you're the right person for this role.`}
     >

@@ -1,6 +1,7 @@
 /**
- * Plain helpers for the sales applicant's expanded row. No React and no
- * imports, so they run under `node --test` as they are.
+ * Plain helpers for the sales applicant's expanded row -- the voice note and
+ * which profile fields to show. No React and no imports, so they run under
+ * `node --test` as they are.
  */
 
 /**
@@ -39,21 +40,14 @@ export function voiceNoteFilename(fullName, voice) {
 }
 
 /**
- * The chosen option label(s) for one assessment question.
- *
- * Answers are stored as option indexes -- a number for a single choice, an
- * array of numbers for a multi-select. Returns an array of labels; empty when
- * the question was not answered or the index no longer matches an option.
+ * `application.profile` keys, in the order the Details section shows them.
+ * The answers and assessment helpers are shared with the other roles that ask
+ * their own questions, in features/role-details/detailFormat.js.
  */
-export function chosenLabels(question, answer) {
-  if (answer === undefined || answer === null) return [];
-  const options = Array.isArray(question?.options) ? question.options : [];
-  const indexes = Array.isArray(answer) ? answer : [answer];
-  return indexes
-    .map((index) => options[index]?.label)
-    .filter((label) => typeof label === 'string' && label.length > 0);
-}
-
-/** Words in an answer, for the count beside each written question. */
-export const wordCount = (text) =>
-  typeof text === 'string' ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+export const SALES_FIELDS = Object.freeze([
+  { key: 'city', label: 'City' },
+  { key: 'qualification', label: 'Qualification' },
+  { key: 'experience', label: 'Experience' },
+  { key: 'heardFrom', label: 'Heard about us' },
+  { key: 'noticePeriod', label: 'Notice period' },
+]);

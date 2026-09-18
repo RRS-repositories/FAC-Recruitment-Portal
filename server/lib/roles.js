@@ -4,8 +4,7 @@ import {
   writtenQuestionsFor,
   WRITTEN_QUESTIONS,
 } from './questions.js';
-import { SALES_DETAIL_OPTIONS } from './sales/questions.js';
-import { SALES_LIMITS, SALES_ROLE_KEY } from './sales/limits.js';
+import { EXTENDED_ROLES, extendedRole } from './extendedRoles.js';
 
 /**
  * Role metadata the server needs.
@@ -29,15 +28,16 @@ const ROLES = {
     country: 'South Africa',
     timezone: 'Africa/Johannesburg',
   },
-  // Everything particular to this role -- its questions, scoring, details and
-  // voice note -- lives in ./sales/. Only the facts every role has are here.
-  [SALES_ROLE_KEY]: {
-    apiKey: SALES_ROLE_KEY,
-    slug: 'sales',
-    title: 'Sales & Customer Service',
-    country: 'South Africa',
-    timezone: 'Africa/Johannesburg',
-  },
+  // The extended roles (Sales & Customer Service, AI Developer): everything
+  // particular to each -- questions, scoring, details, any voice note -- lives
+  // in its own folder, listed by ./extendedRoles.js. Only the facts every role
+  // has are copied here, in the same five keys as the two above.
+  ...Object.fromEntries(
+    EXTENDED_ROLES.map(({ apiKey, slug, title, country, timezone }) => [
+      apiKey,
+      { apiKey, slug, title, country, timezone },
+    ]),
+  ),
 };
 
 /**
@@ -51,7 +51,8 @@ const ROLES = {
 export const SLUG_TO_API_KEY = {
   intern: 'india_intern',
   paralegal: 'sa_paralegal',
-  sales: SALES_ROLE_KEY,
+  // `sales` → sa_sales, `ai-developer` → india_aidev.
+  ...Object.fromEntries(EXTENDED_ROLES.map(({ slug, apiKey }) => [slug, apiKey])),
 };
 
 export const ROLE_BY_API_KEY = ROLES;
@@ -76,21 +77,19 @@ export function publicRolePayload(slug) {
     questions: publicQuestionsFor(role.apiKey),
   };
 
-  // Sales only: the intern and paralegal payloads carry no new keys, so the
-  // form they are served by sees exactly what it saw before this role existed.
-  if (role.apiKey === SALES_ROLE_KEY) {
+  // Extended roles only: the intern and paralegal payloads carry no new keys,
+  // so the form they are served by sees exactly what it saw before these roles
+  // existed.
+  const extended = extendedRole(role.apiKey);
+  if (extended) {
     // The form enforces these for a better experience -- telling someone their
-    // recording is too long before they wait for it to upload -- and the
-    // server enforces them again, because the form is not a trust boundary.
-    payload.limits = {
-      cvMaxBytes: SALES_LIMITS.cvMaxBytes,
-      voiceMaxBytes: SALES_LIMITS.voiceMaxBytes,
-      voiceMaxSeconds: SALES_LIMITS.voiceMaxSeconds,
-      voiceMinSeconds: SALES_LIMITS.voiceMinSeconds,
-    };
+    // file is too big before they wait for it to upload -- and the server
+    // enforces them again, because the form is not a trust boundary. A fresh
+    // object each call, so a caller cannot reach the registry's own.
+    payload.limits = { ...extended.publicLimits };
     // Sent rather than duplicated in the client, so the dropdowns and the
     // server's list of accepted values cannot drift apart.
-    payload.detailOptions = SALES_DETAIL_OPTIONS;
+    payload.detailOptions = extended.detailOptions;
   }
 
   return payload;

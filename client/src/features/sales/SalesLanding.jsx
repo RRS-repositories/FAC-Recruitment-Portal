@@ -1,30 +1,19 @@
-import { Link } from 'react-router-dom';
+import { HeroPhoto, LandingFooter, LandingNav } from '@/features/role-page/Landing';
 import heroPhoto from './assets/sales-hero.jpg';
-import { RECRUIT_EMAIL } from './content';
 
 /**
  * The public landing: hero, stats, the role, the pay card, the closing band.
  *
- * Copy is the design's, word for word. "Manager login" goes to the portal's
- * real dashboard at /admin rather than the prototype's in-page demo one.
+ * Copy is the design's, word for word. The nav, the photo and the footer are
+ * the role pages' shared pieces (features/role-page/Landing.jsx).
  */
 export function SalesLanding({ onStart }) {
   return (
     <div>
       <header className="hero">
-        {/* Decorative: everything it shows is said in the words beside it. */}
-        <div
-          className="hero-img"
-          aria-hidden="true"
-          style={{ backgroundImage: `url(${heroPhoto})` }}
-        />
+        <HeroPhoto src={heroPhoto} />
         <div className="wrap hero-in">
-          <nav className="nav" aria-label="Site">
-            <div className="brand">
-              Fast Action Claims<small>Rowan Rose Ltd · SRA 8000843</small>
-            </div>
-            <Link to="/admin">Manager login</Link>
-          </nav>
+          <LandingNav />
           <div className="pill">
             <i aria-hidden="true" /> Now hiring · Cape Town / Johannesburg / remote SA
           </div>
@@ -117,15 +106,7 @@ export function SalesLanding({ onStart }) {
         </div>
       </main>
 
-      <footer className="wrap">
-        <div className="foot">
-          Fast Action Claims is a trading style of Rowan Rose Ltd, a firm of solicitors authorised
-          and regulated by the Solicitors Regulation Authority (SRA No. 8000843). Company No.
-          12916452.
-          <br />
-          Questions? {RECRUIT_EMAIL}
-        </div>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }

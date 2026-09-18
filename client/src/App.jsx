@@ -10,6 +10,13 @@ import {
   SALES_PATH,
   SALES_REDIRECTS,
 } from '@/features/sales/paths';
+import {
+  AIDEV_APPLY_PATH,
+  AIDEV_APPLY_REDIRECTS,
+  AIDEV_APPLY_SEGMENT,
+  AIDEV_PATH,
+  AIDEV_REDIRECTS,
+} from '@/features/aidev/paths';
 
 // The application flow, dashboard and booking page are each reached
 // deliberately rather than browsed to, so they are split out and never weigh
@@ -25,6 +32,9 @@ const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
 // Sales & Customer Service (South Africa) has its own page, form and
 // stylesheet, all in features/sales/ and all in this one chunk.
 const SalesPage = lazy(() => import('@/features/sales/SalesPage'));
+// AI Developer (India) likewise: features/aidev/, its own chunk. Both are
+// built on the shared role-page kit (features/role-page/).
+const AiDevPage = lazy(() => import('@/features/aidev/AiDevPage'));
 
 /** Holds the fold while a split chunk arrives, so nothing jumps. */
 function RouteFallback() {
@@ -64,6 +74,19 @@ export default function App() {
         ))}
         {SALES_APPLY_REDIRECTS.map((path) => (
           <Route key={path} path={path} element={<Navigate to={SALES_APPLY_PATH} replace />} />
+        ))}
+        {/* AI Developer, the same way: its URL lives only in
+            features/aidev/paths.js, and /recruitment/apply/ai-developer is
+            sent to its own form rather than the generic one. */}
+        <Route path={AIDEV_PATH} element={split(AiDevPage)}>
+          <Route index element={null} />
+          <Route path={AIDEV_APPLY_SEGMENT} element={null} />
+        </Route>
+        {AIDEV_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={AIDEV_PATH} replace />} />
+        ))}
+        {AIDEV_APPLY_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={AIDEV_APPLY_PATH} replace />} />
         ))}
         <Route path="/recruitment/:roleKey" element={<RoleLandingPage />} />
         <Route path="/recruitment/apply/:roleKey" element={split(ApplyPage)} />

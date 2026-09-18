@@ -1,9 +1,14 @@
 import { forwardRef } from 'react';
 import { FormBand } from '../FormShell';
+import { useRoleConfig } from '../RoleContext';
 import { RECRUIT_EMAIL } from '../content';
 
 /**
- * "Application received", as the design lays it out.
+ * "Application received", as the designs lay it out.
+ *
+ * Each sentence is built as one string where the design's markup had one
+ * run of text: split into separate text nodes, a line shapes a pixel
+ * differently.
  *
  * One honest change: the confirmation email is only mentioned when the
  * server says one was sent (`acknowledged`). Telling somebody to watch for a
@@ -14,6 +19,7 @@ export const ThanksScreen = forwardRef(function ThanksScreen(
   { firstName, email, acknowledged, onHome },
   titleRef,
 ) {
+  const { copy } = useRoleConfig();
   return (
     <div>
       <FormBand style={{ paddingBottom: 30 }} />
@@ -25,7 +31,8 @@ export const ThanksScreen = forwardRef(function ThanksScreen(
           Application received
         </h1>
         <p>
-          Thanks {firstName}. We've got your answers, your voice note and your CV
+          Thanks {firstName}
+          {`. We've got ${copy.thanksReceived}`}
           {acknowledged ? (
             <>
               {' '}
@@ -35,9 +42,8 @@ export const ThanksScreen = forwardRef(function ThanksScreen(
           .
         </p>
         <p>
-          You'll hear from us at <b>{RECRUIT_EMAIL}</b> within 48 hours. If you're
-          shortlisted, the email will include a link to book a video interview at a time that suits
-          you.
+          You'll hear from us at <b>{RECRUIT_EMAIL}</b>
+          {` within 48 hours. ${copy.thanksNext}`}
         </p>
         <p className="small">Check your junk folder just in case.</p>
         <button type="button" className="btn" style={{ marginTop: 20 }} onClick={onHome}>

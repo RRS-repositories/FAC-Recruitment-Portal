@@ -2,6 +2,8 @@ import indiaPhoto from '@/assets/role-india.jpg';
 import southAfricaPhoto from '@/assets/role-south-africa.jpg';
 import salesPhoto from '@/features/sales/assets/sales-hero.jpg';
 import { SALES_PATH } from '@/features/sales/paths';
+import aiDevPhoto from '@/features/aidev/assets/aidev-hero.jpg';
+import { AIDEV_PATH } from '@/features/aidev/paths';
 
 /**
  * Role marketing content — and nothing else.
@@ -136,6 +138,48 @@ export const ROLES = {
       { value: '120+', label: 'staff across UK, SA & India' },
       { value: 'R13k', label: 'on-target monthly earnings' },
       { value: 'UK hrs', label: '9am – 6pm, Mon–Fri' },
+    ],
+  },
+
+  // AI Developer has its own page and form too (features/aidev/, built on
+  // the same role-page kit as sales) — so, like sales, it does NOT use
+  // RoleLandingPage or ApplyPage. `path` is where the home page card links;
+  // App.jsx sends /recruitment/apply/ai-developer there too. The copy is the
+  // AI developer design's own words, in the same shape as the entries above.
+  'ai-developer': {
+    key: 'ai-developer',
+    apiKey: 'india_aidev',
+    path: AIDEV_PATH,
+    country: 'India',
+    countryCode: 'IN',
+    timezone: 'Asia/Kolkata',
+    tzLabel: 'IST',
+    short: 'India · AI Developer',
+    title: 'AI Developer',
+    location: 'Remote from India',
+    contractType: 'Full-time, permanent',
+    source: 'Direct',
+    photo: aiDevPhoto,
+    // The developer sits right of centre; this keeps his face in a card.
+    photoPosition: '72% 30%',
+    pill: 'Now hiring · Remote, India · UK hours',
+    headline: ['AI developer.', 'Build the platform with us.'],
+    sub: "We're a UK law firm building our own AI-driven CRM, automation and agent platform. We need a developer who already understands CRMs, workflows and LLM tooling — and wants to build something bigger.",
+    whyHeading: "What you'd be building",
+    why: 'We run a custom CRM, an email-processing AI (ECHOE), WhatsApp document-collection workflows, an AI customer-service team and an AI "office" of agents that work inside the CRM. All of it is built and hosted by us. You\'ll join the team extending it.',
+    contract:
+      "This isn't a ticket-queue job. You'll take a feature from a plain-English brief through design, build, test and deploy, working directly with our UK head of development and using AI coding tools as a normal part of the workflow.",
+    need: [
+      'Real experience with CRM systems — the data model, integrations and the messy edges',
+      "Automations you've built and kept running: n8n, Make, custom code, webhooks, queues",
+      'Production use of LLM APIs — structured outputs, tool calls, cost and error handling',
+      'Comfortable on a Linux VPS with Docker, Postgres and Git',
+    ],
+    stats: [
+      { value: '1 CRM', label: 'built in-house, 20k+ clients' },
+      { value: '50+', label: 'live automations & agents' },
+      { value: 'Remote', label: 'work from anywhere in India' },
+      { value: 'UK hrs', label: '9am – 6pm UK, Mon–Fri' },
     ],
   },
 };
