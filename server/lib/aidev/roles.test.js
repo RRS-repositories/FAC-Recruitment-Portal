@@ -35,7 +35,17 @@ const SALES_BEFORE = {
   prompt: 'eebe56d30c174f15769d274dd835f3895e80ddf1b53f92809835c635c4254b77',
 };
 
-test('the sales payload, questions, role and model prompt are exactly what they were', () => {
+// The sales model prompt was changed ON PURPOSE when the review became
+// role-aware (prompt version 2): the header names the workplace rather than
+// "(remote, South Africa)", and a WHAT THIS ROLE NEEDS section follows it.
+// SALES_PROMPT_V2 pins the new prompt; putting the version-1 header back and
+// taking the section out must still give SALES_BEFORE.prompt, which proves
+// nothing else in it moved.
+const SALES_PROMPT_V2 = 'be3bc18707d1aa888b0740cc61a5fe48e4935f446e0e873a5eb420a189f74919';
+const SALES_V2_HEAD =
+  /^ROLE: Sales & Customer Service \(office-based in South Africa, on the phone, UK hours\)\n\n--- WHAT THIS ROLE NEEDS ---\n[\s\S]*?\n\n--- THEIR CV ---/;
+
+test('the sales payload, questions and role are exactly what they were; the prompt changed only as intended', () => {
   assert.equal(sha(publicRolePayload('sales')), SALES_BEFORE.payload);
   assert.equal(sha(questionsFor('sa_sales')), SALES_BEFORE.questions);
   assert.equal(sha(writtenQuestionsFor('sa_sales')), SALES_BEFORE.written);
@@ -46,7 +56,10 @@ test('the sales payload, questions, role and model prompt are exactly what they 
     mcqAnswers: { q1: 0, q3: [0, 2] },
     cvText: 'cv',
   });
-  assert.equal(sha(prompt), SALES_BEFORE.prompt);
+  assert.equal(sha(prompt), SALES_PROMPT_V2);
+  assert.match(prompt, SALES_V2_HEAD);
+  const asVersion1 = prompt.replace(SALES_V2_HEAD, 'ROLE: Sales & Customer Service (remote, South Africa)\n\n--- THEIR CV ---');
+  assert.equal(sha(asVersion1), SALES_BEFORE.prompt);
 });
 
 test('the slugs: the three that were, plus ai-developer', () => {
@@ -81,6 +94,7 @@ test('the registry: sales then AI Developer, and nothing else counts as extended
       'writtenQuestions', 'questions', 'detailOptions',
       'limits', 'publicLimits', 'hasVoice',
       'score', 'normaliseProfile', 'validateProfile', 'profileForStorage',
+      'review',
     ]);
     assert.ok(Object.isFrozen(r));
   }
@@ -151,7 +165,8 @@ test('the model review labels AI Developer answers with its own questions', () =
   const answers = Object.fromEntries(AIDEV_WRITTEN_QUESTIONS.map((q, i) => [q.id, `answer number ${i + 1}`]));
   const prompt = buildPrompt({ role: 'india_aidev', writtenAnswers: answers, mcqAnswers: { q8: [0, 1] }, cvText: '' });
 
-  assert.ok(prompt.startsWith('ROLE: AI Developer (remote, India)\n'));
+  // Prompt version 2: the workplace, not "(remote, India)", then the brief.
+  assert.ok(prompt.startsWith('ROLE: AI Developer (fully remote in India, UK hours)\n\n--- WHAT THIS ROLE NEEDS ---\n'));
   for (const [i, q] of AIDEV_WRITTEN_QUESTIONS.entries()) {
     assert.ok(prompt.includes(`Q: ${q.label}\nA: answer number ${i + 1}`), `${q.id} is labelled`);
   }

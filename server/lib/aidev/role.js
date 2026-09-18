@@ -31,4 +31,23 @@ export const AIDEV_ROLE = Object.freeze({
   normaliseProfile,
   validateProfile,
   profileForStorage,
+
+  // What the model review (../llmReview.js) is told about the job. Taken from
+  // the approved page design ("What you'd be building" / "What we're looking
+  // for"), not invented. Changing a word here changes what the model is
+  // asked: bump promptVersion with it, so reviews stay traceable.
+  review: Object.freeze({
+    workplace: 'fully remote in India, UK hours',
+    brief: Object.freeze([
+      "- Extending the firm's in-house, AI-driven CRM, its email-processing AI, its WhatsApp document-collection workflows and the AI agents that work inside the CRM.",
+      '- Taking a feature from a plain-English brief through design, build, test and deploy, working directly with the UK head of development and using AI coding tools as a normal part of the workflow.',
+      "What we're looking for:",
+      '- Real experience with CRM systems: the data model, integrations and the messy edges.',
+      '- Automations they have built and kept running: n8n, Make, custom code, webhooks, queues.',
+      '- Production use of LLM APIs: structured outputs, tool calls, cost and error handling.',
+      '- Comfortable on a Linux VPS with Docker, Postgres and Git.',
+      "- Honest about what they don't know, and quick to flag problems early.",
+    ]),
+    promptVersion: 2,
+  }),
 });

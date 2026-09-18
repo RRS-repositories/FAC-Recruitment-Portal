@@ -31,6 +31,7 @@ import { askForJson, LlmError, llmMode, llmModel } from './llm.js';
 import { extractCvText, CvTextError } from './cvText.js';
 import { resolveCv } from './storage.js';
 import { ROLE_BY_API_KEY, questionsFor, writtenQuestionsFor } from './roles.js';
+import { extendedRole } from './extendedRoles.js';
 import { isEnabled } from './flags.js';
 import { aiTuning } from './aiTuning.js';
 import { DEFAULT_TUNING, detectAiUse, levelFor } from '../../shared/aiDetect.js';
@@ -41,8 +42,20 @@ import { DEFAULT_TUNING, detectAiUse, levelFor } from '../../shared/aiDetect.js'
  * Stored against every review, because a score is only defensible if you can
  * say what question produced it. Two applicants reviewed under different
  * prompts are not comparable, and without this nobody could tell.
+ *
+ * This is the version of the ORIGINAL wording, which the intern and paralegal
+ * roles are still asked. A role with a `review` block (the extended roles,
+ * ./extendedRoles.js) carries its own version -- see promptVersionFor.
  */
 export const PROMPT_VERSION = 1;
+
+/** The `review` block of a role that has one, else null (intern, paralegal). */
+const reviewFor = (role) => extendedRole(role)?.review ?? null;
+
+/** The prompt version a review of this role is asked under, and stored with. */
+export function promptVersionFor(role) {
+  return reviewFor(role)?.promptVersion ?? PROMPT_VERSION;
+}
 
 const MAX_ATTEMPTS = Number(process.env.LLM_REVIEW_MAX_ATTEMPTS || 4);
 const INTERVAL_MS = Number(process.env.LLM_REVIEW_INTERVAL_MS || 60_000);
@@ -81,10 +94,47 @@ Reply with exactly this shape and nothing else:
   "ai_rationale": "<one or two sentences; name what you saw, or say you saw nothing>"
 }`;
 
+/**
+ * SYSTEM, less its two claims that fit only the original roles.
+ *
+ * Every extended role is still judged by the same fairness rules, the same
+ * evidence rules and the same JSON shape -- word for word. Only two phrases
+ * change: not every role is remote (sales is office-based), and "because this
+ * is a legal employer" explains formal writing from a paralegal applicant, not
+ * from a salesperson or a developer.
+ *
+ * Built by replacement so the two texts cannot drift apart, and each phrase
+ * must be found exactly once: if somebody rewords SYSTEM, this throws as the
+ * module loads rather than quietly sending the old claim to the new roles.
+ */
+const EXTENDED_SYSTEM_EDITS = [
+  ['These roles are remote positions in India and South Africa.', 'These roles are in India and South Africa.'],
+  ['because they were taught to, and because\n    this is a legal employer.', 'because they were taught to.'],
+];
+
+function replaceOnce(text, from, to) {
+  const count = text.split(from).length - 1;
+  if (count !== 1) {
+    throw new Error(`llmReview: expected ${JSON.stringify(from)} once in SYSTEM, found it ${count} times`);
+  }
+  return text.replace(from, () => to);
+}
+
+export const EXTENDED_SYSTEM = EXTENDED_SYSTEM_EDITS.reduce(
+  (text, [from, to]) => replaceOnce(text, from, to),
+  SYSTEM,
+);
+
+/** The system prompt for a role: SYSTEM itself unless it has a `review` block. */
+export function systemFor(role) {
+  return reviewFor(role) ? EXTENDED_SYSTEM : SYSTEM;
+}
+
 /** The application as the model sees it — no weights, no scores, no verdicts. */
 export function buildPrompt({ role, writtenAnswers, mcqAnswers, cvText }) {
   const roleMeta = ROLE_BY_API_KEY[role] ?? null;
   const questions = questionsFor(role) ?? [];
+  const review = reviewFor(role);
 
   // The questions THIS role was asked. For the two original roles that is the
   // shared set, so their prompt is byte for byte what it always was -- and
@@ -106,7 +156,15 @@ export function buildPrompt({ role, writtenAnswers, mcqAnswers, cvText }) {
     })
     .join('\n\n');
 
-  return `ROLE: ${roleMeta?.title ?? role}${roleMeta?.country ? ` (remote, ${roleMeta.country})` : ''}
+  // A role with a `review` block says where the work is done, and what the
+  // job needs, in its own words. Without one -- intern, paralegal -- both
+  // lines are exactly what they always were, and PROMPT_VERSION stays 1.
+  const header = review
+    ? `ROLE: ${roleMeta?.title ?? role} (${review.workplace})`
+    : `ROLE: ${roleMeta?.title ?? role}${roleMeta?.country ? ` (remote, ${roleMeta.country})` : ''}`;
+  const needs = review ? `\n\n--- WHAT THIS ROLE NEEDS ---\n${review.brief.join('\n')}` : '';
+
+  return `${header}${needs}
 
 --- THEIR CV ---
 ${cvText || '(no CV text was available — judge on the answers alone, and say so in the summary)'}
@@ -224,7 +282,7 @@ async function reviewOne(row) {
   }
 
   const { parsed, raw } = await askForJson({
-    system: SYSTEM,
+    system: systemFor(row.role),
     prompt: buildPrompt({
       role: row.role,
       writtenAnswers: row.written_answers,
@@ -265,7 +323,7 @@ export async function drainReviews() {
                   updated_at = now(), completed_at = now()
             WHERE applicant_id = $1`,
           [
-            row.applicant_id, llmModel(), PROMPT_VERSION,
+            row.applicant_id, llmModel(), promptVersionFor(row.role),
             review.fitmentScore, review.fitmentSummary, JSON.stringify(review.fitmentReasons),
             review.aiOpinion, review.aiRationale, cvChars, JSON.stringify(raw), cvNote,
           ],

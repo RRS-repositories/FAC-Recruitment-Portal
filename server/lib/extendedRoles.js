@@ -24,6 +24,8 @@ import { AIDEV_ROLE } from './aidev/role.js';
  *   hasVoice           whether a voice note is part of the application
  *   score(answers)     0-100, from the weights above
  *   normaliseProfile(body) / validateProfile(values) / profileForStorage(values)
+ *   review             { workplace, brief, promptVersion } -- what the model
+ *                      review is told about the job (see llmReview.js)
  *
  * Imported by roles.js and questions.js, which sit underneath validate.js, so
  * nothing reached from here may import validate.js, roles.js or questions.js
