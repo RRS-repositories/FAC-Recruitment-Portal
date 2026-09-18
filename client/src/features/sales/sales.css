@@ -1,0 +1,165 @@
+/* ==========================================================================
+   Sales & Customer Service (South Africa) — what only this role has.
+
+   Everything the role pages share (hero, stats, cards, form fields, choices,
+   CV upload, thanks) is in features/role-page/rolePage.css, scoped under
+   `.fac-role`. The page's root carries both classes (see SalesPage.jsx), so
+   the rules below — the voice note's recorder, prompts and player — sit
+   under `.fac-sales` beside them, and reach nothing on any other page.
+   Ported from the signed-off prototype (fac-sales-recruitment.jsx) rule for
+   rule, as the shared sheet is.
+   ========================================================================== */
+
+/* ---------- VOICE NOTE ---------- */
+.fac-sales .rec {
+  border: 2px dashed var(--line);
+  border-radius: 18px;
+  padding: 28px;
+  text-align: center;
+  background: #fbfaff;
+}
+.fac-sales .rec.live {
+  border-color: var(--red);
+  background: #fff5f5;
+}
+.fac-sales .mic {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--violet2), var(--violet));
+  color: #fff;
+  font-size: 34px;
+  box-shadow: 0 12px 28px rgba(109, 40, 217, 0.35);
+  border: none;
+}
+.fac-sales .mic.live {
+  background: linear-gradient(135deg, #f87171, var(--red));
+  animation: fac-sales-pulse 1.2s infinite;
+}
+/* Named for this page: keyframe names are global, and Tailwind ships its own
+   `pulse`. */
+@keyframes fac-sales-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 18px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+.fac-sales .timer {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  font-variant-numeric: tabular-nums;
+  margin: 6px 0;
+}
+.fac-sales .timer.warnt {
+  color: var(--amber);
+}
+.fac-sales .rec-hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+.fac-sales .bar {
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 10px auto 0;
+  max-width: 360px;
+}
+.fac-sales .bar div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--violet2), var(--violet));
+  width: 0;
+  transition: width 0.5s linear;
+}
+.fac-sales .or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  margin: 20px 0;
+}
+.fac-sales .or::before,
+.fac-sales .or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.fac-sales audio {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+}
+.fac-sales .prompts {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin: 0 0 20px;
+  text-align: left;
+}
+.fac-sales .prompts b {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.fac-sales .prompts ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.fac-sales .prompts li {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink2);
+}
+.fac-sales .prompts-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 10px;
+}
+
+/* ---------- LABELS ---------- */
+/* Sales shows "(min N words)" at the label's own size, as it has since it
+   shipped (commit 750520f), where the shared sheet follows the prototypes'
+   smaller <small>. Kept so the sales page does not change. */
+.fac-role.fac-sales label.f small {
+  font-size: inherit;
+}
+
+/* ---------- PROGRESS ---------- */
+/* Sales' five progress labels on the narrowest phones: a little tighter, so
+   "Assessment" fits whole instead of breaking mid-word. `.fac-role.fac-sales`
+   so it outranks the shared sheet's `.fac-role .prog` whichever stylesheet
+   the browser happens to load first. */
+@media (max-width: 360px) {
+  .fac-role.fac-sales .prog {
+    gap: 4px;
+  }
+  .fac-role.fac-sales .prog div {
+    letter-spacing: -0.2px;
+  }
+}
+
+/* a11y: no pulsing or sliding for anyone who has asked for less motion. The
+   recording state is still shown by colour, the ■ glyph and the hint text. */
+@media (prefers-reduced-motion: reduce) {
+  .fac-sales .mic.live {
+    animation: none;
+  }
+  .fac-sales .bar div {
+    transition: none;
+  }
+}

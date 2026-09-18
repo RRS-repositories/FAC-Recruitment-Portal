@@ -155,10 +155,12 @@ export const adminSignOut = () => setAdminToken(null);
 /** Who the held token belongs to. Also the cheapest way to test it is still valid. */
 export const adminMe = () => request('/recruit/admin/me', { headers: withAuth() });
 
-export function adminApplications({ status, role, q, page = 1, from, to, sort, ai } = {}) {
+export function adminApplications({ status, role, q, page = 1, from, to, sort, ai, scope } = {}) {
   const params = new URLSearchParams();
   if (status && status !== 'all') params.set('status', status);
   if (role && role !== 'all') params.set('role', role);
+  // A role's own page: the summary figures are that role's. Absent on /admin.
+  if (scope) params.set('scope', scope);
   if (q) params.set('q', q);
   // Both are left off when they mean "no narrowing", so the request says only
   // what was actually asked for. The server ignores anything it does not
@@ -336,6 +338,34 @@ export async function adminDownloadCv(id, filename) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * A sales applicant's voice note, as a Blob.
+ *
+ * Like the CV it needs the auth header, so it cannot be a plain <audio src>:
+ * the caller turns the Blob into an object URL. 404 means none was attached,
+ * 410 that it was deleted under the retention policy -- the status is kept on
+ * the error so the caller can say which.
+ */
+export async function adminVoiceNote(id) {
+  let response;
+  try {
+    response = await fetch(`/api/recruit/admin/applications/${id}/voice`, { headers: withAuth() });
+  } catch {
+    throw new ApiError(FRIENDLY[0], { status: 0 });
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const fallback =
+      response.status === 404
+        ? 'No voice note on file.'
+        : response.status === 410
+          ? 'This voice note was deleted under the retention policy.'
+          : 'Could not load that voice note.';
+    throw new ApiError(payload.error || fallback, { status: response.status, payload });
+  }
+  return response.blob();
 }
 export const apiHealth = () => request('/health');
 

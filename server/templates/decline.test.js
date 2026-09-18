@@ -14,7 +14,7 @@ import { declineReapply, declineSentence, DECLINE_REASONS } from '../../shared/d
  * and an invitation to apply again that the database would then refuse.
  */
 
-const KEYS = ['recruit.india.decline', 'recruit.sa.decline'];
+const KEYS = ['recruit.india.decline', 'recruit.sa.decline', 'recruit.sales.decline', 'recruit.aidev.decline'];
 
 const render = (key, code, note) =>
   getTemplate(key).render({

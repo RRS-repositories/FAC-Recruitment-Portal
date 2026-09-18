@@ -1,0 +1,21 @@
+-- recruit_017 — the AI Developer (India, remote) role.
+--
+-- A fourth role. Its details step (city, qualification, experience, GitHub
+-- link, employer, notice period, where they heard of us) is stored in the
+-- `profile` jsonb column recruit_016 already added, so the only thing the
+-- database needs is the role's name. It has no voice note; the voice columns
+-- stay NULL for it, as they do for the intern and paralegal roles.
+--
+-- Additive: no column, no default, no row rewritten.
+
+-- ── The role ────────────────────────────────────────────────────────────────
+--
+-- ALTER TYPE ... ADD VALUE is allowed inside a transaction block (PostgreSQL
+-- 12+; production runs 17), which is how the runner applies every migration.
+-- The one restriction is that the new value cannot be USED until that
+-- transaction commits -- so nothing in this file compares against, casts to
+-- or inserts it.
+--
+-- IF NOT EXISTS so a re-run, or a database where somebody already added it by
+-- hand, is a no-op rather than a failure.
+ALTER TYPE recruit_role ADD VALUE IF NOT EXISTS 'india_aidev';

@@ -15,7 +15,7 @@ import { REBOOK_EXPIRY_DAYS } from '../lib/rebookPolicy.js';
  * uninvited is not a favour. Two changes have since been asked for and made:
  * the India decline no longer claims a high volume of applications, and a
  * decline that names a reason the candidate can act on now carries an
- * invitation to apply again. The other seven are drafted here and need
+ * invitation to apply again. The rest are drafted here and need
  * sign-off before they reach a real candidate.
  *
  * Each template is:
@@ -103,15 +103,29 @@ registerTemplate({
 
 // ── Decisions — the client's own copy, unchanged ────────────────────────────
 
-const acceptEmail = ({ key, title, country, heading, opening, decision, timesNote, closing }) =>
+const acceptEmail = ({
+  key,
+  title,
+  country,
+  heading,
+  opening,
+  decision,
+  timesNote,
+  closing,
+  // Optional, and only the Sales and AI Developer roles pass them. Left out,
+  // both default to exactly what the four original decision emails have
+  // always had.
+  description = `Wording and layout supplied by the client, in the ${country} template. Unchanged.`,
+  sample = SAMPLE,
+}) =>
   registerTemplate({
     key,
     title,
     audience: 'candidate',
     when: 'When a manager accepts an applicant. Carries their booking link.',
-    description: `Wording and layout supplied by the client, in the ${country} template. Unchanged.`,
+    description,
     mergeFields: ['firstName', 'token'],
-    sample: SAMPLE,
+    sample,
     load,
     render: (data) => {
       const link = bookingUrl(data.token);
@@ -177,21 +191,32 @@ acceptEmail({
   closing: 'We look forward to speaking with you.',
 });
 
-const declineEmail = ({ key, title, country, opening, body, closing }) =>
+const DECLINE_MECHANICS =
+  'The reason paragraph appears only when a manager chose one, and the invitation to apply again '
+  + 'only for the reasons a candidate can act on. The preview below shows both.';
+
+const declineEmail = ({
+  key,
+  title,
+  country,
+  opening,
+  body,
+  closing,
+  // Optional, as for acceptEmail: only the Sales and AI Developer roles pass them.
+  description = `Wording and layout supplied by the client, in the ${country} template. ${DECLINE_MECHANICS}`,
+  sample = SAMPLE,
+}) =>
   registerTemplate({
     key,
     title,
     when: 'When a manager declines an applicant.',
-    description:
-      `Wording and layout supplied by the client, in the ${country} template. The reason paragraph `
-      + 'appears only when a manager chose one, and the invitation to apply again only for the '
-      + 'reasons a candidate can act on. The preview below shows both.',
+    description,
     mergeFields: ['firstName', 'declineSentence', 'declineReapply'],
     // The preview carries a reason and its invitation, because a template
     // screen that only ever shows the plainest version of an email is not
     // showing the manager what they are about to send.
     sample: {
-      ...SAMPLE,
+      ...sample,
       declineSentence: declineSentence('answers_generic'),
       declineReapply: declineReapply('answers_generic'),
       reapplyUrl: publicBaseUrl(),
@@ -266,6 +291,110 @@ declineEmail({
     'Thank you for taking the time to apply for the full-time Paralegal position at Fast Action Claims.',
   body: "After careful consideration, we've decided not to take your application further on this occasion. We had a strong field of applicants and the decision was a close one.",
   closing: 'We appreciate your interest in the firm and wish you every success in your career.',
+});
+
+// ── Decisions — Sales & Customer Service (South Africa) ─────────────────────
+
+/*
+ * DRAFT. Unlike the four above, these are NOT the client's words: the business
+ * has put the Sales wording on hold, and a Sales candidate still has to be told
+ * something when a manager decides. So this is deliberately plain, neutral
+ * wording built on the same two layouts, with nothing borrowed from the
+ * paralegal copy. The title and description say so on the templates screen,
+ * where it will be seen before it is approved.
+ *
+ * The sample is its own invented Sales candidate, so the preview a manager
+ * checks is the Sales email and not a paralegal one wearing its key.
+ */
+const SALES_SAMPLE = {
+  ...SAMPLE,
+  firstName: 'Thandi',
+  fullName: 'Thandi Example',
+  email: 'thandi@example.com',
+  roleTitle: 'Sales & Customer Service',
+  roleCountry: 'South Africa',
+  timezone: 'Africa/Johannesburg',
+  localTime: '15:00',
+};
+
+const SALES_DRAFT_NOTE =
+  'DRAFT — wording on hold. Neutral placeholder wording for the Sales & Customer Service role, '
+  + 'written here rather than supplied by the client; the business has put the final wording on '
+  + 'hold, so this needs sign-off before it reaches a real candidate.';
+
+acceptEmail({
+  key: 'recruit.sales.accept',
+  title: 'Shortlisted — Sales & Customer Service (DRAFT — wording on hold)',
+  country: 'South Africa',
+  heading: 'Interview invitation',
+  opening: 'Thank you for applying for the Sales & Customer Service position at Fast Action Claims.',
+  decision: "We're pleased to let you know that your application has been shortlisted.",
+  timesNote: ', shown in your local time (SAST)',
+  closing: 'We look forward to speaking with you.',
+  description: SALES_DRAFT_NOTE,
+  sample: SALES_SAMPLE,
+});
+
+declineEmail({
+  key: 'recruit.sales.decline',
+  title: 'Not successful — Sales & Customer Service (DRAFT — wording on hold)',
+  country: 'South Africa',
+  opening:
+    'Thank you for taking the time to apply for the Sales & Customer Service position at Fast Action Claims.',
+  body: "After careful consideration, we've decided not to take your application further on this occasion.",
+  closing: 'We appreciate your interest in the firm and wish you every success in your career.',
+  description: `${SALES_DRAFT_NOTE} ${DECLINE_MECHANICS}`,
+  sample: SALES_SAMPLE,
+});
+
+// ── Decisions — AI Developer (India) ────────────────────────────────────────
+
+/*
+ * DRAFT, exactly as the Sales pair above: no supplied wording exists for this
+ * role yet, and an AI Developer candidate still has to be told something when
+ * a manager decides. Plain, neutral wording on the same two layouts, nothing
+ * borrowed from the paralegal copy, and the templates screen says it is a
+ * draft. Its own invented sample, so the preview is this role's email.
+ */
+const AIDEV_SAMPLE = {
+  ...SAMPLE,
+  firstName: 'Arjun',
+  fullName: 'Arjun Example',
+  email: 'arjun@example.com',
+  roleTitle: 'AI Developer',
+  roleCountry: 'India',
+  timezone: 'Asia/Kolkata',
+  localTime: '18:30',
+};
+
+const AIDEV_DRAFT_NOTE =
+  'DRAFT — wording on hold. Neutral placeholder wording for the AI Developer role, '
+  + 'written here rather than supplied by the client; there is no approved wording yet, '
+  + 'so this needs sign-off before it reaches a real candidate.';
+
+acceptEmail({
+  key: 'recruit.aidev.accept',
+  title: 'Shortlisted — AI Developer (DRAFT — wording on hold)',
+  country: 'India',
+  heading: 'Interview invitation',
+  opening: 'Thank you for applying for the AI Developer position at Fast Action Claims.',
+  decision: "We're pleased to let you know that your application has been shortlisted.",
+  timesNote: ', shown in your local time (IST)',
+  closing: 'We look forward to speaking with you.',
+  description: AIDEV_DRAFT_NOTE,
+  sample: AIDEV_SAMPLE,
+});
+
+declineEmail({
+  key: 'recruit.aidev.decline',
+  title: 'Not successful — AI Developer (DRAFT — wording on hold)',
+  country: 'India',
+  opening:
+    'Thank you for taking the time to apply for the AI Developer position at Fast Action Claims.',
+  body: "After careful consideration, we've decided not to take your application further on this occasion.",
+  closing: 'We appreciate your interest in the firm and wish you every success in your career.',
+  description: `${AIDEV_DRAFT_NOTE} ${DECLINE_MECHANICS}`,
+  sample: AIDEV_SAMPLE,
 });
 
 // ── Sarah's posts to the Mattermost interview channel ───────────────────────
@@ -742,4 +871,6 @@ registerTemplate({
 });
 
 /** Imported for its side effects; exported so a caller can assert it loaded. */
-export const TEMPLATE_COUNT = 11;
+// Every registerTemplate() in this file. It had fallen behind (it read 11 while
+// 17 were registered); templates.test.js now pins it to the registry.
+export const TEMPLATE_COUNT = 21;

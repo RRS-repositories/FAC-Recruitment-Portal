@@ -43,7 +43,7 @@ export function HomePage() {
           {Object.values(ROLES).map((role) => (
             <Link
               key={role.key}
-              to={`/recruitment/${role.key}`}
+              to={role.path ?? `/recruitment/${role.key}`}
               className="group block overflow-hidden rounded-[18px] bg-white shadow-card transition-transform duration-200 ease-brand hover:-translate-y-0.5 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
             >
               {/* The photograph is knocked back into the brand violet the same

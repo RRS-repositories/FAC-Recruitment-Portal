@@ -3,6 +3,21 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { HomePage } from '@/pages/HomePage';
 import { RoleLandingPage } from '@/pages/RoleLandingPage';
 import { ScrollToTop } from '@/components/layout/ScrollToTop';
+import {
+  SALES_APPLY_PATH,
+  SALES_APPLY_REDIRECTS,
+  SALES_APPLY_SEGMENT,
+  SALES_PATH,
+  SALES_REDIRECTS,
+} from '@/features/sales/paths';
+import {
+  AIDEV_APPLY_PATH,
+  AIDEV_APPLY_REDIRECTS,
+  AIDEV_APPLY_SEGMENT,
+  AIDEV_PATH,
+  AIDEV_REDIRECTS,
+} from '@/features/aidev/paths';
+import { APPLICANTS_PATH, ROLE_APPLICANTS_BASE } from '@/features/dashboard/roleNav';
 
 // The application flow, dashboard and booking page are each reached
 // deliberately rather than browsed to, so they are split out and never weigh
@@ -15,6 +30,12 @@ const CalendarPage = lazy(() => import('@/pages/CalendarPage'));
 const BookingPage = lazy(() => import('@/pages/BookingPage'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const PrivacyPage = lazy(() => import('@/pages/PrivacyPage'));
+// Sales & Customer Service (South Africa) has its own page, form and
+// stylesheet, all in features/sales/ and all in this one chunk.
+const SalesPage = lazy(() => import('@/features/sales/SalesPage'));
+// AI Developer (India) likewise: features/aidev/, its own chunk. Both are
+// built on the shared role-page kit (features/role-page/).
+const AiDevPage = lazy(() => import('@/features/aidev/AiDevPage'));
 
 /** Holds the fold while a split chunk arrives, so nothing jumps. */
 function RouteFallback() {
@@ -39,6 +60,35 @@ export default function App() {
             on the main site: /recruitment/intern and /recruitment/paralegal. */}
         {/* Before the :roleKey route, or "privacy" would be read as a role. */}
         <Route path="/recruitment/privacy" element={split(PrivacyPage)} />
+        {/* Also before :roleKey and apply/:roleKey: sales has its own page.
+            Its URL lives only in features/sales/paths.js; the redirects keep
+            /recruitment/apply/sales (and the old address, should the URL ever
+            move) from reaching the other roles' page and form. */}
+        {/* The landing and the form share one SalesPage, which stays mounted
+            between them (the children render nothing of their own). */}
+        <Route path={SALES_PATH} element={split(SalesPage)}>
+          <Route index element={null} />
+          <Route path={SALES_APPLY_SEGMENT} element={null} />
+        </Route>
+        {SALES_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={SALES_PATH} replace />} />
+        ))}
+        {SALES_APPLY_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={SALES_APPLY_PATH} replace />} />
+        ))}
+        {/* AI Developer, the same way: its URL lives only in
+            features/aidev/paths.js, and /recruitment/apply/ai-developer is
+            sent to its own form rather than the generic one. */}
+        <Route path={AIDEV_PATH} element={split(AiDevPage)}>
+          <Route index element={null} />
+          <Route path={AIDEV_APPLY_SEGMENT} element={null} />
+        </Route>
+        {AIDEV_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={AIDEV_PATH} replace />} />
+        ))}
+        {AIDEV_APPLY_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to={AIDEV_APPLY_PATH} replace />} />
+        ))}
         <Route path="/recruitment/:roleKey" element={<RoleLandingPage />} />
         <Route path="/recruitment/apply/:roleKey" element={split(ApplyPage)} />
 
@@ -48,6 +98,11 @@ export default function App() {
         <Route path="/book/:token" element={split(BookingPage)} />
         <Route path="/recruitment/book/:token" element={split(BookingPage)} />
         <Route path="/admin" element={split(DashboardPage)} />
+        {/* The same applicants page, one role at a time — the per-role links in
+            the admin menu. The page reads the role from the URL; an unknown
+            one goes back to /admin. The bare prefix has no page of its own. */}
+        <Route path={`${ROLE_APPLICANTS_BASE}/:roleKey`} element={split(DashboardPage)} />
+        <Route path={ROLE_APPLICANTS_BASE} element={<Navigate to={APPLICANTS_PATH} replace />} />
         <Route path="/admin/templates" element={split(TemplatesPage)} />
         <Route path="/admin/calendar" element={split(CalendarPage)} />
         <Route path="/admin/settings" element={split(SettingsPage)} />

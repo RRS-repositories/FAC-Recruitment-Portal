@@ -17,10 +17,14 @@ import { dedupeKey } from './outboxPolicy.js';
 const ACCEPT_TEMPLATE = {
   india_intern: 'recruit.india.accept',
   sa_paralegal: 'recruit.sa.accept',
+  sa_sales: 'recruit.sales.accept',
+  india_aidev: 'recruit.aidev.accept',
 };
 const DECLINE_TEMPLATE = {
   india_intern: 'recruit.india.decline',
   sa_paralegal: 'recruit.sa.decline',
+  sa_sales: 'recruit.sales.decline',
+  india_aidev: 'recruit.aidev.decline',
 };
 
 const HOUR = 3_600_000;

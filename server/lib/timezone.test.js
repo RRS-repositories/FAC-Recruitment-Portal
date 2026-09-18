@@ -27,6 +27,7 @@ test('the scheduling anchor is UK time', () => {
 test('each role maps to the right candidate timezone', () => {
   assert.equal(CANDIDATE_TZ.india_intern, 'Asia/Kolkata');
   assert.equal(CANDIDATE_TZ.sa_paralegal, 'Africa/Johannesburg');
+  assert.equal(CANDIDATE_TZ.sa_sales, 'Africa/Johannesburg');
 });
 
 test('a 09:00 UK slot in summer is 13:30 IST and 10:00 SAST', () => {

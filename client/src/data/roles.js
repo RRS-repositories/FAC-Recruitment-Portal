@@ -1,5 +1,9 @@
 import indiaPhoto from '@/assets/role-india.jpg';
 import southAfricaPhoto from '@/assets/role-south-africa.jpg';
+import salesPhoto from '@/features/sales/assets/sales-hero.jpg';
+import { SALES_PATH } from '@/features/sales/paths';
+import aiDevPhoto from '@/features/aidev/assets/aidev-hero.jpg';
+import { AIDEV_PATH } from '@/features/aidev/paths';
 
 /**
  * Role marketing content — and nothing else.
@@ -30,6 +34,8 @@ export const ROLES = {
     tzLabel: 'IST',
     short: 'India · Internship',
     title: 'Paralegal Internship',
+    // The admin menu's name for it: "India – Intern" (features/dashboard/roleNav.js).
+    navName: 'Intern',
     location: 'Remote from India',
     contractType: 'Paid internship → full-time contract',
     source: 'Internshala',
@@ -68,6 +74,7 @@ export const ROLES = {
     tzLabel: 'SAST',
     short: 'South Africa · Full-time',
     title: 'Paralegal — Full-time',
+    navName: 'Paralegal',
     location: 'Remote from South Africa',
     contractType: 'Full-time permanent contract',
     source: 'Direct',
@@ -91,6 +98,93 @@ export const ROLES = {
       { value: '£12M+', label: 'Recovered for clients' },
       { value: '7 days', label: 'Average time to interview' },
       { value: '100%', label: 'Remote' },
+    ],
+  },
+
+  // Sales has its own page and form (features/sales/) — a voice note, a
+  // different submit endpoint and its own design — so it does NOT use
+  // RoleLandingPage or ApplyPage. `path` is where the home page card links;
+  // App.jsx sends /recruitment/apply/sales there too. The copy below is the
+  // sales design's own words, kept in the same shape as the entries above so
+  // anything iterating ROLES (home cards, dashboard filter) reads it the same.
+  sales: {
+    key: 'sales',
+    apiKey: 'sa_sales',
+    path: SALES_PATH,
+    country: 'South Africa',
+    countryCode: 'ZA',
+    timezone: 'Africa/Johannesburg',
+    tzLabel: 'SAST',
+    short: 'South Africa · Sales',
+    title: 'Sales & Customer Service',
+    navName: 'Sales',
+    location: 'Cape Town / Johannesburg / remote SA',
+    contractType: 'Permanent, full-time role',
+    source: 'Direct',
+    photo: salesPhoto,
+    // Where the sales design crops it on a phone: both faces stay in frame.
+    photoPosition: '38% 30%',
+    pill: 'Now hiring · Cape Town / Johannesburg / remote SA',
+    headline: ['Sales & customer service.', 'South Africa.'],
+    sub: "Join one of the UK's fastest-growing law firms. You'll speak to people who may have been treated unfairly by lenders and bookmakers — and help them do something about it.",
+    whyHeading: 'What the role is',
+    why: "You'll call people who've enquired about a claim, explain in plain English who we are and how it works, and sign up the ones we can genuinely help. You'll also look after existing clients — answering questions, keeping them updated and making sure nobody feels forgotten.",
+    contract:
+      "We're an SRA-regulated law firm. That means honesty on every call, no pressure tactics and no promises we can't keep. If you're good at talking to people and you like a target, you'll do well here.",
+    need: [
+      'Permanent, full-time role',
+      'UK hours: 9:00 AM – 6:00 PM UK time',
+      '45-min lunch plus a 15-min afternoon break',
+      'Full training on our claims and scripts',
+    ],
+    stats: [
+      { value: '£12m+', label: 'recovered for clients' },
+      { value: '120+', label: 'staff across UK, SA & India' },
+      { value: 'R13k', label: 'on-target monthly earnings' },
+      { value: 'UK hrs', label: '9am – 6pm, Mon–Fri' },
+    ],
+  },
+
+  // AI Developer has its own page and form too (features/aidev/, built on
+  // the same role-page kit as sales) — so, like sales, it does NOT use
+  // RoleLandingPage or ApplyPage. `path` is where the home page card links;
+  // App.jsx sends /recruitment/apply/ai-developer there too. The copy is the
+  // AI developer design's own words, in the same shape as the entries above.
+  'ai-developer': {
+    key: 'ai-developer',
+    apiKey: 'india_aidev',
+    path: AIDEV_PATH,
+    country: 'India',
+    countryCode: 'IN',
+    timezone: 'Asia/Kolkata',
+    tzLabel: 'IST',
+    short: 'India · AI Developer',
+    title: 'AI Developer',
+    navName: 'AI Developer',
+    location: 'Remote from India',
+    contractType: 'Full-time, permanent',
+    source: 'Direct',
+    photo: aiDevPhoto,
+    // The developer sits right of centre; this keeps his face in a card.
+    photoPosition: '72% 30%',
+    pill: 'Now hiring · Remote, India · UK hours',
+    headline: ['AI developer.', 'Build the platform with us.'],
+    sub: "We're a UK law firm building our own AI-driven CRM, automation and agent platform. We need a developer who already understands CRMs, workflows and LLM tooling — and wants to build something bigger.",
+    whyHeading: "What you'd be building",
+    why: 'We run a custom CRM, an email-processing AI (ECHOE), WhatsApp document-collection workflows, an AI customer-service team and an AI "office" of agents that work inside the CRM. All of it is built and hosted by us. You\'ll join the team extending it.',
+    contract:
+      "This isn't a ticket-queue job. You'll take a feature from a plain-English brief through design, build, test and deploy, working directly with our UK head of development and using AI coding tools as a normal part of the workflow.",
+    need: [
+      'Real experience with CRM systems — the data model, integrations and the messy edges',
+      "Automations you've built and kept running: n8n, Make, custom code, webhooks, queues",
+      'Production use of LLM APIs — structured outputs, tool calls, cost and error handling',
+      'Comfortable on a Linux VPS with Docker, Postgres and Git',
+    ],
+    stats: [
+      { value: '1 CRM', label: 'built in-house, 20k+ clients' },
+      { value: '50+', label: 'live automations & agents' },
+      { value: 'Remote', label: 'work from anywhere in India' },
+      { value: 'UK hrs', label: '9am – 6pm UK, Mon–Fri' },
     ],
   },
 };

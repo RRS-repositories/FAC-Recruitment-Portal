@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { pool } from '../lib/db.js';
 import {
   ROLES,
@@ -12,6 +13,9 @@ import {
   usingBootstrap,
 } from '../lib/adminAuth.js';
 import { resolveCv, cvExists } from '../lib/storage.js';
+import { writtenQuestionsFor } from '../lib/roles.js';
+import { publicQuestionsFor } from '../lib/questions.js';
+import { parseRange, voiceContentType, voiceFilename } from '../lib/voiceDownload.js';
 import { generateBookingToken, tokenExpiry } from '../lib/bookingToken.js';
 import { notifyDecision, notifyMeetingLink, notifyNoShow } from '../lib/notify.js';
 import { isDeclineReason, NO_REASON } from '../../shared/declineReasons.js';
@@ -153,7 +157,9 @@ const TAB_COUNTS = `
 
 // The summary counts every application, not just the filtered page: it is the
 // state of the pipeline, and a figure that moved when you typed in the search
-// box would be worse than no figure at all.
+// box would be worse than no figure at all. $1 is the page's scope: null on
+// /admin (the whole pipeline, as it always was), one role on that role's own
+// page, where the pipeline in question is that role's.
 const SUMMARY = `
   SELECT
     count(*)::int                                              AS total,
@@ -168,6 +174,7 @@ const SUMMARY = `
     SELECT status FROM recruit_interviews
      WHERE applicant_id = a.id ORDER BY created_at DESC LIMIT 1
   ) i ON true
+  WHERE ($1::recruit_role IS NULL OR a.role = $1)
 `;
 
 /**
@@ -177,7 +184,8 @@ const SUMMARY = `
  * Whole pipeline, like SUMMARY, not the filtered page. Only an accepted
  * applicant whose LATEST interview is the unbooked final chance counts: once
  * they book, or the link expires and the sweep closes the application, it is
- * no longer pending. Through to_jsonb, like every new read.
+ * no longer pending. Through to_jsonb, like every new read. $1 is the page's
+ * scope, as for SUMMARY.
  */
 const REBOOKS = `
   SELECT a.id, a.full_name, a.email, i.token_expires_at
@@ -188,7 +196,8 @@ const REBOOKS = `
         FROM recruit_interviews li
        WHERE li.applicant_id = a.id ORDER BY li.created_at DESC LIMIT 1
     ) i ON true
-   WHERE a.status = 'accepted'
+   WHERE ($1::recruit_role IS NULL OR a.role = $1)
+     AND a.status = 'accepted'
      AND i.status = 'invited'
      AND i.is_final_chance
      AND i.token_expires_at > now()
@@ -720,7 +729,12 @@ export function createAdminRouter() {
 
   router.get('/applications', async (req, res) => {
     const status = STATUSES.has(req.query.status) ? req.query.status : null;
-    const role = ['india_intern', 'sa_paralegal'].includes(req.query.role) ? req.query.role : null;
+    const ROLE_KEYS = ['india_intern', 'sa_paralegal', 'sa_sales', 'india_aidev'];
+    const role = ROLE_KEYS.includes(req.query.role) ? req.query.role : null;
+    // The page's scope, separate from the role filter: a role's own page sends
+    // it so the tiles and re-book figures are that role's. /admin never sends
+    // it, and its tiles stay the whole pipeline whichever role button is on.
+    const scope = ROLE_KEYS.includes(req.query.scope) ? req.query.scope : null;
     const search =
       typeof req.query.q === 'string' && req.query.q.trim() ? req.query.q.trim().slice(0, 100) : null;
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
@@ -749,10 +763,10 @@ export function createAdminRouter() {
       const [list, count, summary, tabs, rebooks] = await Promise.all([
         pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE, from, to, aiLevel, sort]),
         pool.query(COUNT, [status, role, search, from, to, aiLevel]),
-        pool.query(SUMMARY),
+        pool.query(SUMMARY, [scope]),
         pool.query(TAB_COUNTS, [role, search, from, to, aiLevel]),
         // Not asked at all while the feature is off: there is nothing to show.
-        noShowRebook ? pool.query(REBOOKS) : Promise.resolve({ rows: [] }),
+        noShowRebook ? pool.query(REBOOKS, [scope]) : Promise.resolve({ rows: [] }),
       ]);
       const warnBefore = Date.now() + REBOOK_WARN_HOURS * 3_600_000;
 
@@ -764,7 +778,7 @@ export function createAdminRouter() {
         total: count.rows[0].total,
         summary: summary.rows[0],
         // Beside the status filters. Separate from `summary`, which stays the
-        // whole pipeline however the screen is filtered.
+        // whole pipeline (or the page's role) however the screen is filtered.
         tabs: tabs.rows[0],
         // Whether the no-show re-book is switched on. The dashboard shows its
         // button, chips, tile and banner only when it is -- off, the screen is
@@ -835,6 +849,11 @@ export function createAdminRouter() {
         // Shown beside the model's number so a manager can see the two
         // disagree, which is the only reason to keep both.
         ruleScore: rows[0].rule_score,
+        // The questions this applicant was actually asked, so the dashboard
+        // can label their answers without holding its own copy per role.
+        // Weights stripped, as on the public form.
+        writtenQuestions: writtenQuestionsFor(rows[0].role),
+        assessment: publicQuestionsFor(rows[0].role),
       });
     } catch (error) {
       console.error('[fac-recruit] admin detail failed:', error.message);
@@ -1401,6 +1420,78 @@ export function createAdminRouter() {
       return undefined;
     } catch (error) {
       console.error('[fac-recruit] cv download failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not fetch that file.' });
+    }
+  });
+
+  /**
+   * Streams the voice note (Sales applicants). Modelled on the CV route above,
+   * and for the same reasons: not a public URL, every fetch logged against the
+   * manager who made it.
+   *
+   * The columns are read through to_jsonb, not by name. The route is
+   * registered on every deploy, and a database without recruit_016 must
+   * answer "no voice note" rather than 500 -- through to_jsonb a missing
+   * column simply reads as NULL.
+   */
+  router.get('/applications/:id/voice', async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT to_jsonb(a) ->> 'voice_object_key' AS voice_object_key,
+                to_jsonb(a) ->> 'voice_filename'   AS voice_filename,
+                to_jsonb(a) ->> 'voice_mime'       AS voice_mime,
+                to_jsonb(a) ->> 'voice_deleted_at' AS voice_deleted_at
+           FROM recruit_applicants a WHERE a.id = $1`,
+        [req.params.id],
+      );
+      const row = rows[0];
+      if (row?.voice_deleted_at) {
+        // Deleted on purpose, and saying so is the honest answer -- as for CVs.
+        return res.status(410).json({
+          ok: false,
+          error: 'That voice note was deleted under our retention policy.',
+        });
+      }
+      if (!row?.voice_object_key) {
+        return res.status(404).json({ ok: false, error: 'No voice note on file.' });
+      }
+      if (!(await cvExists(row.voice_object_key))) {
+        return res.status(404).json({ ok: false, error: 'That file is missing from storage.' });
+      }
+
+      const file = resolveCv(row.voice_object_key);
+      const { size } = await stat(file);
+
+      console.log(`[fac-recruit] ${req.admin.email} fetched voice note for ${req.params.id}`);
+
+      // `attachment`, and the stored type echoed back only when it is audio.
+      // Anything else -- or nothing -- goes out as opaque bytes, never as
+      // something a browser might decide to render.
+      res.set('Content-Disposition', `attachment; filename="${voiceFilename(row.voice_filename)}"`);
+      res.set('Content-Type', voiceContentType(row.voice_mime));
+      res.set('X-Content-Type-Options', 'nosniff');
+      res.set('Accept-Ranges', 'bytes');
+
+      // One byte range, so an <audio> element pointed straight here can seek.
+      // A range we cannot satisfy is 416; no range, several ranges or anything
+      // we do not parse gets the whole file, which is always a correct answer.
+      const range = parseRange(req.headers.range, size);
+      if (range === 'unsatisfiable') {
+        res.set('Content-Range', `bytes */${size}`);
+        return res.status(416).end();
+      }
+      if (range) {
+        res.status(206);
+        res.set('Content-Range', `bytes ${range.start}-${range.end}/${size}`);
+        res.set('Content-Length', String(range.end - range.start + 1));
+        createReadStream(file, range).pipe(res);
+        return undefined;
+      }
+      res.set('Content-Length', String(size));
+      createReadStream(file).pipe(res);
+      return undefined;
+    } catch (error) {
+      console.error('[fac-recruit] voice download failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not fetch that file.' });
     }
   });

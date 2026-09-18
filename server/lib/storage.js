@@ -50,6 +50,9 @@ function extensionOf(filename) {
   return ext in ALLOWED ? ext : null;
 }
 
+/** 5242880 → "5", 10485760 → "10"; a limit that is not whole MB keeps one decimal. */
+const megabytes = (bytes) => String(Math.round((bytes / (1024 * 1024)) * 10) / 10);
+
 function looksLike(buffer, ext) {
   const signature = SIGNATURES.find((s) => s.ext === ext);
   if (!signature) return true;
@@ -63,9 +66,11 @@ function looksLike(buffer, ext) {
  * bytes decide whether it is what it claims. A `.pdf` that is really an
  * executable is not stored.
  */
-export async function storeCv({ applicantId, originalName, buffer }) {
+export async function storeCv({ applicantId, originalName, buffer, maxBytes = MAX_BYTES }) {
   if (!buffer?.length) throw new UploadError('No file was uploaded.');
-  if (buffer.length > MAX_BYTES) throw new UploadError('That file is larger than 5 MB.');
+  // `maxBytes` exists for the sales role, which accepts a 10 MB CV. Everyone
+  // else gets the default, and with it exactly the message they always had.
+  if (buffer.length > maxBytes) throw new UploadError(`That file is larger than ${megabytes(maxBytes)} MB.`);
 
   const ext = extensionOf(originalName);
   if (!ext) throw new UploadError('Please upload a PDF or Word document.');
