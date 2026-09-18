@@ -67,6 +67,13 @@ const MB = 1024 * 1024;
  * the voice note's again by checkVoiceFile and storeVoice. Without one, it is
  * the CV's own ceiling. Still memory storage, for the same reason.
  *
+ * One byte over the ceiling, because multer versions disagree at the edge:
+ * 2.3 accepts a file of exactly fileSize bytes, 2.1 (the CRM's lockfile, so
+ * production) refuses it. With the extra byte, multer only catches files
+ * plainly too big; the exact limit is checked here, straight after parsing and
+ * before any database work, the same on every version and with the same
+ * message.
+ *
  * Returned as middleware that turns multer's refusals into answers the form
  * can show. A multer error otherwise travels to the host application's error
  * handler and comes back as a 500 "something went wrong" -- which, for a
@@ -79,23 +86,28 @@ function extendedUpload(extended) {
   const parse = multer({
     storage: multer.memoryStorage(),
     limits: {
-      fileSize: extended.hasVoice ? extended.limits.voiceMaxBytes : extended.limits.cvMaxBytes,
+      fileSize: (extended.hasVoice ? extended.limits.voiceMaxBytes : extended.limits.cvMaxBytes) + 1,
       files: fileFields.length,
     },
   }).fields(fileFields.map((name) => ({ name, maxCount: 1 })));
 
+  const maxBytes = { cv: extended.limits.cvMaxBytes, voice: extended.limits.voiceMaxBytes };
+  const tooLarge = (field) =>
+    field === 'voice' ? VOICE_MESSAGES.tooLarge : `That file is larger than ${extended.limits.cvMaxBytes / MB} MB.`;
+
   return function upload(req, res, next) {
     parse(req, res, (error) => {
-      if (!error) return next();
+      if (!error) {
+        const oversized = fileFields.find((name) => req.files?.[name]?.[0]?.size > maxBytes[name]);
+        if (oversized) return res.status(400).json({ ok: false, errors: { [oversized]: tooLarge(oversized) } });
+        return next();
+      }
       if (!(error instanceof multer.MulterError)) return next(error);
 
       const field = fileFields.includes(error.field) ? error.field : null;
       let message = null;
       if (error.code === 'LIMIT_FILE_SIZE') {
-        message =
-          field === 'voice'
-            ? VOICE_MESSAGES.tooLarge
-            : `That file is larger than ${extended.limits.cvMaxBytes / MB} MB.`;
+        message = tooLarge(field);
       } else if (error.code === 'LIMIT_UNEXPECTED_FILE' && field) {
         // A known field sent twice. The form never does that; one file per box.
         message = field === 'voice' ? 'Please add just one voice note.' : 'Please attach just one CV.';

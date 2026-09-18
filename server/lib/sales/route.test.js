@@ -321,7 +321,8 @@ test('/sales: a 10 MB CV is accepted; one byte more is refused under cv, and not
   const refused = await post(`${base}/sales`, salesForm({}, { cv: { buffer: big, name: 'cv.pdf' } }));
   assert.equal(refused.status, 400);
   assert.deepEqual(refused.body, { ok: false, errors: { cv: 'That file is larger than 10 MB.' } });
-  assert.ok(refused.log.some((e) => e.sql === 'ROLLBACK'));
+  // Refused as soon as the upload is read: no transaction is ever opened.
+  assert.equal(refused.log.some((e) => e.sql === 'BEGIN'), false);
   assert.deepEqual(await filesOnDisk(), []);
 });
 
