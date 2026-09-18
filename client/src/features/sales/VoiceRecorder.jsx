@@ -293,8 +293,10 @@ export function VoiceRecorder({ value, onChange, limits, onRecordingChange }) {
       {value ? (
         <div>
           <div className="filepill">
-            <span aria-hidden="true">🔊</span> {value.name} · {formatClock(value.duration)} ·{' '}
-            {formatMB(value.size)} MB{' '}
+            <span>
+              <span aria-hidden="true">🔊</span> {value.name} · {formatClock(value.duration)} ·{' '}
+              {formatMB(value.size)} MB
+            </span>{' '}
             <button type="button" onClick={() => onChange(null)} title="Remove" aria-label="Remove voice note">
               ×
             </button>

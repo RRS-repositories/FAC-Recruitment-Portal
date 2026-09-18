@@ -31,7 +31,7 @@ export function WrittenStep({ questions, values, onChange, telemetry, serverMess
           <div key={q.id}>
             <label className="f" htmlFor={id}>
               {i + 1}. {q.label}
-              {q.minWords ? <small> (min {q.minWords} words)</small> : null}
+              {q.minWords ? <>{' '}<small>(min {q.minWords} words)</small></> : null}
             </label>
             <textarea
               id={id}

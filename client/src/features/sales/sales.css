@@ -452,6 +452,9 @@
   color: var(--ink2);
 }
 .fac-sales label.f small {
+  /* The design's "(min N words)" is the label's own size; the portal's base
+     reset shrinks <small> to 80%, so it is set back here. */
+  font-size: inherit;
   font-weight: 500;
   color: var(--muted);
 }

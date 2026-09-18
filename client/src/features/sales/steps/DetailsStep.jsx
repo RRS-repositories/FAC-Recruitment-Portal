@@ -100,7 +100,7 @@ export function DetailsStep({ values, onChange, options, serverErrors, onClearSe
 
       <div className="warn">
         <b>Please write your own answers.</b> We check for AI-written responses. Anything that looks
-        generated is flagged to the hiring manager and will count against you. We&rsquo;d much
+        generated is flagged to the hiring manager and will count against you. We'd much
         rather read your real words, spelling mistakes and all.
       </div>
 

@@ -88,7 +88,9 @@ export function CvStep({
 
       {value ? (
         <div className="filepill">
-          <span aria-hidden="true">📄</span> {value.name} · {formatMB(value.size)} MB{' '}
+          <span>
+            <span aria-hidden="true">📄</span> {value.name} · {formatMB(value.size)} MB
+          </span>{' '}
           <button
             type="button"
             onClick={() => onChange(null)}
@@ -105,7 +107,7 @@ export function CvStep({
 
       <div className="warn info">
         By submitting you confirm your answers are your own work and that the information
-        you&rsquo;ve given is accurate. We&rsquo;ll email you from {RECRUIT_EMAIL} within 48 hours.
+        you've given is accurate. We'll email you from {RECRUIT_EMAIL} within 48 hours.
       </div>
 
       <ErrorLine message={error || submitError} />

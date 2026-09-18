@@ -25,17 +25,17 @@ export const ThanksScreen = forwardRef(function ThanksScreen(
           Application received
         </h1>
         <p>
-          Thanks {firstName}. We&rsquo;ve got your answers, your voice note and your CV
+          Thanks {firstName}. We've got your answers, your voice note and your CV
           {acknowledged ? (
             <>
               {' '}
-              — and we&rsquo;ve sent a confirmation to <b>{email}</b>
+              — and we've sent a confirmation to <b>{email}</b>
             </>
           ) : null}
           .
         </p>
         <p>
-          You&rsquo;ll hear from us at <b>{RECRUIT_EMAIL}</b> within 48 hours. If you&rsquo;re
+          You'll hear from us at <b>{RECRUIT_EMAIL}</b> within 48 hours. If you're
           shortlisted, the email will include a link to book a video interview at a time that suits
           you.
         </p>

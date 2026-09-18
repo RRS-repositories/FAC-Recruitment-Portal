@@ -30,7 +30,7 @@ export function SalesLanding({ onStart }) {
           </div>
           <h1>Sales &amp; customer service. South Africa.</h1>
           <p className="lead">
-            Join one of the UK&rsquo;s fastest-growing law firms. You&rsquo;ll speak to people who
+            Join one of the UK's fastest-growing law firms. You'll speak to people who
             may have been treated unfairly by lenders and bookmakers — and help them do something
             about it.
           </p>
@@ -64,20 +64,20 @@ export function SalesLanding({ onStart }) {
           <div>
             <h2>What the role is</h2>
             <p>
-              You&rsquo;ll call people who&rsquo;ve enquired about a claim, explain in plain English
-              who we are and how it works, and sign up the ones we can genuinely help. You&rsquo;ll
+              You'll call people who've enquired about a claim, explain in plain English
+              who we are and how it works, and sign up the ones we can genuinely help. You'll
               also look after existing clients — answering questions, keeping them updated and making
               sure nobody feels forgotten.
             </p>
             <p>
-              We&rsquo;re an SRA-regulated law firm. That means honesty on every call, no pressure
-              tactics and no promises we can&rsquo;t keep. If you&rsquo;re good at talking to people
-              and you like a target, you&rsquo;ll do well here.
+              We're an SRA-regulated law firm. That means honesty on every call, no pressure
+              tactics and no promises we can't keep. If you're good at talking to people
+              and you like a target, you'll do well here.
             </p>
-            <h2 style={{ marginTop: 30 }}>What you&rsquo;ll be doing</h2>
+            <h2 style={{ marginTop: 30 }}>What you'll be doing</h2>
             <ul className="check">
               <li>
-                Outbound calls to warm leads who&rsquo;ve asked about irresponsible lending, gambling
+                Outbound calls to warm leads who've asked about irresponsible lending, gambling
                 harm or car finance claims
               </li>
               <li>Explaining the process clearly and signing clients up on the call</li>
@@ -108,7 +108,7 @@ export function SalesLanding({ onStart }) {
         <div className="band">
           <h3>Ready to talk?</h3>
           <p>
-            The application takes about 25–35 minutes. You&rsquo;ll need a quiet spot for a short
+            The application takes about 25–35 minutes. You'll need a quiet spot for a short
             voice recording and a copy of your CV.
           </p>
           <button type="button" className="btn" onClick={onStart}>
