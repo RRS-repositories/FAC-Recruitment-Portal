@@ -473,6 +473,52 @@ export function CalendarPage() {
                           ? `Interview with ${slot.interview.fullName}${rebookOn && look !== STATE.booked ? ` (${look.label})` : ''}, ${SHORT[day.weekday]} ${time}`
                           : `${look.label}, ${SHORT[day.weekday]} ${time}`;
 
+                      /*
+                       * A booked row draws one entry per interview in it. Rows
+                       * are the slot length (server/lib/calendar.js), so this is
+                       * usually one; after a change of slot length, or in an
+                       * older week, a row can hold the end of one interview and
+                       * the start of another, and neither may be hidden. Each
+                       * entry opens its own interview. One interview starting
+                       * here draws exactly as before.
+                       */
+                      if (slot.state === 'booked') {
+                        const inRow = slot.interviews?.length ? slot.interviews : [slot.interview];
+                        return (
+                          <div key={day.date} className="flex flex-col gap-0.5 border-l border-line p-0.5">
+                            {inRow.map((iv) => {
+                              const own = { ...slot, interview: iv };
+                              const ivLook = lookFor(own, rebookOn);
+                              const status = rebookOn && ivLook !== STATE.booked ? ivLook.label : null;
+                              return (
+                                <button
+                                  key={iv.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setReason('');
+                                    setChosen({ slot: own, day });
+                                  }}
+                                  aria-label={`Interview with ${iv.fullName}${status ? ` (${status})` : ''}, ${SHORT[day.weekday]} ${formatTimeIn(iv.startsAt, zone)}${iv.continued ? ', continued' : ''}`}
+                                  className={cn(
+                                    'min-h-[2.1rem] w-full flex-1 rounded border px-1.5 py-1 text-left text-[0.72rem] leading-tight transition-colors',
+                                    ivLook.cell,
+                                  )}
+                                >
+                                  <span className="block text-[0.62rem] uppercase tracking-wide text-white/70">
+                                    {iv.continued
+                                      ? `Continued · from ${formatTimeIn(iv.startsAt, zone)}`
+                                      : inRow.length > 1
+                                        ? `${status ?? 'Interview'} · ${formatTimeIn(iv.startsAt, zone)}`
+                                        : (status ?? 'Interview with')}
+                                  </span>
+                                  <span className="block truncate font-semibold">{iv.fullName}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
                       return (
                         <div key={day.date} className="border-l border-line p-0.5">
                           {clickable ? (
@@ -488,18 +534,6 @@ export function CalendarPage() {
                                 look.cell,
                               )}
                             >
-                              {/* The name only in the row the interview starts in;
-                                  rows it runs on into stay coloured and clickable. */}
-                              {slot.state === 'booked' && !slot.interview.continued ? (
-                                <>
-                                  <span className="block text-[0.62rem] uppercase tracking-wide text-white/70">
-                                    {rebookOn && look !== STATE.booked ? look.label : 'Interview with'}
-                                  </span>
-                                  <span className="block truncate font-semibold">
-                                    {slot.interview.fullName}
-                                  </span>
-                                </>
-                              ) : null}
                             </button>
                           ) : (
                             <div
