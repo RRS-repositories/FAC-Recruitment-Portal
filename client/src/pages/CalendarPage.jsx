@@ -18,6 +18,18 @@ import {
 } from '@/lib/api';
 import { gradeFor } from '@shared/scoring';
 import { roleFromApiKey } from '@/lib/normalise';
+
+/*
+ * The line under a name on the calendar: country and role, short enough for
+ * a narrow cell -- "IND · Intern", "SA · Sales". From ROLES, so a new role
+ * gets its line without an edit here; an unknown key shows nothing extra.
+ */
+const COUNTRY_SHORT = { IN: 'IND', ZA: 'SA' };
+const roleLine = (apiKey) => {
+  const role = roleFromApiKey(apiKey);
+  if (!role) return null;
+  return `${COUNTRY_SHORT[role.countryCode] ?? role.countryCode} · ${role.navName ?? role.title}`;
+};
 import { formatTimeIn } from '@/lib/format';
 import usePageMeta from '@/hooks/usePageMeta';
 import { cn } from '@/lib/cn';
@@ -225,6 +237,12 @@ export function CalendarPage() {
     [data, zone],
   );
 
+  // Today's column gets a violet line down each side, header to last row.
+  // Inset, so it takes no space and no column moves.
+  const todayIso = iso(new Date());
+  const todayEdges = (date) =>
+    date === todayIso && 'shadow-[inset_2px_0_0_#6d28d9,inset_-2px_0_0_#6d28d9]';
+
   const totals = useMemo(() => {
     const days = data?.days ?? [];
     return {
@@ -425,6 +443,7 @@ export function CalendarPage() {
                         className={cn(
                           'border-l border-line px-2 py-2.5 text-center',
                           !day.working && 'bg-slate-50',
+                          todayEdges(day.date),
                         )}
                       >
                         <p
@@ -460,7 +479,7 @@ export function CalendarPage() {
 
                     {data.days.map((day) => {
                       const slot = day.slots[row];
-                      if (!slot) return <div key={day.date} className="border-l border-line" />;
+                      if (!slot) return <div key={day.date} className={cn('border-l border-line', todayEdges(day.date))} />;
 
                       const look = lookFor(slot, rebookOn);
                       const clickable =
@@ -473,8 +492,59 @@ export function CalendarPage() {
                           ? `Interview with ${slot.interview.fullName}${rebookOn && look !== STATE.booked ? ` (${look.label})` : ''}, ${SHORT[day.weekday]} ${time}`
                           : `${look.label}, ${SHORT[day.weekday]} ${time}`;
 
+                      /*
+                       * A booked row draws one entry per interview in it. Rows
+                       * are the slot length (server/lib/calendar.js), so this is
+                       * usually one; after a change of slot length, or in an
+                       * older week, a row can hold the end of one interview and
+                       * the start of another, and neither may be hidden. Each
+                       * entry opens its own interview. One interview starting
+                       * here draws exactly as before.
+                       */
+                      if (slot.state === 'booked') {
+                        const inRow = slot.interviews?.length ? slot.interviews : [slot.interview];
+                        return (
+                          <div key={day.date} className={cn('flex flex-col gap-0.5 border-l border-line p-0.5', todayEdges(day.date))}>
+                            {inRow.map((iv) => {
+                              const own = { ...slot, interview: iv };
+                              const ivLook = lookFor(own, rebookOn);
+                              const status = rebookOn && ivLook !== STATE.booked ? ivLook.label : null;
+                              return (
+                                <button
+                                  key={iv.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setReason('');
+                                    setChosen({ slot: own, day });
+                                  }}
+                                  aria-label={`Interview with ${iv.fullName}${roleLine(iv.role) ? `, ${roleLine(iv.role)}` : ''}${status ? ` (${status})` : ''}, ${SHORT[day.weekday]} ${formatTimeIn(iv.startsAt, zone)}${iv.continued ? ', continued' : ''}`}
+                                  className={cn(
+                                    'min-h-[2.1rem] w-full flex-1 rounded border px-1.5 py-1 text-left text-[0.72rem] leading-tight transition-colors',
+                                    ivLook.cell,
+                                  )}
+                                >
+                                  <span className="block text-[0.62rem] uppercase tracking-wide text-white/70">
+                                    {iv.continued
+                                      ? `Continued · from ${formatTimeIn(iv.startsAt, zone)}`
+                                      : inRow.length > 1
+                                        ? `${status ?? 'Interview'} · ${formatTimeIn(iv.startsAt, zone)}`
+                                        : (status ?? 'Interview with')}
+                                  </span>
+                                  <span className="block truncate font-semibold">{iv.fullName}</span>
+                                  {roleLine(iv.role) ? (
+                                    <span className="block truncate text-[0.62rem] text-white/80">
+                                      {roleLine(iv.role)}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      }
+
                       return (
-                        <div key={day.date} className="border-l border-line p-0.5">
+                        <div key={day.date} className={cn('border-l border-line p-0.5', todayEdges(day.date))}>
                           {clickable ? (
                             <button
                               type="button"
@@ -488,18 +558,6 @@ export function CalendarPage() {
                                 look.cell,
                               )}
                             >
-                              {/* The name only in the row the interview starts in;
-                                  rows it runs on into stay coloured and clickable. */}
-                              {slot.state === 'booked' && !slot.interview.continued ? (
-                                <>
-                                  <span className="block text-[0.62rem] uppercase tracking-wide text-white/70">
-                                    {rebookOn && look !== STATE.booked ? look.label : 'Interview with'}
-                                  </span>
-                                  <span className="block truncate font-semibold">
-                                    {slot.interview.fullName}
-                                  </span>
-                                </>
-                              ) : null}
                             </button>
                           ) : (
                             <div

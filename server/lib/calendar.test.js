@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { GRID, gridBounds, minutesOfDay, rowState } from './calendar.js';
+import { GRID, ROW_MINUTES, gridBounds, minutesOfDay, rowState, rowStepFor } from './calendar.js';
 
 /**
  * The manager's calendar grid, kept apart from the booking hours (17 Sep).
@@ -76,4 +76,50 @@ test('with today\'s 09:00-18:00 hours nothing is "outside" -- the calendar looks
   for (let minute = H(9); minute < H(18); minute += 30) {
     assert.notEqual(rowState({ ...base, dayStart: H(9), dayEnd: H(18), minute }), 'outside');
   }
+});
+
+/* ── Rows the length of one interview (22 Sep) ───────────────────────────── */
+
+test('rows are the slot length from Settings, within sane bounds', () => {
+  assert.equal(rowStepFor(20), 20);
+  assert.equal(rowStepFor(30), 30);
+  assert.equal(rowStepFor(45), 45);
+  assert.equal(rowStepFor('20'), 20);
+  assert.equal(rowStepFor(3), ROW_MINUTES.min);
+  assert.equal(rowStepFor(600), ROW_MINUTES.max);
+  for (const bad of [0, -5, null, undefined, 'x', NaN]) assert.equal(rowStepFor(bad), GRID.step, String(bad));
+});
+
+test('20-minute rows line up with the booking start, so each slot has its own row', () => {
+  // Booking day 13:30-16:30 in 20-minute slots: 13:30, 13:50, 14:10 ...
+  const grid = gridBounds({ dayStart: H(13, 30), dayEnd: H(16, 30), step: 20, anchor: H(13, 30) });
+  // Still covers 09:00-18:00, on rows counted from 13:30.
+  assert.deepEqual(grid, { start: H(8, 50), end: H(18, 10) });
+  const rows = [];
+  for (let m = grid.start; m + 20 <= grid.end; m += 20) rows.push(m);
+  for (const slot of [H(13, 30), H(13, 50), H(14, 10), H(14, 30), H(14, 50), H(16, 10)]) {
+    assert.ok(rows.includes(slot), `a row starts at ${slot}`);
+  }
+});
+
+test('30-minute rows from a whole or half hour are exactly the old grid', () => {
+  for (const dayStart of [H(9), H(10), H(13, 30)]) {
+    assert.deepEqual(
+      gridBounds({ dayStart, dayEnd: H(16, 30), step: 30, anchor: dayStart }),
+      gridBounds({ dayStart, dayEnd: H(16, 30) }),
+    );
+  }
+});
+
+test('an interview outside the window stretches the grid by whole rows', () => {
+  const grid = gridBounds({ dayStart: H(13, 30), dayEnd: H(16, 30), step: 20, anchor: H(13, 30), spans: [{ from: H(18, 20), to: H(18, 50) }] });
+  assert.equal(grid.end, H(18, 50));
+  assert.equal((grid.end - H(13, 30)) % 20, 0);
+});
+
+test('outside the booking hours is judged on the row length', () => {
+  const base20 = { working: true, dayStart: H(13, 30), dayEnd: H(16, 30), startsAt: new Date('2030-01-01'), earliest: new Date('2020-01-01'), step: 20 };
+  assert.equal(rowState({ ...base20, minute: H(16, 10) }), 'free', 'last 20-minute slot fits');
+  assert.equal(rowState({ ...base20, minute: H(16, 30) }), 'outside');
+  assert.equal(rowState({ ...base20, minute: H(13, 10) }), 'outside');
 });

@@ -175,6 +175,8 @@ export function DashboardPage() {
   // score first" would only order the twenty-five rows already on screen.
   const [sort, setSort] = useState(null);
   const [aiLevel, setAiLevel] = useState('all');
+  // The latest interview's status: all, invited ("Link sent"), booked, no_show.
+  const [interviewStatus, setInterviewStatus] = useState('all');
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -233,6 +235,7 @@ export function DashboardPage() {
         to,
         sort,
         ai: aiLevel,
+        interview: interviewStatus,
         // On a role's own page the tiles are that role's too.
         scope: routeRole ? apiRole : undefined,
       });
@@ -252,7 +255,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, apiRole, routeRole, search, page, from, to, sort, aiLevel, signOut]);
+  }, [status, apiRole, routeRole, search, page, from, to, sort, aiLevel, interviewStatus, signOut]);
 
   useEffect(() => {
     if (signedIn) load();
@@ -290,6 +293,7 @@ export function DashboardPage() {
         setStatus('all');
         setRole('all');
         setAiLevel('all');
+        setInterviewStatus('all');
         setFrom('');
         setTo('');
         setPage(1);
@@ -380,6 +384,7 @@ export function DashboardPage() {
   const changeFrom = applyFilter(setFrom);
   const changeTo = applyFilter(setTo);
   const chooseAiLevel = applyFilter(setAiLevel);
+  const chooseInterviewStatus = applyFilter(setInterviewStatus);
 
   /**
    * Cycles one column: descending, then ascending, then back to newest-first.
@@ -518,7 +523,8 @@ export function DashboardPage() {
   }
 
   const pages = Math.max(1, Math.ceil(total / pageSize));
-  const filtered = status !== 'all' || (!routeRole && role !== 'all') || Boolean(search);
+  const filtered =
+    status !== 'all' || (!routeRole && role !== 'all') || Boolean(search) || interviewStatus !== 'all';
 
   return (
     <AdminShell
@@ -601,6 +607,7 @@ export function DashboardPage() {
                     setStatus('all');
                     clearRole();
                     setAiLevel('all');
+                    setInterviewStatus('all');
                     setFrom('');
                     setTo('');
                     setQuery(r.email);
@@ -755,6 +762,24 @@ export function DashboardPage() {
                 <option value="possible">Possible AI</option>
                 <option value="ai_used">AI used</option>
               </select>
+
+              <label htmlFor="interview-filter" className="sr-only">
+                Filter by interview
+              </label>
+              <select
+                id="interview-filter"
+                value={interviewStatus}
+                onChange={(e) => chooseInterviewStatus(e.target.value)}
+                className={cn(
+                  'rounded-control border-[1.5px] bg-white py-2 pl-3 pr-8 text-[0.86rem] font-semibold focus:border-violet focus:outline-none',
+                  interviewStatus === 'all' ? 'border-line text-ink' : 'border-violet text-violet-deep',
+                )}
+              >
+                <option value="all">Interview: all</option>
+                <option value="invited">Link sent</option>
+                <option value="booked">Booked</option>
+                <option value="no_show">No show</option>
+              </select>
             </div>
 
             <div className="relative ml-auto w-full sm:w-64">
@@ -845,6 +870,7 @@ export function DashboardPage() {
                   clearRole();
                   setQuery('');
                   setAiLevel('all');
+                  setInterviewStatus('all');
                   setSort(null);
                 }}
               >
