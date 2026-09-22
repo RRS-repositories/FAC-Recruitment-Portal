@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { calendarMode, CalendarError, extraGuests, resetCalendarClient } from './googleCalendar.js';
+import { calendarMode, CalendarError, extraGuests, interviewAttendees, resetCalendarClient } from './googleCalendar.js';
+import { extendedRole } from './extendedRoles.js';
 
 /**
  * What is worth pinning without a Google account attached: that the feature is
@@ -84,4 +85,80 @@ test('extra guests: the same person listed twice is added once', () => {
     extraGuests({ RECRUIT_GOOGLE_EXTRA_GUESTS: 'joe@example.co.uk,JOE@example.co.uk' }),
     ['joe@example.co.uk'],
   );
+});
+
+/* ── Guests one role adds to its own interviews ──────────────────────────── */
+
+const PEOPLE = {
+  candidateName: 'Cand Idate',
+  candidateEmail: 'candidate@example.com',
+  interviewerName: 'Inter Viewer',
+  interviewerEmail: 'interviewer@example.com',
+};
+
+function withGuests(values, run) {
+  const keys = ['RECRUIT_GOOGLE_EXTRA_GUESTS', 'RECRUIT_GOOGLE_SALES_EXTRA_GUESTS', 'RECRUIT_GOOGLE_INVITE_CANDIDATE'];
+  const had = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+  for (const k of keys) delete process.env[k];
+  Object.assign(process.env, values);
+  try {
+    run();
+  } finally {
+    for (const k of keys) {
+      if (had[k] === undefined) delete process.env[k];
+      else process.env[k] = had[k];
+    }
+  }
+}
+
+test('with no role guests the invite is exactly what it always was', () => {
+  withGuests({ RECRUIT_GOOGLE_EXTRA_GUESTS: 'watcher@example.com' }, () => {
+    assert.deepEqual(interviewAttendees(PEOPLE), [
+      { email: 'candidate@example.com', displayName: 'Cand Idate', responseStatus: 'needsAction' },
+      { email: 'interviewer@example.com', displayName: 'Inter Viewer' },
+      { email: 'watcher@example.com' },
+    ]);
+  });
+});
+
+test('role guests are added after everyone else, each person once', () => {
+  withGuests({ RECRUIT_GOOGLE_EXTRA_GUESTS: 'watcher@example.com' }, () => {
+    const attendees = interviewAttendees({
+      ...PEOPLE,
+      roleGuests: ['sales.lead@example.com', 'watcher@example.com', 'interviewer@example.com'],
+    });
+    assert.deepEqual(
+      attendees.map((a) => a.email),
+      ['candidate@example.com', 'interviewer@example.com', 'watcher@example.com', 'sales.lead@example.com'],
+    );
+  });
+});
+
+test('only the Sales role names a guest list of its own', () => {
+  assert.equal(extendedRole('sa_sales').calendar.extraGuestsEnv, 'RECRUIT_GOOGLE_SALES_EXTRA_GUESTS');
+  assert.equal(extendedRole('india_aidev')?.calendar, undefined);
+  // The intern and paralegal roles are not extended roles at all.
+  assert.equal(extendedRole('india_intern'), null);
+  assert.equal(extendedRole('sa_paralegal'), null);
+});
+
+test('the Sales list is read from its own .env key, not the shared one', () => {
+  withGuests(
+    { RECRUIT_GOOGLE_EXTRA_GUESTS: 'watcher@example.com', RECRUIT_GOOGLE_SALES_EXTRA_GUESTS: ' Sales.Lead@Example.com , bad' },
+    () => {
+      assert.deepEqual(extraGuests(process.env, 'RECRUIT_GOOGLE_SALES_EXTRA_GUESTS'), ['sales.lead@example.com']);
+      assert.deepEqual(extraGuests(process.env), ['watcher@example.com']);
+    },
+  );
+});
+
+test('Meet invites: the Sales guest is added to Sales interviews and to no other role', async () => {
+  const { roleGuestsFor } = await import('./meetLink.js');
+  withGuests({ RECRUIT_GOOGLE_SALES_EXTRA_GUESTS: 'sales.lead@example.com' }, () => {
+    assert.deepEqual(roleGuestsFor('sa_sales'), ['sales.lead@example.com']);
+    for (const role of ['india_intern', 'sa_paralegal', 'india_aidev', 'nope', undefined]) {
+      assert.deepEqual(roleGuestsFor(role), [], String(role));
+    }
+  });
+  withGuests({}, () => assert.deepEqual(roleGuestsFor('sa_sales'), [], 'unset: Sales adds nobody'));
 });

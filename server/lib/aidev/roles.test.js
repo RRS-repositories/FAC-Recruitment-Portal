@@ -89,7 +89,8 @@ test('the AI Developer role is registered under slug "ai-developer" and key "ind
 test('the registry: sales then AI Developer, and nothing else counts as extended', () => {
   assert.deepEqual(EXTENDED_ROLES.map((r) => r.apiKey), ['sa_sales', 'india_aidev']);
   for (const r of EXTENDED_ROLES) {
-    assert.deepEqual(Object.keys(r), [
+    // `calendar` is optional, and only Sales has it (its own Meet guest list).
+    assert.deepEqual(Object.keys(r).filter((k) => k !== 'calendar'), [
       'apiKey', 'slug', 'title', 'country', 'timezone',
       'writtenQuestions', 'questions', 'detailOptions',
       'limits', 'publicLimits', 'hasVoice',
@@ -98,6 +99,7 @@ test('the registry: sales then AI Developer, and nothing else counts as extended
     ]);
     assert.ok(Object.isFrozen(r));
   }
+  assert.deepEqual(EXTENDED_ROLES.filter((r) => 'calendar' in r).map((r) => r.apiKey), ['sa_sales']);
   assert.equal(extendedRole('sa_sales').hasVoice, true);
   assert.equal(extendedRole('india_aidev').hasVoice, false);
   for (const key of ['india_intern', 'sa_paralegal', 'nope', undefined, 'constructor', '__proto__']) {

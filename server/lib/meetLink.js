@@ -5,7 +5,9 @@ import {
   cancelInterviewEvent,
   calendarMode,
   CalendarError,
+  extraGuests,
 } from './googleCalendar.js';
+import { extendedRole } from './extendedRoles.js';
 import { isEnabled } from './flags.js';
 
 /**
@@ -53,6 +55,17 @@ const ROLE_TITLE = {
 };
 
 /** True when a link should be created at all. Both switches, as ever. */
+/**
+ * The people a role adds to its own interviews' invites, on top of the extra
+ * guests every interview gets. Named by the role (`calendar.extraGuestsEnv`,
+ * see sales/role.js) and listed in .env, so the addresses -- real people's --
+ * never sit in this public repository. A role without one adds nobody.
+ */
+export const roleGuestsFor = (role) => {
+  const key = extendedRole(role)?.calendar?.extraGuestsEnv;
+  return key ? extraGuests(process.env, key) : [];
+};
+
 export async function autoMeetOn() {
   return calendarMode() === 'on' && (await isEnabled('recruitment_auto_meet'));
 }
@@ -85,6 +98,7 @@ export async function attachMeetLink(interviewId, db = pool) {
       interviewerName: row.interviewer_name,
       interviewerEmail: row.interviewer_email,
       roleTitle: ROLE_TITLE[row.role] ?? null,
+      roleGuests: roleGuestsFor(row.role),
     });
 
     // Guarded on meet_link IS NULL so two workers cannot overwrite each
