@@ -26,6 +26,8 @@ import { AIDEV_ROLE } from './aidev/role.js';
  *   normaliseProfile(body) / validateProfile(values) / profileForStorage(values)
  *   review             { workplace, brief, promptVersion } -- what the model
  *                      review is told about the job (see llmReview.js)
+ *   calendar           optional { extraGuestsEnv } -- the .env key listing
+ *                      who else joins this role's interviews (meetLink.js)
  *
  * Imported by roles.js and questions.js, which sit underneath validate.js, so
  * nothing reached from here may import validate.js, roles.js or questions.js

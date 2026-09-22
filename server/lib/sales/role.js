@@ -38,6 +38,12 @@ export const SALES_ROLE = Object.freeze({
   }),
 
   hasVoice: true,
+
+  // Who else is put on a Sales interview's Meet invite, so they can join
+  // without knocking. The addresses are in .env under this name (comma-
+  // separated), not here: this repository is public. Sales interviews only.
+  calendar: Object.freeze({ extraGuestsEnv: 'RECRUIT_GOOGLE_SALES_EXTRA_GUESTS' }),
+
   score: (answers) => scoreSales(answers),
   normaliseProfile,
   validateProfile,

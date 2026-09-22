@@ -58,9 +58,9 @@ const inviteCandidate = () => process.env.RECRUIT_GOOGLE_INVITE_CANDIDATE !== 'f
  */
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function extraGuests(env = process.env) {
+export function extraGuests(env = process.env, key = 'RECRUIT_GOOGLE_EXTRA_GUESTS') {
   const seen = new Set();
-  return String(env.RECRUIT_GOOGLE_EXTRA_GUESTS ?? '')
+  return String(env[key] ?? '')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter((s) => {
@@ -68,6 +68,40 @@ export function extraGuests(env = process.env) {
       seen.add(s);
       return true;
     });
+}
+
+/**
+ * Everyone on the interview invite: the candidate (unless switched off), the
+ * interviewer, then the extra guests every interview gets, then any a role
+ * adds for its own interviews only (`roleGuests` -- see meetLink.js). Each
+ * person once, in that order.
+ *
+ * With no role guests this is exactly the list the invite has always had.
+ */
+export function interviewAttendees({
+  candidateName,
+  candidateEmail,
+  interviewerName,
+  interviewerEmail,
+  roleGuests = [],
+}) {
+  const attendees = [];
+  if (inviteCandidate() && candidateEmail) {
+    attendees.push({ email: candidateEmail, displayName: candidateName, responseStatus: 'needsAction' });
+  }
+  if (interviewerEmail) attendees.push({ email: interviewerEmail, displayName: interviewerName });
+
+  // Skipped when they are already on the invite as the candidate or the
+  // interviewer — Google accepts a duplicate attendee, but it then shows the
+  // same person twice on the event.
+  const already = new Set(attendees.map((a) => a.email.toLowerCase()));
+  for (const email of [...extraGuests(), ...roleGuests]) {
+    if (!already.has(email)) {
+      attendees.push({ email });
+      already.add(email);
+    }
+  }
+  return attendees;
 }
 
 export const calendarMode = () =>
@@ -152,22 +186,17 @@ export async function createInterviewEvent({
   interviewerName,
   interviewerEmail,
   roleTitle,
+  roleGuests = [],
 }) {
   const cal = await calendar();
 
-  const attendees = [];
-  if (inviteCandidate() && candidateEmail) {
-    attendees.push({ email: candidateEmail, displayName: candidateName, responseStatus: 'needsAction' });
-  }
-  if (interviewerEmail) attendees.push({ email: interviewerEmail, displayName: interviewerName });
-
-  // Skipped when they are already on the invite as the candidate or the
-  // interviewer — Google accepts a duplicate attendee, but it then shows the
-  // same person twice on the event.
-  const already = new Set(attendees.map((a) => a.email.toLowerCase()));
-  for (const email of extraGuests()) {
-    if (!already.has(email)) attendees.push({ email });
-  }
+  const attendees = interviewAttendees({
+    candidateName,
+    candidateEmail,
+    interviewerName,
+    interviewerEmail,
+    roleGuests,
+  });
 
   let data;
   try {
