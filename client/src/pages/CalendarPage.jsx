@@ -237,6 +237,12 @@ export function CalendarPage() {
     [data, zone],
   );
 
+  // Today's column gets a violet line down each side, header to last row.
+  // Inset, so it takes no space and no column moves.
+  const todayIso = iso(new Date());
+  const todayEdges = (date) =>
+    date === todayIso && 'shadow-[inset_2px_0_0_#6d28d9,inset_-2px_0_0_#6d28d9]';
+
   const totals = useMemo(() => {
     const days = data?.days ?? [];
     return {
@@ -437,6 +443,7 @@ export function CalendarPage() {
                         className={cn(
                           'border-l border-line px-2 py-2.5 text-center',
                           !day.working && 'bg-slate-50',
+                          todayEdges(day.date),
                         )}
                       >
                         <p
@@ -472,7 +479,7 @@ export function CalendarPage() {
 
                     {data.days.map((day) => {
                       const slot = day.slots[row];
-                      if (!slot) return <div key={day.date} className="border-l border-line" />;
+                      if (!slot) return <div key={day.date} className={cn('border-l border-line', todayEdges(day.date))} />;
 
                       const look = lookFor(slot, rebookOn);
                       const clickable =
@@ -497,7 +504,7 @@ export function CalendarPage() {
                       if (slot.state === 'booked') {
                         const inRow = slot.interviews?.length ? slot.interviews : [slot.interview];
                         return (
-                          <div key={day.date} className="flex flex-col gap-0.5 border-l border-line p-0.5">
+                          <div key={day.date} className={cn('flex flex-col gap-0.5 border-l border-line p-0.5', todayEdges(day.date))}>
                             {inRow.map((iv) => {
                               const own = { ...slot, interview: iv };
                               const ivLook = lookFor(own, rebookOn);
@@ -537,7 +544,7 @@ export function CalendarPage() {
                       }
 
                       return (
-                        <div key={day.date} className="border-l border-line p-0.5">
+                        <div key={day.date} className={cn('border-l border-line p-0.5', todayEdges(day.date))}>
                           {clickable ? (
                             <button
                               type="button"
