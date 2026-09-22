@@ -18,6 +18,18 @@ import {
 } from '@/lib/api';
 import { gradeFor } from '@shared/scoring';
 import { roleFromApiKey } from '@/lib/normalise';
+
+/*
+ * The line under a name on the calendar: country and role, short enough for
+ * a narrow cell -- "IND · Intern", "SA · Sales". From ROLES, so a new role
+ * gets its line without an edit here; an unknown key shows nothing extra.
+ */
+const COUNTRY_SHORT = { IN: 'IND', ZA: 'SA' };
+const roleLine = (apiKey) => {
+  const role = roleFromApiKey(apiKey);
+  if (!role) return null;
+  return `${COUNTRY_SHORT[role.countryCode] ?? role.countryCode} · ${role.navName ?? role.title}`;
+};
 import { formatTimeIn } from '@/lib/format';
 import usePageMeta from '@/hooks/usePageMeta';
 import { cn } from '@/lib/cn';
@@ -498,7 +510,7 @@ export function CalendarPage() {
                                     setReason('');
                                     setChosen({ slot: own, day });
                                   }}
-                                  aria-label={`Interview with ${iv.fullName}${status ? ` (${status})` : ''}, ${SHORT[day.weekday]} ${formatTimeIn(iv.startsAt, zone)}${iv.continued ? ', continued' : ''}`}
+                                  aria-label={`Interview with ${iv.fullName}${roleLine(iv.role) ? `, ${roleLine(iv.role)}` : ''}${status ? ` (${status})` : ''}, ${SHORT[day.weekday]} ${formatTimeIn(iv.startsAt, zone)}${iv.continued ? ', continued' : ''}`}
                                   className={cn(
                                     'min-h-[2.1rem] w-full flex-1 rounded border px-1.5 py-1 text-left text-[0.72rem] leading-tight transition-colors',
                                     ivLook.cell,
@@ -512,6 +524,11 @@ export function CalendarPage() {
                                         : (status ?? 'Interview with')}
                                   </span>
                                   <span className="block truncate font-semibold">{iv.fullName}</span>
+                                  {roleLine(iv.role) ? (
+                                    <span className="block truncate text-[0.62rem] text-white/80">
+                                      {roleLine(iv.role)}
+                                    </span>
+                                  ) : null}
                                 </button>
                               );
                             })}
