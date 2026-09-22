@@ -56,6 +56,14 @@ const SORTS = new Set(['score_desc', 'score_asc', 'duration_desc', 'duration_asc
 /** The AI-check bands a manager can narrow to. `all` is simply no filter. */
 const AI_LEVELS = new Set(['clean', 'possible', 'ai_used']);
 
+/*
+ * The interview filter: the status of the applicant's latest interview, the
+ * same one the list shows on each row (LIST's lateral join, with the same rule
+ * about withdrawn re-book links). 'invited' is what the row calls "Link sent".
+ * An allow-list like AI_LEVELS; anything else means no narrowing.
+ */
+const INTERVIEW_FILTERS = new Set(['invited', 'booked', 'no_show']);
+
 const LIST = `
   SELECT a.id, a.created_at, a.role, a.full_name, a.email, a.phone,
          a.rule_score, a.final_score, a.status, a.duration_sec,
@@ -95,6 +103,7 @@ const LIST = `
      AND ($6::date IS NULL OR a.created_at >= $6::date)
      AND ($7::date IS NULL OR a.created_at < ($7::date + 1))
      AND ($8::text IS NULL OR a.ai_use_level = $8)
+     AND ($10::text IS NULL OR i.status::text = $10)
    ORDER BY
      -- One ORDER BY with the choice as a parameter, rather than SQL built by
      -- string concatenation. $9 can only ever be one of the handful of values
@@ -127,6 +136,11 @@ const COUNT = `
      AND ($4::date IS NULL OR a.created_at >= $4::date)
      AND ($5::date IS NULL OR a.created_at < ($5::date + 1))
      AND ($6::text IS NULL OR a.ai_use_level = $6)
+     -- The interview filter, on the latest interview as LIST judges it.
+     AND ($7::text IS NULL OR (SELECT li.status::text FROM recruit_interviews li
+           WHERE li.applicant_id = a.id
+             AND NOT (li.status = 'cancelled' AND to_jsonb(li) ->> 'rebook_of_interview_id' IS NOT NULL)
+           ORDER BY li.created_at DESC LIMIT 1) = $7)
 `;
 
 /**
@@ -153,6 +167,11 @@ const TAB_COUNTS = `
     -- open a list of two and the numbers on the screen would contradict
     -- each other.
     AND ($5::text IS NULL OR a.ai_use_level = $5)
+    -- And the interview filter, for the same reason.
+    AND ($6::text IS NULL OR (SELECT li.status::text FROM recruit_interviews li
+           WHERE li.applicant_id = a.id
+             AND NOT (li.status = 'cancelled' AND to_jsonb(li) ->> 'rebook_of_interview_id' IS NOT NULL)
+           ORDER BY li.created_at DESC LIMIT 1) = $6)
 `;
 
 // The summary counts every application, not just the filtered page: it is the
@@ -757,14 +776,15 @@ export function createAdminRouter() {
     // unrecognised is ignored rather than returning nothing, so a stale
     // bookmark shows the list instead of an empty screen.
     const aiLevel = AI_LEVELS.has(req.query.ai) ? req.query.ai : null;
+    const interviewStatus = INTERVIEW_FILTERS.has(req.query.interview) ? req.query.interview : null;
 
     try {
       const noShowRebook = await isEnabled('recruitment_noshow_rebook');
       const [list, count, summary, tabs, rebooks] = await Promise.all([
-        pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE, from, to, aiLevel, sort]),
-        pool.query(COUNT, [status, role, search, from, to, aiLevel]),
+        pool.query(LIST, [status, role, search, PAGE_SIZE, (page - 1) * PAGE_SIZE, from, to, aiLevel, sort, interviewStatus]),
+        pool.query(COUNT, [status, role, search, from, to, aiLevel, interviewStatus]),
         pool.query(SUMMARY, [scope]),
-        pool.query(TAB_COUNTS, [role, search, from, to, aiLevel]),
+        pool.query(TAB_COUNTS, [role, search, from, to, aiLevel, interviewStatus]),
         // Not asked at all while the feature is off: there is nothing to show.
         noShowRebook ? pool.query(REBOOKS, [scope]) : Promise.resolve({ rows: [] }),
       ]);
