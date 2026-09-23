@@ -317,6 +317,17 @@ export const adminNotAttended = (id) =>
     headers: withAuth(),
   });
 
+/**
+ * The firm cancels the interview and invites them to pick another time. The
+ * candidate gets an apology with a new booking link.
+ */
+export const adminCancelInterview = (id, { rebook = true } = {}) =>
+  request(`/recruit/admin/applications/${id}/interview/cancel`, {
+    method: 'POST',
+    body: { rebook },
+    headers: withAuth(),
+  });
+
 /** Records whether the candidate turned up. */
 export const adminMarkAttendance = (id, status) =>
   request(`/recruit/admin/applications/${id}/interview`, {

@@ -16,7 +16,7 @@ import { notifyDecision } from '../lib/notify.js';
 const AIDEV = ['recruit.aidev.accept', 'recruit.aidev.decline'];
 
 test('TEMPLATE_COUNT covers the two new templates', () => {
-  assert.equal(TEMPLATE_COUNT, 21);
+  assert.equal(TEMPLATE_COUNT, 22);
   assert.equal(templateKeys().length, TEMPLATE_COUNT);
   for (const key of AIDEV) assert.ok(templateKeys().includes(key), key);
 });

@@ -11,6 +11,7 @@ import { NotAttendedModal } from '@/features/dashboard/NotAttendedModal';
 import {
   adminAddBlackout,
   adminCalendar,
+  adminCancelInterview,
   adminMarkAttendance,
   adminRemoveBlackout,
   adminSignOut,
@@ -202,6 +203,8 @@ export function CalendarPage() {
 
   // What the manager clicked: a booked slot to look at, or a free one to hold.
   const [chosen, setChosen] = useState(null);
+  // The "are you sure" step in front of cancelling an interview.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [reason, setReason] = useState('');
   // "Not attended" from the popup: the same dialog as the dashboard.
   const [notAttending, setNotAttending] = useState(null);
@@ -282,6 +285,30 @@ export function CalendarPage() {
       await load();
     } catch (failure) {
       setError(failure.message);
+      setChosen(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /*
+   * "Cancel interview" -- the firm calling it off, not the candidate. The
+   * server cancels it, stops its reminders, removes the calendar event and
+   * emails an apology with a new booking link. Behind a confirm, because it
+   * sends a real email and cannot be undone.
+   */
+  const cancelInterview = async (rebook) => {
+    setBusy(true);
+    setError('');
+    try {
+      await adminCancelInterview(chosen.slot.interview.applicantId, { rebook });
+      setConfirmingCancel(false);
+      setChosen(null);
+      await load();
+    } catch (failure) {
+      if (failure.status === 401) signOut();
+      else setError(failure.message);
+      setConfirmingCancel(false);
       setChosen(null);
     } finally {
       setBusy(false);
@@ -724,8 +751,46 @@ export function CalendarPage() {
                   );
                 })()
               ) : null}
+              {/* Cancelling is the firm's own decision, so it sits apart from
+                  the attendance buttons and asks first. Only while the
+                  interview still stands. */}
+              {['invited', 'booked'].includes(chosen.slot.interview.status) ? (
+                confirmingCancel ? (
+                  <div className="mt-4 rounded-panel border border-danger/30 bg-red-50 px-4 py-3">
+                    <p className="text-[0.88rem] font-semibold text-danger">
+                      Cancel this interview and ask them to book again?
+                    </p>
+                    <p className="mt-1 text-[0.84rem] leading-relaxed text-body">
+                      Either way {chosen.slot.interview.fullName} is emailed an apology, this interview's
+                      reminders are cancelled and the calendar invitation is removed.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button variant="danger" size="sm" onClick={() => cancelInterview(true)} disabled={busy}>
+                        {busy ? 'Cancelling…' : 'Cancel and send a booking link'}
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => cancelInterview(false)} disabled={busy}>
+                        {busy ? 'Cancelling…' : 'Cancel only'}
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => setConfirmingCancel(false)} disabled={busy}>
+                        Keep the interview
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-[0.8rem] leading-relaxed text-muted">
+                      With a link they can pick another time themselves. Cancel only tells them we will be
+                      in touch, and leaves them no open invitation.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4">
+                    <Button variant="secondary" size="sm" onClick={() => setConfirmingCancel(true)} disabled={busy}>
+                      <Icon name="close" size={15} />
+                      Cancel interview
+                    </Button>
+                  </div>
+                )
+              ) : null}
               <div className="mt-6 flex justify-end gap-2">
-                <Button variant="secondary" onClick={() => setChosen(null)}>
+                <Button variant="secondary" onClick={() => { setConfirmingCancel(false); setChosen(null); }}>
                   Close
                 </Button>
                 {/* The id, never the email: a query string ends up in browser

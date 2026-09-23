@@ -17,7 +17,7 @@ import { writtenQuestionsFor } from '../lib/roles.js';
 import { publicQuestionsFor } from '../lib/questions.js';
 import { parseRange, voiceContentType, voiceFilename } from '../lib/voiceDownload.js';
 import { generateBookingToken, tokenExpiry } from '../lib/bookingToken.js';
-import { notifyDecision, notifyMeetingLink, notifyNoShow } from '../lib/notify.js';
+import { notifyCancelledByUs, notifyDecision, notifyMeetingLink, notifyNoShow } from '../lib/notify.js';
 import { isDeclineReason, NO_REASON } from '../../shared/declineReasons.js';
 import { cancelPendingFor, historyFor } from '../lib/outbox.js';
 import { describeTemplates } from '../lib/templates.js';
@@ -31,6 +31,7 @@ import { addBlackout, listBlackouts, removeBlackout } from '../lib/blackouts.js'
 import { dueForDeletion, retentionMonths, setRetentionMonths } from '../lib/retention.js';
 import { buildCalendar } from '../lib/calendar.js';
 import { markNotAttended, previewNotAttended } from '../lib/notAttended.js';
+import { cancelMeetLink } from '../lib/meetLink.js';
 import { REBOOK_WARN_HOURS, attendanceGuard, reissueGuard } from '../lib/rebookPolicy.js';
 
 /**
@@ -1385,6 +1386,124 @@ export function createAdminRouter() {
     } catch (error) {
       console.error('[fac-recruit] not attended preview failed:', error.message);
       return res.status(503).json({ ok: false, error: 'Could not check that just now.' });
+    }
+  });
+
+  /**
+   * The firm cancels an interview, and offers another time.
+   *
+   * Not the candidate's own cancellation (booking.js), which says "as
+   * requested" and offers nothing: this is us calling it off, so it
+   * apologises and carries a NEW booking link. What it does, in one
+   * transaction:
+   *
+   *   the interview  -> cancelled, and its row kept (when and who, later)
+   *   its reminders  -> cancelled, so nothing still says "tomorrow"
+   *   a new invite   -> a fresh row and token, exactly as a reissued link
+   *   the email      -> recruit.cancelled.byus, carrying that token
+   *
+   * The calendar event is removed afterwards, outside the transaction, the
+   * same way booking.js does it: Google being slow must not roll back a
+   * cancellation the database has already agreed to.
+   */
+  router.post('/applications/:id/interview/cancel', async (req, res) => {
+    // Two ways to cancel: with a new booking link, or without one. Default
+    // true, so a caller that says nothing gets the kinder of the two.
+    const rebook = req.body?.rebook !== false;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const { rows: applicant } = await client.query(
+        'SELECT id, email, full_name, role, status FROM recruit_applicants WHERE id = $1 FOR UPDATE',
+        [req.params.id],
+      );
+      if (!applicant[0]) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ ok: false, error: 'No such applicant.' });
+      }
+
+      // The interview to call off: their latest one that is still standing.
+      const { rows: latest } = await client.query(
+        `SELECT id, status, starts_at FROM recruit_interviews
+          WHERE applicant_id = $1 AND status IN ('invited', 'booked')
+          ORDER BY created_at DESC LIMIT 1`,
+        [req.params.id],
+      );
+      if (!latest[0]) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ ok: false, error: 'There is no interview to cancel.' });
+      }
+
+      await client.query(
+        `UPDATE recruit_interviews SET status = 'cancelled', updated_at = now() WHERE id = $1`,
+        [latest[0].id],
+      );
+
+      const { rows: interviewer } = await client.query(
+        'SELECT id FROM recruit_interviewers WHERE active ORDER BY id LIMIT 1',
+      );
+      if (!interviewer[0]) throw new Error('no active interviewer configured');
+
+      // Only when a new time is being offered. Cancelling without one leaves
+      // the applicant with no open invitation, which is the point of it.
+      let token = null;
+      let freshId = null;
+      if (rebook) {
+        const issued = generateBookingToken();
+        token = issued.token;
+        const { rows: fresh } = await client.query(
+          `INSERT INTO recruit_interviews (applicant_id, interviewer_id, booking_token_hash, token_expires_at, status)
+           VALUES ($1, $2, $3, $4, 'invited') RETURNING id`,
+          [req.params.id, interviewer[0].id, issued.hash, tokenExpiry()],
+        );
+        freshId = fresh[0].id;
+      }
+
+      await client.query(
+        `INSERT INTO recruit_audit (applicant_id, actor_email, action, payload)
+         VALUES ($1, $2, 'interview_cancelled_by_us', $3)`,
+        [
+          req.params.id,
+          req.admin.email,
+          JSON.stringify({
+            cancelledInterviewId: latest[0].id,
+            wasStartingAt: latest[0].starts_at,
+            rebookOffered: rebook,
+            newInterviewId: freshId,
+          }),
+        ],
+      );
+
+      await notifyCancelledByUs(client, {
+        applicant: applicant[0],
+        cancelledInterviewId: latest[0].id,
+        // Without a new interview the email belongs to the cancelled one, so
+        // it still has a place in that applicant's email history.
+        interviewId: freshId ?? latest[0].id,
+        bookingToken: token,
+      });
+
+      await client.query('COMMIT');
+
+      cancelMeetLink(latest[0].id).catch((error) =>
+        console.error(`[fac-recruit] could not cancel the event for ${latest[0].id}:`, error.message),
+      );
+
+      return res.json({
+        ok: true,
+        rebook,
+        bookingUrl: token
+          ? `${(process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '')}/book/${token}`
+          : null,
+        emailLive: (await isEnabled('recruitment_alerts')) && mailMode() === 'smtp',
+      });
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      console.error('[fac-recruit] cancel interview failed:', error.message);
+      return res.status(503).json({ ok: false, error: 'Could not cancel that interview just now.' });
+    } finally {
+      client.release();
     }
   });
 
