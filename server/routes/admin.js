@@ -1425,7 +1425,7 @@ export function createAdminRouter() {
 
       // The interview to call off: their latest one that is still standing.
       const { rows: latest } = await client.query(
-        `SELECT id, status, starts_at FROM recruit_interviews
+        `SELECT id, status, starts_at, interviewer_id FROM recruit_interviews
           WHERE applicant_id = $1 AND status IN ('invited', 'booked')
           ORDER BY created_at DESC LIMIT 1`,
         [req.params.id],
@@ -1440,8 +1440,15 @@ export function createAdminRouter() {
         [latest[0].id],
       );
 
+      // The replacement belongs to the SAME interviewer as the interview we
+      // just called off -- with two of them, issuing it against whoever
+      // happens to be first would quietly move the candidate to someone
+      // else's diary. Their own is the fallback if that one has since gone.
       const { rows: interviewer } = await client.query(
-        'SELECT id FROM recruit_interviewers WHERE active ORDER BY id LIMIT 1',
+        `SELECT id FROM recruit_interviewers
+          WHERE active
+          ORDER BY (id = $1) DESC, id LIMIT 1`,
+        [latest[0].interviewer_id],
       );
       if (!interviewer[0]) throw new Error('no active interviewer configured');
 

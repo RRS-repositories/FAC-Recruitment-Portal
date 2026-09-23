@@ -300,10 +300,17 @@ export function CalendarPage() {
   const cancelInterview = async (rebook) => {
     setBusy(true);
     setError('');
+    const who = chosen.slot.interview;
     try {
-      await adminCancelInterview(chosen.slot.interview.applicantId, { rebook });
+      const result = await adminCancelInterview(who.applicantId, { rebook });
       setConfirmingCancel(false);
       setChosen(null);
+      // Email switched off: the link must not vanish with the dialog, or the
+      // interview is cancelled and nobody can tell the candidate how to
+      // rebook. Same as the no-show path does.
+      if (result?.rebook && !result.emailLive && result.bookingUrl) {
+        setRebookLink({ name: who.fullName, email: who.email, url: result.bookingUrl, cancelled: true });
+      }
       await load();
     } catch (failure) {
       if (failure.status === 401) signOut();
@@ -860,13 +867,14 @@ export function CalendarPage() {
       {rebookLink ? (
         <Modal titleId="rebook-link-title" className="max-w-lg" dismissable={false}>
           <h2 id="rebook-link-title" className="text-[1.15rem] font-bold text-ink">
-            Send {rebookLink.name} their final re-book link
+            {rebookLink.cancelled
+              ? `Send ${rebookLink.name} their new booking link`
+              : `Send ${rebookLink.name} their final re-book link`}
           </h2>
           <p className="mt-2 text-[0.9rem] leading-relaxed text-muted">
-            No email is being sent, so send this to{' '}
-            <b className="font-semibold text-ink">{rebookLink.email}</b> yourself. It is valid for 7
-            days and <b className="font-semibold text-ink">shown once</b> — it cannot be retrieved
-            again.
+            {rebookLink.cancelled ? 'The interview is cancelled, but no email is being sent. ' : 'No email is being sent, so '}
+            send this to <b className="font-semibold text-ink">{rebookLink.email}</b> yourself. It is{' '}
+            <b className="font-semibold text-ink">shown once</b> — it cannot be retrieved again.
           </p>
           <p className="mt-4 break-all rounded-panel border border-line bg-lav-soft p-3 font-mono text-[0.8rem] text-ink">
             {rebookLink.url}
