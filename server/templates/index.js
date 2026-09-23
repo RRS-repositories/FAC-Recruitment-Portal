@@ -681,6 +681,69 @@ registerTemplate({
   }),
 });
 
+/*
+ * We cancelled, not them.
+ *
+ * An apology and a new booking link in the same email: a candidate told their
+ * interview is off, with nothing to click, has to chase us for a time. The
+ * link is a real new invitation, so the slot they choose books exactly as the
+ * first one did.
+ */
+registerTemplate({
+  key: 'recruit.cancelled.byus',
+  title: 'We cancelled — please book again',
+  audience: 'candidate',
+  when: 'When a manager cancels an interview. Carries a new booking link.',
+  description:
+    'Apologises, says it is nothing to do with their application, and gives them a fresh link to choose another time.',
+  mergeFields: ['firstName', 'token'],
+  sample: SAMPLE,
+  load,
+  /*
+   * Two shapes, one template. With a token the manager chose "cancel and send
+   * a booking link", and the email asks them to pick a new time. Without one
+   * they chose "cancel only": the same apology, no link, and a line saying we
+   * will be in touch -- rather than a dead "book again" button, or silence.
+   */
+  render: (data) => {
+    const rebook = Boolean(data.token);
+    const link = rebook ? bookingUrl(data.token) : null;
+    const APOLOGY =
+      'We are sorry: we have had to cancel your interview with us. This is entirely on our side and says nothing about your application, which is still very much with us.';
+    const NO_LINK_NEXT = 'We will be in touch shortly about arranging another time.';
+    return {
+      subject: rebook
+        ? 'Your interview has been cancelled — please choose a new time'
+        : 'Your interview has been cancelled',
+      text: [
+        `Dear ${data.firstName},`,
+        '',
+        APOLOGY,
+        '',
+        ...(rebook
+          ? ['Please choose a new time that suits you using the link below:', '', `▶ Book a new time: ${link}`, '', MEETING_NOTE_TEXT]
+          : [NO_LINK_NEXT]),
+        '',
+        'With our apologies for the inconvenience.',
+        '',
+        SIGN_OFF,
+      ].join('\n'),
+      html: shell({
+        heading: 'Your interview has been cancelled',
+        preview: rebook ? 'We are sorry — please choose a new time.' : 'We are sorry — we will be in touch.',
+        body: [
+          greeting(data.firstName),
+          p(APOLOGY),
+          ...(rebook
+            ? [p('Please choose a new time that suits you using the button below.'), callout(MEETING_NOTE_HTML), button(link, 'Book a new time')]
+            : [p(NO_LINK_NEXT)]),
+          p('With our apologies for the inconvenience.'),
+        ].join('\n'),
+      }),
+    };
+  },
+});
+
 // ── Reminders ───────────────────────────────────────────────────────────────
 
 registerTemplate({
@@ -866,4 +929,4 @@ registerTemplate({
 /** Imported for its side effects; exported so a caller can assert it loaded. */
 // Every registerTemplate() in this file. It had fallen behind (it read 11 while
 // 17 were registered); templates.test.js now pins it to the registry.
-export const TEMPLATE_COUNT = 21;
+export const TEMPLATE_COUNT = 22;

@@ -221,6 +221,29 @@ export const notifyMeetingLink = (client, { applicant, interviewId }) =>
     dedupeKey: dedupeKey('meetlink', interviewId, Math.floor(Date.now() / 60_000)),
   });
 
+/**
+ * Cancelled by US, with a new link so they can pick another time.
+ *
+ * Separate from notifyCancelled (the candidate's own cancellation): that one
+ * says "as requested" and needs no link, which would be a strange thing to
+ * send someone whose interview WE called off. The pending reminders are
+ * cancelled for the interview that is not happening; the email is attached to
+ * the new one, whose token it carries.
+ */
+export async function notifyCancelledByUs(client, { applicant, cancelledInterviewId, interviewId, bookingToken }) {
+  await cancelPendingFor(client, cancelledInterviewId, 'interview cancelled by us');
+
+  return enqueue(client, {
+    template: 'recruit.cancelled.byus',
+    toEmail: applicant.email,
+    toName: applicant.full_name,
+    applicantId: applicant.id,
+    interviewId,
+    vars: bookingToken ? { token: bookingToken } : {},
+    dedupeKey: dedupeKey('cancelledbyus', cancelledInterviewId, Date.now()),
+  });
+}
+
 /** Cancelled by the candidate. Their reminders must not still arrive. */
 export async function notifyCancelled(client, { applicant, interviewId }) {
   await cancelPendingFor(client, interviewId, 'interview cancelled');

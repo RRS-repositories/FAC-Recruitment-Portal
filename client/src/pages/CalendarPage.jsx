@@ -11,6 +11,7 @@ import { NotAttendedModal } from '@/features/dashboard/NotAttendedModal';
 import {
   adminAddBlackout,
   adminCalendar,
+  adminCancelInterview,
   adminMarkAttendance,
   adminRemoveBlackout,
   adminSignOut,
@@ -202,6 +203,8 @@ export function CalendarPage() {
 
   // What the manager clicked: a booked slot to look at, or a free one to hold.
   const [chosen, setChosen] = useState(null);
+  // The "are you sure" step in front of cancelling an interview.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [reason, setReason] = useState('');
   // "Not attended" from the popup: the same dialog as the dashboard.
   const [notAttending, setNotAttending] = useState(null);
@@ -282,6 +285,37 @@ export function CalendarPage() {
       await load();
     } catch (failure) {
       setError(failure.message);
+      setChosen(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /*
+   * "Cancel interview" -- the firm calling it off, not the candidate. The
+   * server cancels it, stops its reminders, removes the calendar event and
+   * emails an apology with a new booking link. Behind a confirm, because it
+   * sends a real email and cannot be undone.
+   */
+  const cancelInterview = async (rebook) => {
+    setBusy(true);
+    setError('');
+    const who = chosen.slot.interview;
+    try {
+      const result = await adminCancelInterview(who.applicantId, { rebook });
+      setConfirmingCancel(false);
+      setChosen(null);
+      // Email switched off: the link must not vanish with the dialog, or the
+      // interview is cancelled and nobody can tell the candidate how to
+      // rebook. Same as the no-show path does.
+      if (result?.rebook && !result.emailLive && result.bookingUrl) {
+        setRebookLink({ name: who.fullName, email: who.email, url: result.bookingUrl, cancelled: true });
+      }
+      await load();
+    } catch (failure) {
+      if (failure.status === 401) signOut();
+      else setError(failure.message);
+      setConfirmingCancel(false);
       setChosen(null);
     } finally {
       setBusy(false);
@@ -724,8 +758,46 @@ export function CalendarPage() {
                   );
                 })()
               ) : null}
+              {/* Cancelling is the firm's own decision, so it sits apart from
+                  the attendance buttons and asks first. Only while the
+                  interview still stands. */}
+              {['invited', 'booked'].includes(chosen.slot.interview.status) ? (
+                confirmingCancel ? (
+                  <div className="mt-4 rounded-panel border border-danger/30 bg-red-50 px-4 py-3">
+                    <p className="text-[0.88rem] font-semibold text-danger">
+                      Cancel this interview and ask them to book again?
+                    </p>
+                    <p className="mt-1 text-[0.84rem] leading-relaxed text-body">
+                      Either way {chosen.slot.interview.fullName} is emailed an apology, this interview's
+                      reminders are cancelled and the calendar invitation is removed.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button variant="danger" size="sm" onClick={() => cancelInterview(true)} disabled={busy}>
+                        {busy ? 'Cancelling…' : 'Cancel and send a booking link'}
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => cancelInterview(false)} disabled={busy}>
+                        {busy ? 'Cancelling…' : 'Cancel only'}
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => setConfirmingCancel(false)} disabled={busy}>
+                        Keep the interview
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-[0.8rem] leading-relaxed text-muted">
+                      With a link they can pick another time themselves. Cancel only tells them we will be
+                      in touch, and leaves them no open invitation.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4">
+                    <Button variant="secondary" size="sm" onClick={() => setConfirmingCancel(true)} disabled={busy}>
+                      <Icon name="close" size={15} />
+                      Cancel interview
+                    </Button>
+                  </div>
+                )
+              ) : null}
               <div className="mt-6 flex justify-end gap-2">
-                <Button variant="secondary" onClick={() => setChosen(null)}>
+                <Button variant="secondary" onClick={() => { setConfirmingCancel(false); setChosen(null); }}>
                   Close
                 </Button>
                 {/* The id, never the email: a query string ends up in browser
@@ -795,13 +867,14 @@ export function CalendarPage() {
       {rebookLink ? (
         <Modal titleId="rebook-link-title" className="max-w-lg" dismissable={false}>
           <h2 id="rebook-link-title" className="text-[1.15rem] font-bold text-ink">
-            Send {rebookLink.name} their final re-book link
+            {rebookLink.cancelled
+              ? `Send ${rebookLink.name} their new booking link`
+              : `Send ${rebookLink.name} their final re-book link`}
           </h2>
           <p className="mt-2 text-[0.9rem] leading-relaxed text-muted">
-            No email is being sent, so send this to{' '}
-            <b className="font-semibold text-ink">{rebookLink.email}</b> yourself. It is valid for 7
-            days and <b className="font-semibold text-ink">shown once</b> — it cannot be retrieved
-            again.
+            {rebookLink.cancelled ? 'The interview is cancelled, but no email is being sent. ' : 'No email is being sent, so '}
+            send this to <b className="font-semibold text-ink">{rebookLink.email}</b> yourself. It is{' '}
+            <b className="font-semibold text-ink">shown once</b> — it cannot be retrieved again.
           </p>
           <p className="mt-4 break-all rounded-panel border border-line bg-lav-soft p-3 font-mono text-[0.8rem] text-ink">
             {rebookLink.url}
