@@ -20,10 +20,9 @@ const MUTED = '#6b7280';
 const VIOLET = '#6d28d9';
 const LINE = '#e5e7eb';
 
-/** The regulatory footer, as it appears on the client's own templates. */
+/** The legal footer, as it appears on the client's own templates. */
 const LEGAL =
-  'Sent by Fast Action Claims, a trading name of Rowan Rose Ltd (Company No. 12916452), ' +
-  'authorised and regulated by the Solicitors Regulation Authority, SRA No. 8000843.';
+  'Sent by Beacon Legal Group, a trading name of Rowan Rose Ltd (Company No. 12916452).';
 
 /** Where a reply goes. Same resolution order as the mailer's own From. */
 const replyAddress = () =>
@@ -85,7 +84,7 @@ export const detail = (label, value) =>
 const SIGN_OFF_HTML =
   `<p style="margin:0 0 4px;font-size:15px;line-height:1.7;color:${BODY_TEXT};">Kind regards,</p>` +
   `<p style="margin:0 0 30px;font-size:15px;line-height:1.7;color:${INK};font-weight:600;">Recruitment Team<br>` +
-  `<span style="font-weight:400;color:${MUTED};">Fast Action Claims &middot; Rowan Rose Ltd</span></p>`;
+  `<span style="font-weight:400;color:${MUTED};">Beacon Legal Group &middot; Rowan Rose Ltd</span></p>`;
 
 /**
  * Wraps a body in the shell.
@@ -115,7 +114,7 @@ export function shell({ heading, preview, body }) {
           <table role="presentation" cellpadding="0" cellspacing="0"><tr>
             <td style="width:38px;height:38px;background:#7c3aed;border-radius:10px;text-align:center;vertical-align:middle;font-size:15px;font-weight:900;color:#ffffff;letter-spacing:-0.03em;">FA</td>
             <td style="padding-left:11px;">
-              <div style="font-size:16px;font-weight:800;color:#ffffff;letter-spacing:-0.02em;">Fast Action Claims</div>
+              <div style="font-size:16px;font-weight:800;color:#ffffff;letter-spacing:-0.02em;">Beacon Legal Group</div>
               <div style="font-size:11.5px;color:rgba(255,255,255,0.6);">Rowan Rose Ltd</div>
             </td>
           </tr></table>
@@ -133,7 +132,7 @@ ${SIGN_OFF_HTML}
         </td></tr>
 
       </table>
-      <p style="margin:16px 0 0;font-size:11.5px;color:${MUTED};font-family:${FONT};">You received this because you applied for a role at Fast Action Claims.</p>
+      <p style="margin:16px 0 0;font-size:11.5px;color:${MUTED};font-family:${FONT};">You received this because you applied for a role at Beacon Legal Group.</p>
     </td></tr>
   </table>
 </body>

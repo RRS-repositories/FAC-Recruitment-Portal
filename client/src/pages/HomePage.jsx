@@ -21,9 +21,9 @@ import usePageMeta from '@/hooks/usePageMeta';
  */
 export function HomePage() {
   usePageMeta({
-    title: 'Open positions — Fast Action Claims Careers',
+    title: 'Open positions — Beacon Legal Group Careers',
     description:
-      'Paralegal roles at Fast Action Claims, remote from India and South Africa. Apply in about ten minutes.',
+      'Paralegal roles at Beacon Legal Group, remote from India and South Africa. Apply in about ten minutes.',
   });
 
   return (

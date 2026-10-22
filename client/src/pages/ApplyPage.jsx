@@ -12,7 +12,7 @@ export function ApplyPage() {
 
   usePageMeta({
     title: role ? `Apply — ${role.title}` : 'Apply',
-    description: 'Apply for a paralegal role with Fast Action Claims.',
+    description: 'Apply for a paralegal role with Beacon Legal Group.',
     // An application form has nothing to offer a search engine, and indexing it
     // would put a half-finished form ahead of the role page it belongs to.
     robots: 'noindex, nofollow',

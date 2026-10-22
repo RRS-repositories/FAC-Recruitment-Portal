@@ -143,7 +143,7 @@ export async function loadContext(row, db) {
 }
 
 /** The sign-off every email shares, so it cannot drift between them. */
-export const SIGN_OFF = 'Kind regards,\nRecruitment Team\nFast Action Claims\nRowan Rose Ltd';
+export const SIGN_OFF = 'Kind regards,\nRecruitment Team\nBeacon Legal Group\nRowan Rose Ltd';
 
 /**
  * The line that names the time, in both zones.

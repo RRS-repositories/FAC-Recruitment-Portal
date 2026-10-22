@@ -17,7 +17,7 @@ export function LandingNav() {
   return (
     <nav className="nav" aria-label="Site">
       <div className="brand">
-        Fast Action Claims<small>Rowan Rose Ltd · SRA 8000843</small>
+        Beacon Legal Group<small>Rowan Rose Ltd</small>
       </div>
       <Link to="/admin">Manager login</Link>
     </nav>
@@ -28,9 +28,7 @@ export function LandingFooter() {
   return (
     <footer className="wrap">
       <div className="foot">
-        Fast Action Claims is a trading style of Rowan Rose Ltd, a firm of solicitors authorised
-        and regulated by the Solicitors Regulation Authority (SRA No. 8000843). Company No.
-        12916452.
+        Beacon Legal Group is a trading style of Rowan Rose Ltd. Company No. 12916452.
         <br />
         Questions? {RECRUIT_EMAIL}
       </div>

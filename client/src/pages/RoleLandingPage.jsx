@@ -22,7 +22,7 @@ export function RoleLandingPage() {
   const role = getRole(roleKey);
 
   usePageMeta({
-    title: role ? `${role.title} — Fast Action Claims Careers` : 'Careers',
+    title: role ? `${role.title} — Beacon Legal Group Careers` : 'Careers',
     description: role?.sub,
   });
 

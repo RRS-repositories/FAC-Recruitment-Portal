@@ -124,7 +124,7 @@ const ROLE_QUESTIONS = {
     ...SHARED_QUESTIONS,
     {
       id: 'q11',
-      question: 'What interests you most about this role at Fast Action Claims?',
+      question: 'What interests you most about this role at Beacon Legal Group?',
       options: [
         { label: 'Gaining hands-on experience in UK consumer law while working from India', score: 3 },
         { label: 'The opportunity to grow with an international legal firm and earn a full-time contract', score: 3 },
@@ -159,7 +159,7 @@ const ROLE_QUESTIONS = {
     ...SHARED_QUESTIONS,
     {
       id: 'q11',
-      question: 'What interests you most about this role at Fast Action Claims?',
+      question: 'What interests you most about this role at Beacon Legal Group?',
       options: [
         { label: 'Working on UK consumer law matters with a growing firm', score: 3 },
         { label: 'A stable full-time remote position with real casework', score: 3 },

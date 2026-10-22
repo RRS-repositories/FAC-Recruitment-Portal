@@ -58,7 +58,7 @@ test('the wording is the supplied wording', () => {
     'You missed your interview, Priya.',
     'other candidates were turned away from that slot',
     'Join the Google Meet link from your calendar invite',
-    'Fast Action Claims, Rowan Rose Ltd, Beacon Legal Group or Atlas Recruitment',
+    'Beacon Legal Group, Rowan Rose Ltd or Atlas Recruitment',
     'silence will be treated as a no-show',
     'Re-book my interview',
   ]) {

@@ -140,8 +140,8 @@ export function DashboardPage() {
 
   usePageMeta({
     title: routeRole
-      ? `Applicants: ${roleNavLabel(ROLES[routeRole])} — Fast Action Claims`
-      : 'Applicants — Fast Action Claims',
+      ? `Applicants: ${roleNavLabel(ROLES[routeRole])} — Beacon Legal Group`
+      : 'Applicants — Beacon Legal Group',
     description: 'Internal recruitment dashboard.',
     // Personal data. Never indexed, regardless of what stands in front of it.
     robots: 'noindex, nofollow',
@@ -1114,13 +1114,13 @@ export function DashboardPage() {
             </Button>
             <Button
               href={`mailto:${bookingLink.email}?subject=${encodeURIComponent(
-                'Your interview with Fast Action Claims',
+                'Your interview with Beacon Legal Group',
               )}&body=${encodeURIComponent(
                 bookingLink.rebook
                   ? `Hi ${bookingLink.name},\n\nWe missed you at your interview. This is your final opportunity to re-book, ` +
-                      `and the link is valid for 7 days:\n\n${bookingLink.url}\n\nBest wishes,\nFast Action Claims`
+                      `and the link is valid for 7 days:\n\n${bookingLink.url}\n\nBest wishes,\nBeacon Legal Group`
                   : `Hi ${bookingLink.name},\n\nGood news — we would like to invite you to an interview. ` +
-                      `Please pick a time that suits you here:\n\n${bookingLink.url}\n\nBest wishes,\nFast Action Claims`,
+                      `Please pick a time that suits you here:\n\n${bookingLink.url}\n\nBest wishes,\nBeacon Legal Group`,
               )}`}
             >
               <Icon name="mail" size={15} />

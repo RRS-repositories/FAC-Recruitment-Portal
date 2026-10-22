@@ -16,21 +16,26 @@ import { SALES_DETAIL_OPTIONS, SALES_QUESTIONS, SALES_WRITTEN_QUESTIONS } from '
 /**
  * Registering the sales role must not move the other two by a byte.
  *
- * The fingerprints below are sha256 of JSON.stringify(...) taken from main
- * BEFORE the sales role existed (3f18e1e). If one of these fails, the form an
- * intern or paralegal candidate is served has changed -- which may be
- * intended, but must never be a side effect of this role.
+ * The fingerprints below were taken from main BEFORE the sales role existed
+ * (3f18e1e) and re-pinned on 22 Oct 2026, when the firm was renamed to Beacon
+ * Legal Group: one written question names the firm, so the payload and question
+ * hashes moved with it. WRITTEN_QUESTIONS did not move -- the shared three
+ * never named the firm, which is why its pin below is still the original.
+ *
+ * If one of these fails, the form an intern or paralegal candidate is served
+ * has changed -- which may be intended, but must never be a side effect of
+ * another role.
  */
 const sha = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 const BEFORE = {
   payload: {
-    intern: '278dc26ff4edfc879845c301c17c5862959980687ce0917dddaa822a6dd86160',
-    paralegal: 'b05456932b5faa00733143060a4a08d413f512fb4225f7dd3a607c7a0fb9bbeb',
+    intern: '4936a1d7747871744c8e048ce18d0ccf8be79eb897cfe088560921ae426f9e3e',
+    paralegal: 'c02600c301af8406ae367616388bb2f81b96f398da84c15a18182f120020bc97',
   },
   questions: {
-    india_intern: 'd8543e66c459cffa55bad2741b03f53032d5db5282ce75dd16d19c1f00129079',
-    sa_paralegal: '4c5447b4e2920bdaeedad98a2ef19431df66ddf0132625e42dd1444439f7dec0',
+    india_intern: '0a6b1ac3d833d928dbdfd3f52ed1a7f45bb27abb99f01e42ae839518436669ad',
+    sa_paralegal: '0fac0bcd6a9baeb4493fdc87819b4011384f0c10f2eabff7d0aa2b3dc3dcc681',
   },
   written: '1a6610efdf6824823d2f5ff3137d3a841fabc5b04ca535c2b55b07a47c028f5f',
 };

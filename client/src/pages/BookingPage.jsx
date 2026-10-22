@@ -82,7 +82,7 @@ export function BookingPage() {
   const { token } = useParams();
 
   usePageMeta({
-    title: 'Book your interview — Fast Action Claims',
+    title: 'Book your interview — Beacon Legal Group',
     // A page reached by a secret link, showing a named person's interview.
     robots: 'noindex, nofollow',
   });

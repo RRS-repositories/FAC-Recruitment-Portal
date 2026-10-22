@@ -50,7 +50,7 @@ export function buildIcs({ uid, startsAt, endsAt, summary, description, location
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Fast Action Claims//Recruitment Portal//EN',
+    'PRODID:-//Beacon Legal Group//Recruitment Portal//EN',
     'CALSCALE:GREGORIAN',
     // REQUEST would make this a formal invitation the candidate can accept or
     // decline, and there is nothing on our side listening for that reply.

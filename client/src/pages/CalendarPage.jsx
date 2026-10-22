@@ -170,7 +170,7 @@ const prettyDate = (isoDate) =>
 
 export function CalendarPage() {
   usePageMeta({
-    title: 'Calendar — Fast Action Claims',
+    title: 'Calendar — Beacon Legal Group',
     description: 'Interviews and blocked time, week by week.',
     robots: 'noindex, nofollow',
   });

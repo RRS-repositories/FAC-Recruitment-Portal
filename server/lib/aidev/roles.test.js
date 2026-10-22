@@ -22,17 +22,22 @@ import { AIDEV_DETAIL_OPTIONS, AIDEV_QUESTIONS, AIDEV_WRITTEN_QUESTIONS } from '
  * extended-role registry, must not move any existing role by a byte.
  *
  * The sales fingerprints below are sha256 of JSON.stringify(...) taken from
- * the branch BEFORE the registry existed (c6792e1). The intern and paralegal
- * ones are pinned, from before the sales role, in ../sales/roles.test.js.
+ * the branch BEFORE the registry existed (c6792e1), re-pinned on 22 Oct 2026
+ * for the rename to Beacon Legal Group: the sales written questions name the
+ * firm, and the role brief no longer calls it SRA-regulated, so the payload,
+ * questions, written and prompt hashes all moved. `role` did not -- the role
+ * record itself carries no firm name, and its pin below is the original.
+ *
+ * The intern and paralegal ones are pinned in ../sales/roles.test.js.
  */
 const sha = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 const SALES_BEFORE = {
-  payload: 'ecc1d0b8519bf9031dad31b47f42ea261f9e646c17fc786608114f01aa3ce368',
-  questions: '1ecec04aa6f44fc8a078f4d8aeb23a014cdc9c92d63242af3cea32857ee6bc16',
-  written: '352eee60e00d8be63c1647bb54f14b31be6437fbc9a100f2e237d41f100332fa',
+  payload: 'b7b302a3df5047890643058eb069ef7c64c22c2e02262dc890a63bba51d858bb',
+  questions: '68e4d48dfd4125dc16e1255e99d1d4567026ac27171da5bc43938d9f75267bf9',
+  written: '139c72ab4299431523728035bc34e80099070f6020b804b2e996184bfa6ed2a8',
   role: '6f3cb0fde947a498fa2981cd544f6231c0bc58f1c6709f7489f31672523a273a',
-  prompt: 'eebe56d30c174f15769d274dd835f3895e80ddf1b53f92809835c635c4254b77',
+  prompt: '71a52b0798447ba61c77a89337b5782cb32719769109098d41cdcad15e2b1458',
 };
 
 // The sales model prompt was changed ON PURPOSE when the review became
@@ -41,7 +46,7 @@ const SALES_BEFORE = {
 // SALES_PROMPT_V2 pins the new prompt; putting the version-1 header back and
 // taking the section out must still give SALES_BEFORE.prompt, which proves
 // nothing else in it moved.
-const SALES_PROMPT_V2 = 'be3bc18707d1aa888b0740cc61a5fe48e4935f446e0e873a5eb420a189f74919';
+const SALES_PROMPT_V2 = 'b28f0150fc4192a1d1dab1ff940fe40f5d7e27407ddd58a1c8dcbd5b49ce00e7';
 const SALES_V2_HEAD =
   /^ROLE: Sales & Customer Service \(office-based in South Africa, on the phone, UK hours\)\n\n--- WHAT THIS ROLE NEEDS ---\n[\s\S]*?\n\n--- THEIR CV ---/;
 

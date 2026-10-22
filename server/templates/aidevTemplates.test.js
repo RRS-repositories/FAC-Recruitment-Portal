@@ -35,7 +35,7 @@ for (const key of AIDEV) {
     for (const part of [out.subject, out.text, out.html, tpl.title]) {
       assert.doesNotMatch(part, /paralegal|internship|internshala|sales|customer service/i);
     }
-    assert.match(out.text, /the AI Developer position at Fast Action Claims\./);
+    assert.match(out.text, /the AI Developer position at Beacon Legal Group\./);
     assert.match(out.text, /^Dear Arjun,/, 'its own invented sample');
   });
 
@@ -48,8 +48,8 @@ for (const key of AIDEV) {
 
 test('each is the India email word for word, only the role line changed', () => {
   const pairs = [
-    ['recruit.india.accept', 'recruit.aidev.accept', 'Thank you for applying for the AI Developer position at Fast Action Claims.'],
-    ['recruit.india.decline', 'recruit.aidev.decline', 'Thank you for taking the time to apply for the AI Developer position at Fast Action Claims.'],
+    ['recruit.india.accept', 'recruit.aidev.accept', 'Thank you for applying for the AI Developer position at Beacon Legal Group.'],
+    ['recruit.india.decline', 'recruit.aidev.decline', 'Thank you for taking the time to apply for the AI Developer position at Beacon Legal Group.'],
   ];
   for (const [india, aidev, roleLine] of pairs) {
     const data = { ...getTemplate(india).sample, token: 'T', declineSentence: 'R.', declineReapply: 'A.' };
@@ -71,7 +71,7 @@ test('the accept email carries the booking link and gives times in IST', () => {
   assert.match(out.html, /\/book\/TOKEN-123/);
   assert.match(out.text, /shown in your local time \(IST\)/);
   assert.match(out.text, /a short video interview with/);
-  assert.equal(out.subject, "Fast Action Claims — You've been shortlisted");
+  assert.equal(out.subject, "Beacon Legal Group — You've been shortlisted");
 });
 
 test('the decline email is built like the Sales one, with the reason mechanics', () => {
