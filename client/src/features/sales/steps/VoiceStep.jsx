@@ -26,7 +26,7 @@ export function VoiceStep({ step, value, onChange, limits, serverMessage, onBack
         <ol>
           <li>Who you are and why you'd be an ideal candidate</li>
           <li>The sales or customer service experience you've had, with real examples</li>
-          <li>Why you'd be the best person for this role at Fast Action Claims</li>
+          <li>Why you'd be the best person for this role at Beacon Legal Group</li>
         </ol>
         <div className="prompts-note">
           Speak naturally, as you would on a call. Find a quiet spot. You can re-record as many

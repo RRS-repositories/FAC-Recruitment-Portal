@@ -8,7 +8,7 @@ export function FormBand({ children, style }) {
     <div className="formhead" style={style}>
       <div className="wrap">
         <div className="brand">
-          Fast Action Claims<small>{brandLine}</small>
+          Beacon Legal Group<small>{brandLine}</small>
         </div>
         {children}
       </div>

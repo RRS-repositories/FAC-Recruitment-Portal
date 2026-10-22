@@ -130,7 +130,7 @@ export const ROLES = {
     whyHeading: 'What the role is',
     why: "You'll call people who've enquired about a claim, explain in plain English who we are and how it works, and sign up the ones we can genuinely help. You'll also look after existing clients — answering questions, keeping them updated and making sure nobody feels forgotten.",
     contract:
-      "We're an SRA-regulated law firm. That means honesty on every call, no pressure tactics and no promises we can't keep. If you're good at talking to people and you like a target, you'll do well here.",
+      "We're a UK law firm. That means honesty on every call, no pressure tactics and no promises we can't keep. If you're good at talking to people and you like a target, you'll do well here.",
     need: [
       'Permanent, full-time role',
       'UK hours: 9:00 AM – 6:00 PM UK time',

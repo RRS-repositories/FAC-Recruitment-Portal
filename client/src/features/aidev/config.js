@@ -26,9 +26,9 @@ export const AIDEV = {
   applyPath: AIDEV_APPLY_PATH,
 
   meta: {
-    title: 'AI Developer — Fast Action Claims Careers',
+    title: 'AI Developer — Beacon Legal Group Careers',
     description:
-      'Remote AI developer role in India with Fast Action Claims, a UK law firm building its own AI-driven CRM, automation and agent platform. UK hours, ₹30,000 a month, full-time and permanent.',
+      'Remote AI developer role in India with Beacon Legal Group, a UK law firm building its own AI-driven CRM, automation and agent platform. UK hours, ₹30,000 a month, full-time and permanent.',
   },
 
   /** The form band's small line. */

@@ -59,7 +59,7 @@ export function SalesLanding({ onStart }) {
               sure nobody feels forgotten.
             </p>
             <p>
-              We're an SRA-regulated law firm. That means honesty on every call, no pressure
+              We're a UK law firm. That means honesty on every call, no pressure
               tactics and no promises we can't keep. If you're good at talking to people
               and you like a target, you'll do well here.
             </p>

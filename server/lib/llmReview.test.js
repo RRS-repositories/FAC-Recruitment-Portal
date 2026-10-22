@@ -194,6 +194,13 @@ test('sales answers are labelled with the sales written questions', () => {
  * running that commit's own SYSTEM and buildPrompt on the inputs listed here.
  * If one fails, what an intern or paralegal applicant's review is asked has
  * changed, and PROMPT_VERSION 1 would no longer describe it.
+ *
+ * The prompt pins were recomputed on 22 Oct 2026 for the rename to Beacon
+ * Legal Group: a written question quoted into the prompt names the firm.
+ * PROMPT_VERSION stays 1 deliberately -- the question being asked is the same
+ * question, and the version exists to tell apart prompts that assess something
+ * different, not prompts that spell the firm's name differently. `system` is
+ * unchanged, and still the original hash: SYSTEM never named the firm.
  */
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
 
@@ -201,14 +208,14 @@ const AT_3F18E1E = {
   system: '7e332085fc1cd36ae553151d3539cabbadaba18929cb26bcbf00173912d6e842',
   prompts: {
     india_intern: [
-      'a5ade7e4f81a45cf30dc678b8fd74997db3a05a7f63f6594ba7aa13feb2e39c4',
-      '3640c3f4b7ee0ec5b8df897b81c5659aecb549a4935997ecc444521e9080c4a3',
-      '4b54775ad9d210bfb50fe23cd7d62a2c677ded7f439c27098d785e499bf7a1d1',
+      '79b60aa392561d6332884eefe6a83088e2f40b2c56bebcb0ce30b9e1753f31ca',
+      'eb2a8b805939e970a4f196aa542f27d1bfda360ae4452d55278ab82fec26dff6',
+      '2dd92e9e6e0816e8d68c6f2efdf908c08164410fefb1e620a03483de3b4f3f57',
     ],
     sa_paralegal: [
-      '4ba29ba5ca19b3c0198b53a99d9f50a76995e0db86e395275b486f26f267b7d2',
-      '1a6c37e0e2110a6d8aad5eb63107bc28ad3a8ee0e4c466b3f404d15f73620732',
-      '6093391a5cf3654780d3959c4ecf7428b1b4d60d71658c4791520b3c85b640ba',
+      '111f06e57ee8cc1f7f2b25191d10335048af1a8010947903570c280ae5d5dc68',
+      'f750eb67c3e8176e221a2041c25152d200d2f500287b259b10aa38519c8b5d2c',
+      '9e19b20f9e1e6f943d57de7d5e3943675216e036bdfed2569dc03f3c42fcc03d',
     ],
   },
 };

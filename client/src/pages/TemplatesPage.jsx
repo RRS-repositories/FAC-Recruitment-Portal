@@ -43,7 +43,7 @@ const STAGE_ORDER = [
 
 export function TemplatesPage() {
   usePageMeta({
-    title: 'Email templates — Fast Action Claims',
+    title: 'Email templates — Beacon Legal Group',
     description: 'What the portal sends, and when.',
     robots: 'noindex, nofollow',
   });

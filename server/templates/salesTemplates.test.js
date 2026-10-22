@@ -44,8 +44,8 @@ for (const key of SALES) {
 
 test('each is the South Africa email word for word, only the role line changed', () => {
   const pairs = [
-    ['recruit.sa.accept', 'recruit.sales.accept', 'Thank you for applying for the full-time Sales & Customer Service position at Fast Action Claims.'],
-    ['recruit.sa.decline', 'recruit.sales.decline', 'Thank you for taking the time to apply for the full-time Sales & Customer Service position at Fast Action Claims.'],
+    ['recruit.sa.accept', 'recruit.sales.accept', 'Thank you for applying for the full-time Sales & Customer Service position at Beacon Legal Group.'],
+    ['recruit.sa.decline', 'recruit.sales.decline', 'Thank you for taking the time to apply for the full-time Sales & Customer Service position at Beacon Legal Group.'],
   ];
   for (const [sa, sales, roleLine] of pairs) {
     const data = { ...getTemplate(sa).sample, token: 'T', declineSentence: 'R.', declineReapply: 'A.' };
@@ -64,12 +64,12 @@ test('"Application received" says "position" for the new roles only', () => {
   const ack = getTemplate('recruit.ack');
   // As the original roles reach it: roleApplied is the title alone.
   const intern = ack.render({ ...ack.sample, roleTitle: 'Paralegal Internship', roleApplied: 'Paralegal Internship' });
-  assert.match(intern.text, /for the Paralegal Internship at Fast Action Claims\./);
+  assert.match(intern.text, /for the Paralegal Internship at Beacon Legal Group\./);
   // A context with no roleApplied at all (an email queued before this change) still reads as before.
   const older = ack.render({ ...ack.sample, roleTitle: 'Paralegal — Full-time', roleApplied: undefined });
-  assert.match(older.text, /for the Paralegal — Full-time at Fast Action Claims\./);
+  assert.match(older.text, /for the Paralegal — Full-time at Beacon Legal Group\./);
   const sales = ack.render({ ...ack.sample, roleTitle: 'Sales & Customer Service', roleApplied: 'Sales & Customer Service position' });
-  assert.match(sales.text, /for the Sales & Customer Service position at Fast Action Claims\./);
+  assert.match(sales.text, /for the Sales & Customer Service position at Beacon Legal Group\./);
 });
 
 test('the sales accept email still carries the booking link', () => {

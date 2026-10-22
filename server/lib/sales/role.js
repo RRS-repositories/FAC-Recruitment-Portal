@@ -62,7 +62,7 @@ export const SALES_ROLE = Object.freeze({
       '- Inbound customer service: updates, questions, keeping clients informed.',
       '- Logging every call accurately in the CRM.',
       '- A weekly sign-up target, with a bonus for going over it.',
-      '- The firm is an SRA-regulated law firm: honesty on every call, no pressure tactics, no promises it cannot keep.',
+      '- The firm is a UK law firm: honesty on every call, no pressure tactics, no promises it cannot keep.',
       '- High call volume (80–120 outbound calls a day), and resilience after rejection.',
       '- UK hours: 9:00–18:00 UK time.',
       'What good looks like: comfortable on the phone, target-driven, honest, resilient, keeps accurate notes.',

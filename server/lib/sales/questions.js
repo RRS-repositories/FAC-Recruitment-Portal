@@ -56,7 +56,7 @@ export const SALES_WRITTEN_QUESTIONS = freeze([
   {
     id: 'w5',
     label:
-      'What do you know about Fast Action Claims and the claims we handle (irresponsible lending, gambling harm, car finance)? Why does this kind of work interest you?',
+      'What do you know about Beacon Legal Group and the claims we handle (irresponsible lending, gambling harm, car finance)? Why does this kind of work interest you?',
     minWords: 40,
   },
   {
@@ -83,7 +83,7 @@ export const SALES_QUESTIONS = freeze([
     options: [
       {
         label:
-          "Acknowledge it, explain we're an SRA-regulated law firm with no upfront fees, and ask one open question about their situation before saying anything else.",
+          "Acknowledge it, explain we're a UK law firm with no upfront fees, and ask one open question about their situation before saying anything else.",
         score: 3,
       },
       { label: 'Apologise and offer to remove them from the list.', score: 0 },
@@ -195,7 +195,7 @@ export const SALES_QUESTIONS = freeze([
     options: [
       {
         label:
-          "'Hi, is that [name]? It's [me] from Fast Action Claims — a UK law firm. Have I caught you at an okay time? I'll be quick.' Then one question about their lending.",
+          "'Hi, is that [name]? It's [me] from Beacon Legal Group — a UK law firm. Have I caught you at an okay time? I'll be quick.' Then one question about their lending.",
         score: 3,
       },
       { label: "'Hello, you may be entitled to compensation, are you interested?'", score: 1 },

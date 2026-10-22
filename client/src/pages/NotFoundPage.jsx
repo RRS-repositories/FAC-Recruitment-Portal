@@ -4,7 +4,7 @@ import { ROLES } from '@/data/roles';
 import usePageMeta from '@/hooks/usePageMeta';
 
 export function NotFoundPage() {
-  usePageMeta({ title: 'Page not found — Fast Action Claims Careers' });
+  usePageMeta({ title: 'Page not found — Beacon Legal Group Careers' });
 
   return (
     <AppShell>

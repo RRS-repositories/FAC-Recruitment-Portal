@@ -27,7 +27,7 @@ export const mailMode = () => (process.env.SMTP_HOST ? 'smtp' : 'file');
 /** Who the mail claims to be from. */
 export function sender() {
   const address = process.env.MAIL_FROM || 'recruitment@fastactionclaims.co.uk';
-  const name = process.env.MAIL_FROM_NAME || 'Fast Action Claims';
+  const name = process.env.MAIL_FROM_NAME || 'Beacon Legal Group';
   return { address, name, formatted: `"${name}" <${address}>` };
 }
 

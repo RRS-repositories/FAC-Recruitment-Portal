@@ -26,9 +26,9 @@ export const SALES = {
   applyPath: SALES_APPLY_PATH,
 
   meta: {
-    title: 'Sales & Customer Service — Fast Action Claims Careers',
+    title: 'Sales & Customer Service — Beacon Legal Group Careers',
     description:
-      "Sales and customer service in South Africa with Fast Action Claims, one of the UK's fastest-growing law firms. UK hours, R6,000 basic, R13,000 OTE.",
+      "Sales and customer service in South Africa with Beacon Legal Group, one of the UK's fastest-growing law firms. UK hours, R6,000 basic, R13,000 OTE.",
   },
 
   /** The form band's small line. */

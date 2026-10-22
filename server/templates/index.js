@@ -82,7 +82,7 @@ registerTemplate({
   sample: SAMPLE,
   load,
   render: (data) => ({
-    subject: 'Fast Action Claims — we have your application',
+    subject: 'Beacon Legal Group — we have your application',
     ...bodyBoth({
       heading: 'We have your application',
       preview: 'Thanks - we review every application ourselves, within 48 hours.',
@@ -90,7 +90,7 @@ registerTemplate({
       lines: [
       `Hi ${data.firstName},`,
       '',
-      `Thank you for applying for the ${data.roleApplied ?? data.roleTitle} at Fast Action Claims. Your application and CV have reached us safely.`,
+      `Thank you for applying for the ${data.roleApplied ?? data.roleTitle} at Beacon Legal Group. Your application and CV have reached us safely.`,
       '',
       "We review every application ourselves rather than filtering them automatically, so please give us up to 48 hours. You'll hear from us either way — we don't leave people wondering.",
       '',
@@ -132,7 +132,7 @@ const acceptEmail = ({
     render: (data) => {
       const link = bookingUrl(data.token);
       return {
-        subject: `Fast Action Claims — ${heading}`,
+        subject: `Beacon Legal Group — ${heading}`,
         text: [
           `Dear ${data.firstName},`,
           '',
@@ -176,7 +176,7 @@ acceptEmail({
   country: 'India',
   heading: "You've been shortlisted",
   opening:
-    'Thank you for applying for the Paralegal Internship at Fast Action Claims via Internshala.',
+    'Thank you for applying for the Paralegal Internship at Beacon Legal Group via Internshala.',
   decision: "We're delighted to let you know that your application has been successful.",
   timesNote: ', shown in your local time (IST)',
   closing: 'Congratulations, and we look forward to speaking with you soon.',
@@ -187,7 +187,7 @@ acceptEmail({
   title: 'Shortlisted — South Africa',
   country: 'South Africa',
   heading: 'Interview invitation',
-  opening: 'Thank you for applying for the full-time Paralegal position at Fast Action Claims.',
+  opening: 'Thank you for applying for the full-time Paralegal position at Beacon Legal Group.',
   decision: "We're pleased to let you know that your application has been shortlisted.",
   timesNote: ', shown in your local time (SAST)',
   closing: 'We look forward to speaking with you.',
@@ -244,7 +244,7 @@ const declineEmail = ({
       const applyUrl = data.reapplyUrl || publicBaseUrl();
 
       return {
-        subject: 'Fast Action Claims — Application update',
+        subject: 'Beacon Legal Group — Application update',
         text: [
           `Dear ${data.firstName},`,
           '',
@@ -261,7 +261,7 @@ const declineEmail = ({
         ].join('\n'),
         html: shell({
           heading: 'Application update',
-          preview: 'An update on your application to Fast Action Claims.',
+          preview: 'An update on your application to Beacon Legal Group.',
           body: [
             greeting(data.firstName),
             p(esc(opening)),
@@ -280,7 +280,7 @@ declineEmail({
   title: 'Not successful — India',
   country: 'India',
   opening:
-    'Thank you for taking the time to apply for the Paralegal Internship at Fast Action Claims via Internshala.',
+    'Thank you for taking the time to apply for the Paralegal Internship at Beacon Legal Group via Internshala.',
   body: "After careful consideration, we've decided not to progress your application on this occasion. This doesn't reflect on your abilities.",
   closing: 'We appreciate your interest in our firm and wish you every success in your career.',
 });
@@ -290,7 +290,7 @@ declineEmail({
   title: 'Not successful — South Africa',
   country: 'South Africa',
   opening:
-    'Thank you for taking the time to apply for the full-time Paralegal position at Fast Action Claims.',
+    'Thank you for taking the time to apply for the full-time Paralegal position at Beacon Legal Group.',
   body: "After careful consideration, we've decided not to take your application further on this occasion. We had a strong field of applicants and the decision was a close one.",
   closing: 'We appreciate your interest in the firm and wish you every success in your career.',
 });
@@ -322,7 +322,7 @@ acceptEmail({
   title: 'Shortlisted — Sales & Customer Service',
   country: 'South Africa',
   heading: 'Interview invitation',
-  opening: 'Thank you for applying for the full-time Sales & Customer Service position at Fast Action Claims.',
+  opening: 'Thank you for applying for the full-time Sales & Customer Service position at Beacon Legal Group.',
   decision: "We're pleased to let you know that your application has been shortlisted.",
   timesNote: ', shown in your local time (SAST)',
   closing: 'We look forward to speaking with you.',
@@ -335,7 +335,7 @@ declineEmail({
   title: 'Not successful — Sales & Customer Service',
   country: 'South Africa',
   opening:
-    'Thank you for taking the time to apply for the full-time Sales & Customer Service position at Fast Action Claims.',
+    'Thank you for taking the time to apply for the full-time Sales & Customer Service position at Beacon Legal Group.',
   body: "After careful consideration, we've decided not to take your application further on this occasion. We had a strong field of applicants and the decision was a close one.",
   closing: 'We appreciate your interest in the firm and wish you every success in your career.',
   description: `Wording and layout supplied by the client, in the South Africa template, with the role changed to Sales & Customer Service. ${DECLINE_MECHANICS}`,
@@ -369,7 +369,7 @@ acceptEmail({
   title: 'Shortlisted — AI Developer',
   country: 'India',
   heading: "You've been shortlisted",
-  opening: 'Thank you for applying for the AI Developer position at Fast Action Claims.',
+  opening: 'Thank you for applying for the AI Developer position at Beacon Legal Group.',
   decision: "We're delighted to let you know that your application has been successful.",
   timesNote: ', shown in your local time (IST)',
   closing: 'Congratulations, and we look forward to speaking with you soon.',
@@ -383,7 +383,7 @@ declineEmail({
   title: 'Not successful — AI Developer',
   country: 'India',
   opening:
-    'Thank you for taking the time to apply for the AI Developer position at Fast Action Claims.',
+    'Thank you for taking the time to apply for the AI Developer position at Beacon Legal Group.',
   body: "After careful consideration, we've decided not to progress your application on this occasion. This doesn't reflect on your abilities.",
   closing: 'We appreciate your interest in our firm and wish you every success in your career.',
   description: `Wording and layout supplied by the client, in the India template, with the role changed to AI Developer and "via Internshala" left out. ${DECLINE_MECHANICS}`,
@@ -507,7 +507,7 @@ registerTemplate({
               uid: `interview-${data.startsAt}@fastactionclaims.co.uk`,
               startsAt: data.startsAt,
               endsAt: data.endsAt,
-              summary: `Interview — ${data.roleTitle} — Fast Action Claims`,
+              summary: `Interview — ${data.roleTitle} — Beacon Legal Group`,
               description: `Interview with ${data.interviewerName}. ${joinLine(data)}`,
               location: data.meetLink ?? 'Video call — link to follow',
               organiserEmail: process.env.MAIL_FROM || 'recruitment@fastactionclaims.co.uk',
@@ -915,7 +915,7 @@ registerTemplate({
   sample: SAMPLE,
   load,
   render: (data) => ({
-    subject: 'Fast Action Claims — your application has been closed',
+    subject: 'Beacon Legal Group — your application has been closed',
     ...bodyBoth({
       heading: 'Your application has been closed',
       preview: 'You did not attend your final interview.',
@@ -925,7 +925,7 @@ registerTemplate({
         '',
         `You did not attend your final interview for the ${data.roleTitle}, booked for ${whenLine(data)}.`,
         '',
-        'As we explained when we offered you a final opportunity to re-book, your application has now been closed, and you will not be considered for any future internship or role with Fast Action Claims, Rowan Rose Ltd, Beacon Legal Group or Atlas Recruitment.',
+        'As we explained when we offered you a final opportunity to re-book, your application has now been closed, and you will not be considered for any future internship or role with Beacon Legal Group, Rowan Rose Ltd, Beacon Legal Group or Atlas Recruitment.',
         '',
         'We will not contact you again about this application.',
       ],

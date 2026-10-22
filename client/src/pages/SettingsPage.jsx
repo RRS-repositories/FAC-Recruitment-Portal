@@ -108,7 +108,7 @@ function FlagRow({ name, enabled, busy, onChange }) {
 
 export function SettingsPage() {
   usePageMeta({
-    title: 'Settings — Fast Action Claims',
+    title: 'Settings — Beacon Legal Group',
     description: 'Interview availability and portal settings.',
     robots: 'noindex, nofollow',
   });
@@ -354,7 +354,7 @@ export function SettingsPage() {
                         {...props}
                         type="email"
                         value={interviewerEmail}
-                        placeholder="name@fastactionclaims.co.uk"
+                        placeholder="name@beaconlegalgroup.co.uk"
                         autoComplete="off"
                         onChange={(e) => setInterviewerEmail(e.target.value)}
                       />

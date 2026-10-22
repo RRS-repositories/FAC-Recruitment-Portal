@@ -18,7 +18,7 @@ import usePageMeta from '@/hooks/usePageMeta';
  * signing off by whoever is accountable for data protection before launch.
  */
 
-const CONTROLLER = 'Rowan Rose Ltd, trading as Fast Action Claims';
+const CONTROLLER = 'Rowan Rose Ltd, trading as Beacon Legal Group';
 
 function Section({ title, children }) {
   return (
@@ -31,9 +31,9 @@ function Section({ title, children }) {
 
 export default function PrivacyPage() {
   usePageMeta({
-    title: 'How we handle your data — Fast Action Claims recruitment',
+    title: 'How we handle your data — Beacon Legal Group recruitment',
     description:
-      'What we collect when you apply for a role at Fast Action Claims, why we hold it, how long we keep it, and what you can ask us to do.',
+      'What we collect when you apply for a role at Beacon Legal Group, why we hold it, how long we keep it, and what you can ask us to do.',
   });
 
   const [facts, setFacts] = useState(null);
