@@ -52,7 +52,7 @@ export function AdminSignIn({ onSignedIn }) {
           </span>
           <h1 className="mt-3 text-[1.25rem] font-bold text-ink">Recruitment dashboard</h1>
           <p className="mt-1 text-[0.86rem] text-muted">
-            Sign in with your Beacon Legal Group manager account.
+            Sign in with your manager account.
           </p>
         </div>
 
